@@ -1,7 +1,7 @@
 "use client";
 import { useState, useTransition } from "react";
 import { RefreshCw } from "lucide-react";
-import { syncGithubAction, syncJiraAction, syncMeetingsAction } from "@/app/actions";
+import { syncGithubAction, syncJiraAction, syncMeetingsAction } from "@/app/(app)/actions";
 
 
 

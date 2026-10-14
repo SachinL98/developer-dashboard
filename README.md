@@ -15,7 +15,7 @@ npm run dev                   # http://localhost:3000
 npm test                      # unit tests (workflow rules, estimation, notes, analytics)
 ```
 
-Everything works on the seeded demo data. Integrations switch on when their env vars are set (see `.env.example` and the **Integrations** page).
+Out of the box (no Google credentials, not production) the login page offers a seeded-user picker. For real use follow **[docs/SETUP.md](docs/SETUP.md)**: Google sign-in restricted to the office domain, per-user Jira and Google connections, webhooks and scheduled sync.
 
 ## What's in it
 
@@ -42,14 +42,19 @@ Standup Mon–Fri 08:45–09:00 · Grooming Mon–Fri 09:00–09:15 · Estimatio
 
 ## Integrations
 
-- **Jira Cloud** (`src/lib/integrations/jira.ts`): issue search/sync, create issues in the backlog, set estimates, transition by target status name, worklogs, sprint create/start/close, move issues to a sprint. Webhook: `POST /api/webhooks/jira` mirrors forward-only status changes.
+- **Jira Cloud** (`src/lib/integrations/jira.ts`): per-user OAuth 2.0 (3LO) with an optional service account for cron. Issue search/sync, create issues in the backlog, set estimates, transition by target status name, worklogs, sprint create/start/close, move issues to a sprint. Webhook: `POST /api/webhooks/jira` mirrors forward-only status changes.
 - **GitHub** (`github.ts`): org repos, PR sync to tickets by key in title/branch, diff fetch for review scan. Webhook: `POST /api/webhooks/github` (`pull_request` events, optional HMAC secret).
-- **Google Calendar / Meet** (`google.ts`): creates events with Meet links for the cadence (one-off recurring events or rolling sync), imports links.
+- **Google Calendar / Meet** (`google.ts`, `meet.ts`): links existing calendar events or creates them with Meet links for the cadence, and imports real Meet transcripts (Meet REST API) into the notes taker, on demand or via `/api/cron/transcripts`.
 - **Claude** (optional `ANTHROPIC_API_KEY`): LLM meeting summaries; a heuristic parser is used otherwise.
 
 If an integration call fails, the local change still succeeds and the error is surfaced in the UI.
 
+## Security model
+- Sign-in with Google (OIDC, PKCE, state cookie), only `AUTH_ALLOWED_DOMAIN` accounts with verified email; DB-backed sessions (hashed token, httpOnly cookie, 14 days); deactivating a user signs them out everywhere.
+- Roles: developer, lead, admin (see the table in docs/SETUP.md). Every server action re-checks the role; inputs are validated with zod.
+- Jira and Google tokens are per user, AES-256-GCM encrypted with `AUTH_SECRET`, refreshed automatically and dropped if revoked. Actions in Jira/Google are done as the signed-in person.
+- Webhooks and cron endpoints require their secrets and refuse to run in production without them.
+
 ## Notes
-- No login: an internal tool where the sidebar "Working as" picker selects the current developer (cookie). Put it behind your SSO/VPN before exposing it.
 - Capacity assumes `Developer.capacityHrs` productive hours per week and a 15% buffer.
 - Story point custom field defaults to `customfield_10016` (`JIRA_STORY_POINTS_FIELD`).

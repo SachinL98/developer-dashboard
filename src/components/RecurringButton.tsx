@@ -1,7 +1,7 @@
 "use client";
 import { useState, useTransition } from "react";
 import { CalendarPlus } from "lucide-react";
-import { createRecurringMeetEventsAction } from "@/app/actions";
+import { createRecurringMeetEventsAction } from "@/app/(app)/actions";
 
 export function RecurringButton({ disabled }: { disabled?: boolean }) {
   const [pending, start] = useTransition();

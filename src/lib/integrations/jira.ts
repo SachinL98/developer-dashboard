@@ -2,20 +2,48 @@ import { request, IntegrationError } from "./http";
 import type { StatusKey } from "../workflow";
 import { STATUS_META } from "../workflow";
 
+import { boundUserId } from "../context";
+import { accessTokenFor, getConnection } from "./connections";
+
 const env = () => ({
   base: process.env.JIRA_BASE_URL?.replace(/\/$/, ""), email: process.env.JIRA_EMAIL, token: process.env.JIRA_API_TOKEN,
   project: process.env.JIRA_PROJECT_KEY, board: process.env.JIRA_BOARD_ID, spField: process.env.JIRA_STORY_POINTS_FIELD || "customfield_10016",
+  sprintField: process.env.JIRA_SPRINT_FIELD || "customfield_10020",
 });
-export const jiraConfigured = () => { const e = env(); return !!(e.base && e.email && e.token && e.project); };
 
-const call = <T>(path: string, init: RequestInit = {}) => {
+/** Optional org-wide service account (basic auth). Per-user OAuth connections are preferred when present. */
+const serviceAccount = () => { const e = env(); return !!(e.base && e.email && e.token); };
+
+interface JiraAuth { base: string; headers: Record<string, string>; siteUrl: string; via: "oauth" | "service" }
+
+/** Credentials for the current request: the signed-in user's OAuth connection, else the service account. */
+async function resolveAuth(): Promise<JiraAuth> {
+  const uid = boundUserId();
+  const conn = uid ? await getConnection(uid, "JIRA") : null;
+  if (conn?.cloudId) {
+    return { base: `https://api.atlassian.com/ex/jira/${conn.cloudId}`, headers: { Authorization: `Bearer ${await accessTokenFor(conn)}` }, siteUrl: conn.siteUrl ?? "", via: "oauth" };
+  }
   const e = env();
-  if (!jiraConfigured()) throw new IntegrationError("Jira", "not configured (set JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN, JIRA_PROJECT_KEY)");
-  return request<T>("Jira", `${e.base}${path}`, {
-    ...init,
-    headers: { Authorization: "Basic " + Buffer.from(`${e.email}:${e.token}`).toString("base64"), "Content-Type": "application/json", ...(init.headers ?? {}) },
-  });
+  if (serviceAccount()) return { base: e.base!, headers: { Authorization: "Basic " + Buffer.from(`${e.email}:${e.token}`).toString("base64") }, siteUrl: e.base!, via: "service" };
+  throw new IntegrationError("Jira", "not connected — connect your Jira account in Integrations");
+}
+
+/** True when a Jira call can be made now (user connected or service account set) and the team project is configured. */
+export async function jiraReady(): Promise<boolean> {
+  if (!env().project) return false;
+  try { await resolveAuth(); return true; } catch { return false; }
+}
+export const jiraProjectConfigured = () => !!env().project;
+
+const call = async <T>(path: string, init: RequestInit = {}) => {
+  const auth = await resolveAuth();
+  return request<T>("Jira", `${auth.base}${path}`, { ...init, headers: { ...auth.headers, "Content-Type": "application/json", ...(init.headers ?? {}) } });
 };
+
+/** Link to an issue in the Jira UI for the current user's site. */
+export async function jiraBrowseUrl(key: string): Promise<string | null> {
+  try { return `${(await resolveAuth()).siteUrl}/browse/${key}`; } catch { return null; }
+}
 
 const adf = (text: string) => ({ type: "doc", version: 1, content: text.split("\n").map((l) => ({ type: "paragraph", content: l ? [{ type: "text", text: l }] : [] })) });
 const adfText = (n: any): string => !n ? "" : n.text ?? (n.content ?? []).map(adfText).join(n.type === "doc" ? "\n" : "");
@@ -37,6 +65,13 @@ export interface JiraIssue {
   assigneeEmail?: string; assigneeId?: string; sprintId?: string; sprintName?: string; labels: string[]; estimateHrs: number | null;
 }
 
+/** The sprint field is an array of every sprint the issue has been in: prefer the active one, else the newest. */
+function pickSprint(v: any): { sprintId?: string; sprintName?: string } {
+  const list: any[] = Array.isArray(v) ? v : v ? [v] : [];
+  const s = list.find((x) => x.state === "active") ?? list.filter((x) => x.state !== "closed").pop() ?? undefined;
+  return s ? { sprintId: String(s.id), sprintName: s.name } : {};
+}
+
 const mapType = (t: string) => (/bug/i.test(t) ? "BUG" : /story|feature|epic/i.test(t) ? "FEATURE" : /improve|enhance/i.test(t) ? "ENHANCEMENT" : "TASK");
 const mapPriority = (p?: string) => (/highest|blocker|critical/i.test(p ?? "") ? "CRITICAL" : /high/i.test(p ?? "") ? "HIGH" : /low/i.test(p ?? "") ? "LOW" : "MEDIUM");
 
@@ -48,14 +83,14 @@ export async function searchIssues(jql?: string): Promise<JiraIssue[]> {
   do {
     const data: any = await call("/rest/api/3/search/jql", {
       method: "POST",
-      body: JSON.stringify({ jql: query, maxResults: 100, nextPageToken, fields: ["summary", "description", "issuetype", "priority", "status", "assignee", "labels", "timeoriginalestimate", "sprint", e.spField] }),
+      body: JSON.stringify({ jql: query, maxResults: 100, nextPageToken, fields: ["summary", "description", "issuetype", "priority", "status", "assignee", "labels", "timeoriginalestimate", e.sprintField, e.spField] }),
     });
     for (const i of data.issues ?? []) {
       const f = i.fields;
       out.push({
         key: i.key, title: f.summary, description: adfText(f.description), type: mapType(f.issuetype?.name ?? ""), priority: mapPriority(f.priority?.name),
         status: f.status?.name ?? "", points: f[e.spField] ?? null, assigneeEmail: f.assignee?.emailAddress, assigneeId: f.assignee?.accountId,
-        sprintId: f.sprint ? String(f.sprint.id) : undefined, sprintName: f.sprint?.name, labels: f.labels ?? [],
+        ...pickSprint(f[e.sprintField]), labels: f.labels ?? [],
         estimateHrs: f.timeoriginalestimate ? f.timeoriginalestimate / 3600 : null,
       });
     }
@@ -124,4 +159,3 @@ export async function startSprint(sprintId: string, start: Date, end: Date) {
 export async function closeSprint(sprintId: string) {
   await call(`/rest/agile/1.0/sprint/${sprintId}`, { method: "POST", body: JSON.stringify({ state: "closed" }) });
 }
-export const jiraUrl = (key: string) => `${env().base}/browse/${key}`;

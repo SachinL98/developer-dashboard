@@ -2,7 +2,7 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Play, Square } from "lucide-react";
-import { startTimerAction, stopTimerAction } from "@/app/actions";
+import { startTimerAction, stopTimerAction } from "@/app/(app)/actions";
 
 export function TimerButton({ ticketId, running }: { ticketId: string; running: boolean }) {
   const [pending, start] = useTransition();

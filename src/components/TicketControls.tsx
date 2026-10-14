@@ -2,12 +2,12 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Play, Square, ArrowRight, Save } from "lucide-react";
-import { moveTicketAction, setProgressAction, startTimerAction, stopTimerAction, updateTicketAction } from "@/app/actions";
+import { moveTicketAction, setProgressAction, startTimerAction, stopTimerAction, updateTicketAction } from "@/app/(app)/actions";
 import { STATUS_META, allowedNext, STORY_POINTS, type StatusKey } from "@/lib/workflow";
 
 export function TicketControls(p: {
   id: string; status: StatusKey; progress: number; timerRunning: boolean; assigneeId: string | null; devs: { id: string; name: string }[];
-  prUrl: string | null; points: number | null; estimateHrs: number | null; sprintId: string | null; sprints: { id: string; name: string }[];
+  canLead: boolean; prUrl: string | null; points: number | null; estimateHrs: number | null; sprintId: string | null; sprints: { id: string; name: string }[];
 }) {
   const [msg, setMsg] = useState<{ t: string; bad?: boolean } | null>(null);
   const [pct, setPct] = useState(p.progress);
@@ -52,7 +52,7 @@ export function TicketControls(p: {
 
       <div className="grid grid-cols-2 gap-3">
         <div><label className="label">Assignee</label>
-          <select className="input" value={p.assigneeId ?? ""} onChange={(e) => run(() => updateTicketAction(p.id, { assigneeId: e.target.value || null }))}>
+          <select className="input" disabled={!p.canLead} title={p.canLead ? "" : "Leads assign tickets"} value={p.assigneeId ?? ""} onChange={(e) => run(() => updateTicketAction(p.id, { assigneeId: e.target.value || null }))}>
             <option value="">Unassigned</option>{p.devs.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select></div>
         <div><label className="label">Story points</label>
@@ -63,7 +63,7 @@ export function TicketControls(p: {
           <div className="flex gap-2"><input className="input" inputMode="decimal" value={est} onChange={(e) => setEst(e.target.value)} />
             <button className="btn" onClick={() => run(() => updateTicketAction(p.id, { estimateHrs: est ? +est : null }))}><Save size={14} /></button></div></div>
         <div><label className="label">Sprint</label>
-          <select className="input" value={p.sprintId ?? ""} onChange={async (e) => { const { assignToSprintAction } = await import("@/app/actions"); run(() => assignToSprintAction(p.id, e.target.value || null)); }}>
+          <select className="input" disabled={!p.canLead} value={p.sprintId ?? ""} onChange={async (e) => { const { assignToSprintAction } = await import("@/app/(app)/actions"); run(() => assignToSprintAction(p.id, e.target.value || null)); }}>
             <option value="">Backlog</option>{p.sprints.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select></div>
       </div>

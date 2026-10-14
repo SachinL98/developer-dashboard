@@ -11,12 +11,12 @@ const pick = <T,>(xs: T[]) => xs[Math.floor(rnd() * xs.length)];
 const DAY = 86_400_000, HR = 3_600_000;
 
 const devs = [
-  { name: "Amaya Perera", email: "amaya@spaceitlabs.com", githubLogin: "amaya-p", role: "Tech Lead", avatarHue: 190, capacityHrs: 28 },
+  { name: "Amaya Perera", email: "amaya@spaceitlabs.com", githubLogin: "amaya-p", role: "Tech Lead", access: "LEAD" as const, avatarHue: 190, capacityHrs: 28 },
   { name: "Nuwan Silva", email: "nuwan@spaceitlabs.com", githubLogin: "nuwan-s", role: "Senior Developer", avatarHue: 265, capacityHrs: 32 },
   { name: "Dilini Fernando", email: "dilini@spaceitlabs.com", githubLogin: "dilini-f", role: "Developer", avatarHue: 330, capacityHrs: 32 },
   { name: "Kasun Jayawardena", email: "kasun@spaceitlabs.com", githubLogin: "kasun-j", role: "Developer", avatarHue: 85, capacityHrs: 30 },
   { name: "Ishara Gunasekara", email: "ishara@spaceitlabs.com", githubLogin: "ishara-g", role: "QA Engineer", avatarHue: 35, capacityHrs: 30 },
-  { name: "Sachin Lakshan", email: "sachin.lakshan@spaceitlabs.com", githubLogin: "SachinL98", role: "Engineering Manager", avatarHue: 150, capacityHrs: 20 },
+  { name: "Sachin Lakshan", email: "sachin.lakshan@spaceitlabs.com", githubLogin: "SachinL98", role: "Engineering Manager", access: "ADMIN" as const, avatarHue: 150, capacityHrs: 20 },
 ];
 
 const projects = [
@@ -52,7 +52,7 @@ const rank = (s: Status) => STATUS_ORDER.indexOf(s);
 async function main() {
   await db.$transaction([
     db.actionItem.deleteMany(), db.meeting.deleteMany(), db.prReview.deleteMany(), db.estimateVote.deleteMany(), db.progressLog.deleteMany(),
-    db.timeEntry.deleteMany(), db.workSession.deleteMany(), db.transition.deleteMany(), db.ticket.deleteMany(), db.sprint.deleteMany(),
+    db.timeEntry.deleteMany(), db.workSession.deleteMany(), db.connection.deleteMany(), db.authSession.deleteMany(), db.transition.deleteMany(), db.ticket.deleteMany(), db.sprint.deleteMany(),
     db.project.deleteMany(), db.developer.deleteMany(),
   ]);
   const D = await Promise.all(devs.map((d) => db.developer.create({ data: d })));

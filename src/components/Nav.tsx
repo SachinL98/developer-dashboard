@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, KanbanSquare, Rocket, Timer, Calculator, Video, BarChart3, PlusCircle, Plug, Users } from "lucide-react";
+import { LayoutDashboard, KanbanSquare, Rocket, Timer, Calculator, Video, BarChart3, PlusCircle, Plug, Users, Shield } from "lucide-react";
 import clsx from "clsx";
 
 const items = [
@@ -17,11 +17,12 @@ const items = [
   { href: "/settings", label: "Integrations", icon: Plug },
 ];
 
-export function Nav() {
+export function Nav({ isAdmin }: { isAdmin?: boolean }) {
   const path = usePathname();
+  const list = isAdmin ? [...items, { href: "/admin/users", label: "Admin", icon: Shield }] : items;
   return (
     <nav className="flex flex-col gap-1">
-      {items.map(({ href, label, icon: Icon }) => {
+      {list.map(({ href, label, icon: Icon }) => {
         const active = href === "/" ? path === "/" : path.startsWith(href);
         return (
           <Link key={href} href={href} className={clsx("group flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition",

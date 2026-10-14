@@ -3,7 +3,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles, Plus, ListPlus } from "lucide-react";
 import clsx from "clsx";
-import { bulkCreateAction, createTicketAction, previewBulkAction, suggestEstimateAction } from "@/app/actions";
+import { bulkCreateAction, createTicketAction, previewBulkAction, suggestEstimateAction } from "@/app/(app)/actions";
 import { STORY_POINTS, TYPE_META, PRIORITY_META } from "@/lib/workflow";
 import { DESCRIPTION_TEMPLATES } from "@/lib/ticket-parse";
 

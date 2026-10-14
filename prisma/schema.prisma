@@ -40,6 +40,12 @@ enum SprintState {
   CLOSED
 }
 
+enum Access {
+  DEVELOPER
+  LEAD
+  ADMIN
+}
+
 enum MeetingKind {
   STANDUP
   GROOMING
@@ -59,6 +65,13 @@ model Developer {
   role        String   @default("Developer")
   avatarHue   Int      @default(200)
   capacityHrs Float    @default(30) // productive hours per sprint week
+  access      Access   @default(DEVELOPER)
+  active      Boolean  @default(true)
+  googleSub   String?  @unique
+  picture     String?
+  lastLoginAt DateTime?
+  authSessions AuthSession[]
+  connections Connection[]
   tickets     Ticket[]       @relation("Assignee")
   sessions    WorkSession[]
   timers      TimeEntry[]
@@ -226,4 +239,36 @@ model ActionItem {
   done      Boolean  @default(false)
   ticket    Ticket?  @relation(fields: [ticketId], references: [id])
   ticketId  String?
+}
+
+// Login sessions. Only a SHA-256 hash of the cookie token is stored.
+model AuthSession {
+  id          String    @id @default(cuid())
+  tokenHash   String    @unique
+  user        Developer @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime
+  userAgent   String?
+
+  @@index([userId])
+}
+
+// Per-user OAuth connections (Google Calendar/Meet, Jira Cloud). Tokens are AES-256-GCM encrypted.
+model Connection {
+  id          String    @id @default(cuid())
+  user        Developer @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  provider    String // GOOGLE | JIRA
+  accessToken String
+  refreshToken String?
+  expiresAt   DateTime?
+  scope       String?
+  cloudId     String? // Jira site
+  siteUrl     String? // Jira site URL
+  externalId  String? // Jira accountId / Google sub
+  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime  @default(now())
+
+  @@unique([userId, provider])
 }

@@ -2,6 +2,10 @@ import { db } from "./db";
 import { gateError, STATUS_META, type StatusKey } from "./workflow";
 import * as jira from "./integrations/jira";
 import * as gh from "./integrations/github";
+import { parseNotes, summariseWithClaude } from "./notes";
+import * as gcal from "./integrations/google";
+import { fetchTranscript, meetCodeFromUrl } from "./integrations/meet";
+import { occurrences } from "./schedule";
 import { freshChecklist, reviewPassed, scanDiff, type ReviewItem } from "./review-template";
 
 const warn = (where: string, e: unknown) => console.warn(`[${where}]`, e instanceof Error ? e.message : e);
@@ -24,7 +28,7 @@ export async function createTicket(t: NewTicket) {
   let key = await nextTicketKey(t.projectId);
   let jiraKey: string | null = null;
   let jiraError: string | null = null;
-  if (t.pushToJira !== false && jira.jiraConfigured()) {
+  if (t.pushToJira !== false && (await jira.jiraReady())) {
     try {
       const assignee = t.assigneeId ? (await db.developer.findUnique({ where: { id: t.assigneeId } }))?.jiraAccount ?? undefined : undefined;
       jiraKey = await jira.createIssue({ ...t, description: t.description ?? "", assigneeAccountId: assignee });
@@ -71,7 +75,7 @@ export async function moveTicket(ticketId: string, to: StatusKey, byId?: string 
   if (to !== "IN_PROGRESS") await db.timeEntry.updateMany({ where: { ticketId, endedAt: null }, data: { endedAt: now } });
 
   let syncError: string | null = null;
-  if (t.jiraKey && jira.jiraConfigured()) {
+  if (t.jiraKey && (await jira.jiraReady())) {
     try { await jira.transitionIssue(t.jiraKey, to); } catch (e) { syncError = e instanceof Error ? e.message : String(e); warn("jira.transition", e); }
   }
   return { ok: true as const, from, to, label: STATUS_META[to].label, syncError };
@@ -91,7 +95,7 @@ export async function stopTimer(developerId: string) {
   const open = await db.timeEntry.findMany({ where: { developerId, endedAt: null }, include: { ticket: true } });
   await db.timeEntry.updateMany({ where: { developerId, endedAt: null }, data: { endedAt: now } });
   for (const e of open) {
-    if (e.ticket.jiraKey && jira.jiraConfigured()) {
+    if (e.ticket.jiraKey && (await jira.jiraReady())) {
       const secs = (now.getTime() - e.startedAt.getTime()) / 1000;
       if (secs >= 60) jira.addWorklog(e.ticket.jiraKey, e.startedAt, secs).catch((er) => warn("jira.worklog", er));
     }
@@ -194,4 +198,66 @@ export async function syncGithub() {
     }
   }
   return { linked };
+}
+
+// ---------- Meeting notes ----------
+
+export async function generateNotes(meetingId: string, transcript: string) {
+  const names = (await db.developer.findMany()).map((d) => d.name);
+  const parsed = await summariseWithClaude(transcript, parseNotes(transcript, names));
+  await db.$transaction([
+    db.meeting.update({ where: { id: meetingId }, data: { transcript, summary: parsed.summary, decisions: parsed.decisions } }),
+    db.actionItem.deleteMany({ where: { meetingId } }),
+    ...parsed.actionItems.map((a) => db.actionItem.create({ data: { meetingId, text: a.text, owner: a.owner } })),
+  ]);
+  for (const a of parsed.actionItems.filter((x) => x.ticketKey)) {
+    const t = await db.ticket.findUnique({ where: { key: a.ticketKey! } });
+    if (t) await db.actionItem.updateMany({ where: { meetingId, text: a.text }, data: { ticketId: t.id } });
+  }
+  return parsed;
+}
+
+/** Pull the real Meet transcript for an ended meeting and turn it into notes. Returns null if none is available yet. */
+export async function importMeetTranscript(meetingId: string) {
+  const m = await db.meeting.findUniqueOrThrow({ where: { id: meetingId } });
+  const code = meetCodeFromUrl(m.meetUrl);
+  if (!code) throw new Error("This meeting has no Google Meet link.");
+  if (m.endsAt > new Date()) throw new Error("The meeting hasn't finished yet.");
+  const t = await fetchTranscript(code, m.startsAt, m.endsAt);
+  if (!t) return null;
+  const parsed = await generateNotes(meetingId, t.text);
+  return { parsed, chars: t.text.length };
+}
+
+// ---------- Meetings from the calendar ----------
+/**
+ * Make sure the team cadence exists locally for the next `days` days. With Google connected, existing calendar
+ * events (matched by title + start) are linked instead of duplicated; missing ones are created with a Meet link.
+ */
+export async function syncMeetingCadence(days = 14) {
+  const from = new Date(); from.setHours(0, 0, 0, 0);
+  const occ = occurrences(from, days);
+  const existing = await db.meeting.findMany({ where: { startsAt: { gte: from } } });
+  const have = new Map(existing.map((m) => [`${m.kind}|${m.startsAt.toISOString()}`, m]));
+  const devs = await db.developer.findMany({ where: { active: true } });
+  const google = await gcal.googleReady();
+  const events = google ? await gcal.listEvents(from, new Date(from.getTime() + days * 864e5)).catch(() => []) : [];
+  let created = 0, linked = 0;
+  for (const o of occ) {
+    const key = `${o.kind}|${o.startsAt.toISOString()}`;
+    const ev = events.find((e) => e.summary.trim().toLowerCase() === o.title.toLowerCase() && Math.abs(new Date(e.start).getTime() - o.startsAt.getTime()) < 60_000);
+    const mine = have.get(key);
+    if (mine) {
+      if (ev && (mine.googleEvId !== ev.id || (ev.meetUrl && mine.meetUrl !== ev.meetUrl))) { await db.meeting.update({ where: { id: mine.id }, data: { googleEvId: ev.id, meetUrl: ev.meetUrl ?? mine.meetUrl } }); linked++; }
+      continue;
+    }
+    let meetUrl = ev?.meetUrl, googleEvId = ev?.id;
+    if (google && !ev) {
+      const r = await gcal.createMeetEvent({ title: o.title, start: o.startsAt, end: o.endsAt, attendees: devs.map((d) => d.email) }).catch((e) => { warn("google.create", e); return null; });
+      meetUrl = r?.meetUrl; googleEvId = r?.id;
+    }
+    await db.meeting.create({ data: { kind: o.kind, title: o.title, startsAt: o.startsAt, endsAt: o.endsAt, meetUrl, googleEvId, attendees: devs.map((d) => d.email) } });
+    created++;
+  }
+  return { created, linked, google };
 }

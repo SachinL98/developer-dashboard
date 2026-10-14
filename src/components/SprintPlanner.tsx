@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { GripVertical, Flame, Wand2, Rocket, Flag, X, Plus } from "lucide-react";
-import { assignToSprintAction, autoFillSprintAction, closeSprintAction, createSprintAction, reorderAction, startSprintAction } from "@/app/actions";
+import { assignToSprintAction, autoFillSprintAction, closeSprintAction, createSprintAction, reorderAction, startSprintAction } from "@/app/(app)/actions";
 import { PRIORITY_META, TYPE_META } from "@/lib/workflow";
 import { Progress } from "./ui";
 
@@ -12,7 +12,7 @@ export interface PlanTicket { id: string; key: string; title: string; type: keyo
 export interface PlanSprint { id: string; name: string; goal: string | null; state: string; start: string; end: string }
 export interface Fit { capacityHrs: number; committedHrs: number; loadPct: number; fits: boolean; overBy: number }
 
-export function SprintPlanner({ sprints, selected, backlog, inSprint, fit, perDev }: { sprints: PlanSprint[]; selected: PlanSprint | null; backlog: PlanTicket[]; inSprint: PlanTicket[]; fit: Fit | null; perDev: { name: string; hrs: number; cap: number }[] }) {
+export function SprintPlanner({ sprints, selected, backlog, inSprint, fit, perDev, canManage }: { canManage: boolean; sprints: PlanSprint[]; selected: PlanSprint | null; backlog: PlanTicket[]; inSprint: PlanTicket[]; fit: Fit | null; perDev: { name: string; hrs: number; cap: number }[] }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [list, setList] = useState(backlog);
@@ -30,7 +30,7 @@ export function SprintPlanner({ sprints, selected, backlog, inSprint, fit, perDe
     const next = [...list]; const [m] = next.splice(from, 1); next.splice(to, 0, m);
     setList(next); run(() => reorderAction(next.map((t) => t.id)), () => "Priority order saved");
   }
-  const sprintOpen = selected && selected.state !== "CLOSED";
+  const sprintOpen = canManage && selected && selected.state !== "CLOSED";
 
   return (
     <div className="space-y-6">
@@ -41,7 +41,7 @@ export function SprintPlanner({ sprints, selected, backlog, inSprint, fit, perDe
               {s.name} <span className="ml-1 text-[10px] uppercase tracking-wider opacity-70">{s.state.toLowerCase()}</span>
             </Link>
           ))}
-          <button className="btn ml-auto" onClick={() => setShowNew((v) => !v)}><Plus size={14} /> New sprint</button>
+          {canManage && <button className="btn ml-auto" onClick={() => setShowNew((v) => !v)}><Plus size={14} /> New sprint</button>}
         </div>
         {showNew && (
           <div className="mt-4 grid gap-3 md:grid-cols-5">
@@ -59,10 +59,10 @@ export function SprintPlanner({ sprints, selected, backlog, inSprint, fit, perDe
       <div className="grid gap-6 xl:grid-cols-2">
         <div className="card-pad">
           <div className="mb-1 flex items-center justify-between"><span className="h-section">Backlog · priority order</span><span className="text-xs text-mute">{list.length} tickets</span></div>
-          <p className="mb-3 text-xs text-mute">Drag to prioritise (saved immediately). Drop onto the sprint to commit, or use +.</p>
+          <p className="mb-3 text-xs text-mute">{canManage ? "Drag to prioritise (saved immediately). Drop onto the sprint to commit, or use +." : "Read-only: leads and admins plan the sprint."}</p>
           <ul className="space-y-1.5">
             {list.map((t) => (
-              <li key={t.id} draggable onDragStart={() => setDragId(t.id)} onDragEnd={() => { setDragId(null); setOver(null); }} onDragOver={(e) => { e.preventDefault(); setOver(t.id); }} onDrop={() => { reorder(t.id); setOver(null); }}
+              <li key={t.id} draggable={canManage} onDragStart={() => setDragId(t.id)} onDragEnd={() => { setDragId(null); setOver(null); }} onDragOver={(e) => { e.preventDefault(); setOver(t.id); }} onDrop={() => { reorder(t.id); setOver(null); }}
                 className={clsx("group flex items-center gap-2 rounded-lg border bg-panel2 px-2 py-2 text-sm", over === t.id ? "border-neon" : "border-line")}>
                 <GripVertical size={14} className="cursor-grab text-mute" />
                 <span style={{ color: PRIORITY_META[t.priority].color }}>▲</span>
@@ -82,10 +82,10 @@ export function SprintPlanner({ sprints, selected, backlog, inSprint, fit, perDe
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div><div className="text-lg font-semibold">{selected.name}</div><div className="text-xs text-mute">{selected.goal} · {new Date(selected.start).toLocaleDateString("en-GB")} → {new Date(selected.end).toLocaleDateString("en-GB")}</div></div>
               <div className="flex gap-2">
-                {selected.state === "PLANNING" && <>
+                {canManage && selected.state === "PLANNING" && <>
                   <button className="btn" disabled={pending} onClick={() => run(() => autoFillSprintAction(selected.id), (r) => `Added ${r.added} by priority; ${r.skipped} didn't fit`)}><Wand2 size={14} /> Auto-fill</button>
                   <button className="btn-primary" disabled={pending} onClick={() => run(() => startSprintAction(selected.id), (r) => `Sprint started. ${r.moved} cards moved to Ready to Dev`)}><Rocket size={14} /> Start sprint</button></>}
-                {selected.state === "ACTIVE" && <button className="btn" disabled={pending} onClick={() => confirm("Close sprint? Unfinished cards roll into the next planning sprint in their current column.") && run(() => closeSprintAction(selected.id), (r) => `Sprint closed. ${r.carried} cards carried over`)}><Flag size={14} /> Close sprint</button>}
+                {canManage && selected.state === "ACTIVE" && <button className="btn" disabled={pending} onClick={() => confirm("Close sprint? Unfinished cards roll into the next planning sprint in their current column.") && run(() => closeSprintAction(selected.id), (r) => `Sprint closed. ${r.carried} cards carried over`)}><Flag size={14} /> Close sprint</button>}
               </div>
             </div>
             {fit && (
@@ -104,7 +104,7 @@ export function SprintPlanner({ sprints, selected, backlog, inSprint, fit, perDe
                   {t.complicated && <Flame size={13} className="text-neon-amber" />}
                   {t.points != null && <span className="rounded bg-line px-1.5 font-mono text-xs">{t.points}</span>}
                   <span className={clsx("w-14 whitespace-nowrap text-right font-mono text-xs", t.estimateHrs == null ? "text-neon-red" : "text-mute")}>{t.estimateHrs != null ? `${t.estimateHrs}h` : "no est."}</span>
-                  {selected.state === "PLANNING" && <button className="text-mute hover:text-neon-red" onClick={() => run(() => assignToSprintAction(t.id, null), () => `${t.key} returned to backlog`)}><X size={14} /></button>}
+                  {canManage && selected.state === "PLANNING" && <button className="text-mute hover:text-neon-red" onClick={() => run(() => assignToSprintAction(t.id, null), () => `${t.key} returned to backlog`)}><X size={14} /></button>}
                 </li>
               ))}
               {!inSprint.length && <li className="rounded-xl border border-dashed border-line p-8 text-center text-sm text-mute">Drop backlog tickets here.</li>}

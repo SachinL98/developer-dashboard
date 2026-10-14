@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { safeEqual } from "@/lib/crypto";
 import { statusFromJira } from "@/lib/integrations/jira";
 import { canMove, type StatusKey } from "@/lib/workflow";
 
@@ -8,7 +9,8 @@ export const dynamic = "force-dynamic";
 /** Jira `jira:issue_updated` webhook: mirror forward-only status changes made in Jira. */
 export async function POST(req: Request) {
   const secret = process.env.JIRA_WEBHOOK_SECRET;
-  if (secret && new URL(req.url).searchParams.get("secret") !== secret) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!secret && process.env.NODE_ENV === "production") return NextResponse.json({ error: "JIRA_WEBHOOK_SECRET is not configured" }, { status: 503 });
+  if (secret && !safeEqual(new URL(req.url).searchParams.get("secret") ?? "", secret)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const body = await req.json();
   const key: string | undefined = body.issue?.key;
   const statusName: string | undefined = body.issue?.fields?.status?.name;

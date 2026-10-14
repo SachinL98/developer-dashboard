@@ -3,17 +3,18 @@ import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import clsx from "clsx";
 import { GitPullRequest, Clock, Flame, Lock, ArrowRight } from "lucide-react";
-import { moveTicketAction } from "@/app/actions";
+import { moveTicketAction } from "@/app/(app)/actions";
 import { STATUS_META, STATUS_ORDER, TYPE_META, PRIORITY_META, allowedNext, type StatusKey } from "@/lib/workflow";
+import { canMoveTicket, type Actor } from "@/lib/permissions";
 import { Avatar, Progress } from "./ui";
 
 export interface BoardTicket {
   id: string; key: string; title: string; status: StatusKey; type: keyof typeof TYPE_META; priority: keyof typeof PRIORITY_META;
   points: number | null; estimateHrs: number | null; loggedHrs: number; progressPct: number; prNumber: number | null; prState: string | null;
-  assignee: { name: string; hue: number } | null; project: { key: string; color: string }; complicated: boolean;
+  assigneeId: string | null; assignee: { name: string; hue: number } | null; project: { key: string; color: string }; complicated: boolean;
 }
 
-export function Board({ tickets: initial, readOnlyHint }: { tickets: BoardTicket[]; readOnlyHint?: string }) {
+export function Board({ tickets: initial, readOnlyHint, actor }: { tickets: BoardTicket[]; readOnlyHint?: string; actor: Actor }) {
   const [tickets, setTickets] = useState(initial);
   const [drag, setDrag] = useState<BoardTicket | null>(null);
   const [toast, setToast] = useState<{ msg: string; bad?: boolean } | null>(null);
@@ -41,14 +42,14 @@ export function Board({ tickets: initial, readOnlyHint }: { tickets: BoardTicket
         <select className="input max-w-[200px]" value={who} onChange={(e) => setWho(e.target.value)}>
           <option value="all">Everyone</option>{people.map((p) => <option key={p}>{p}</option>)}
         </select>
-        <span className="text-xs text-mute">{readOnlyHint ?? "Drag a card forward, or use the → button. Backward moves are disabled."}</span>
+        <span className="text-xs text-mute">{readOnlyHint ?? "Drag a card forward, or use the → button. Backward moves are disabled; you can move your own cards, leads move any."}</span>
       </div>
       <div className="-mx-4 overflow-x-auto px-4 pb-4 md:-mx-8 md:px-8">
         <div className="flex gap-3" style={{ minWidth: STATUS_ORDER.length * 268 }}>
           {STATUS_ORDER.map((s) => {
             const meta = STATUS_META[s];
             const col = visible.filter((t) => t.status === s);
-            const droppable = !!drag && allowedNext(drag.status).includes(s);
+            const droppable = !!drag && allowedNext(drag.status).includes(s) && canMoveTicket(actor, drag, s);
             const blocked = !!drag && drag.status !== s && !droppable;
             return (
               <div key={s} onDragOver={(e) => droppable && e.preventDefault()} onDrop={() => { if (drag && droppable) move(drag, s); setDrag(null); }}
@@ -58,7 +59,7 @@ export function Board({ tickets: initial, readOnlyHint }: { tickets: BoardTicket
                   <span className="rounded-md bg-panel2 px-1.5 font-mono text-xs text-mute">{col.length}</span>
                 </div>
                 <div className="space-y-2">
-                  {col.map((t) => <Card key={t.id} t={t} onDragStart={() => setDrag(t)} onDragEnd={() => setDrag(null)} onMove={(to) => move(t, to)} />)}
+                  {col.map((t) => <Card key={t.id} t={t} actor={actor} onDragStart={() => setDrag(t)} onDragEnd={() => setDrag(null)} onMove={(to) => move(t, to)} />)}
                   {!col.length && <div className="rounded-xl border border-dashed border-line/70 p-4 text-center text-xs text-mute/70">{drag ? (droppable ? "Drop here" : <Lock size={14} className="mx-auto" />) : "Empty"}</div>}
                 </div>
               </div>
@@ -71,8 +72,8 @@ export function Board({ tickets: initial, readOnlyHint }: { tickets: BoardTicket
   );
 }
 
-function Card({ t, onDragStart, onDragEnd, onMove }: { t: BoardTicket; onDragStart: () => void; onDragEnd: () => void; onMove: (to: StatusKey) => void }) {
-  const next = allowedNext(t.status);
+function Card({ t, actor, onDragStart, onDragEnd, onMove }: { t: BoardTicket; actor: Actor; onDragStart: () => void; onDragEnd: () => void; onMove: (to: StatusKey) => void }) {
+  const next = allowedNext(t.status).filter((n) => canMoveTicket(actor, t, n));
   const over = t.estimateHrs ? t.loggedHrs > t.estimateHrs : false;
   return (
     <div draggable={next.length > 0} onDragStart={onDragStart} onDragEnd={onDragEnd}

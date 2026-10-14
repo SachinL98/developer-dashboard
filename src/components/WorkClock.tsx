@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useTransition } from "react";
 import { Play, Square, LogIn, LogOut } from "lucide-react";
-import { clockInAction, clockOutAction, stopTimerAction } from "@/app/actions";
+import { clockInAction, clockOutAction, stopTimerAction } from "@/app/(app)/actions";
 import { fmtDur } from "@/lib/time";
 
 export function WorkClock({ sessionStart, timer }: { sessionStart: string | null; timer: { key: string; title: string; startedAt: string } | null }) {

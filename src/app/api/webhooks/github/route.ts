@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 function verify(body: string, sig: string | null) {
   const secret = process.env.GITHUB_WEBHOOK_SECRET;
-  if (!secret) return true; // unsigned mode for local dev
+  if (!secret) return process.env.NODE_ENV !== "production"; // unsigned only in local dev; production requires GITHUB_WEBHOOK_SECRET
   if (!sig) return false;
   const expected = "sha256=" + createHmac("sha256", secret).update(body).digest("hex");
   return sig.length === expected.length && timingSafeEqual(Buffer.from(sig), Buffer.from(expected));

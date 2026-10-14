@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { Eye, EyeOff, Sparkles, Check, RotateCcw, Flame } from "lucide-react";
-import { applyEstimateAction, clearVotesAction, voteAction } from "@/app/actions";
+import { applyEstimateAction, clearVotesAction, voteAction } from "@/app/(app)/actions";
 import { POKER_HOURS, STORY_POINTS } from "@/lib/workflow";
 import { summarisePoker, type Suggestion } from "@/lib/estimation";
 
@@ -14,7 +14,7 @@ export interface EstTicket {
 }
 const pointsFor = (h: number) => STORY_POINTS.find((p) => h <= p * 2.5) ?? 13;
 
-export function EstimationBoard({ tickets, devCount }: { tickets: EstTicket[]; devCount: number }) {
+export function EstimationBoard({ tickets, devCount, canLead }: { tickets: EstTicket[]; devCount: number; canLead: boolean }) {
   const [sel, setSel] = useState(tickets[0]?.id);
   const [reveal, setReveal] = useState<Record<string, boolean>>({});
   const [pending, start] = useTransition();
@@ -55,7 +55,7 @@ export function EstimationBoard({ tickets, devCount }: { tickets: EstTicket[]; d
             <div className="flex flex-wrap items-center gap-6">
               <div><div className="font-mono text-3xl">{t.suggestion.hours}<span className="text-base text-mute">h</span></div><div className="text-xs text-mute">range {t.suggestion.low}–{t.suggestion.high}h · {t.suggestion.confidence} confidence</div></div>
               <p className="min-w-[200px] flex-1 text-xs text-mute">{t.suggestion.basis}</p>
-              <button className="btn" disabled={pending} onClick={() => run(() => applyEstimateAction(t.id, t.suggestion.hours, t.points ?? pointsFor(t.suggestion.hours)))}>Apply {t.suggestion.hours}h</button>
+              <button className="btn" disabled={pending || !canLead} title={canLead ? "" : "Leads apply the agreed estimate"} onClick={() => run(() => applyEstimateAction(t.id, t.suggestion.hours, t.points ?? pointsFor(t.suggestion.hours)))}>Apply {t.suggestion.hours}h</button>
             </div>
           </div>
 
@@ -64,7 +64,7 @@ export function EstimationBoard({ tickets, devCount }: { tickets: EstTicket[]; d
               <span className="h-section">Planning poker (hours)</span>
               <div className="flex gap-2">
                 <button className="btn px-2 py-1" onClick={() => setReveal((r) => ({ ...r, [t.id]: !r[t.id] }))}>{shown ? <><EyeOff size={13} /> Hide</> : <><Eye size={13} /> Reveal ({t.votes.length}/{devCount})</>}</button>
-                <button className="btn px-2 py-1" disabled={pending} onClick={() => run(() => clearVotesAction(t.id))}><RotateCcw size={13} /> New round</button>
+                <button className="btn px-2 py-1" disabled={pending || !canLead} onClick={() => run(() => clearVotesAction(t.id))}><RotateCcw size={13} /> New round</button>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -85,7 +85,7 @@ export function EstimationBoard({ tickets, devCount }: { tickets: EstTicket[]; d
                 <div><div className="text-xs text-mute">Median</div><div className="font-mono text-2xl">{summary.median}h</div></div>
                 <div><div className="text-xs text-mute">Range</div><div className="font-mono text-2xl">{summary.min}–{summary.max}h</div></div>
                 <div className={clsx("rounded-full px-3 py-1 text-xs", summary.consensus ? "bg-neon-lime/15 text-neon-lime" : "bg-neon-amber/15 text-neon-amber")}>{summary.consensus ? "Consensus" : "Wide spread — discuss, then re-vote"}</div>
-                <button className="btn-primary ml-auto" disabled={pending} onClick={() => run(() => applyEstimateAction(t.id, summary.median, pointsFor(summary.median)))}>Apply {summary.median}h ({pointsFor(summary.median)} pts)</button>
+                <button className="btn-primary ml-auto" disabled={pending || !canLead} title={canLead ? "" : "Leads apply the agreed estimate"} onClick={() => run(() => applyEstimateAction(t.id, summary.median, pointsFor(summary.median)))}>Apply {summary.median}h ({pointsFor(summary.median)} pts)</button>
               </div>
             )}
           </div>

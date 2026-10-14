@@ -3,12 +3,12 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Bot, UserCheck, CheckCircle2, Circle, ShieldAlert, RefreshCw } from "lucide-react";
 import clsx from "clsx";
-import { runReviewAction, saveReviewAction, startReviewerPassAction } from "@/app/actions";
+import { runReviewAction, saveReviewAction, startReviewerPassAction } from "@/app/(app)/actions";
 import type { ReviewItem } from "@/lib/review-template";
 
 export interface ReviewView { id: string; kind: string; round: number; passed: boolean; items: ReviewItem[]; createdAt: string }
 
-export function ReviewPanel({ ticketId, reviews, status }: { ticketId: string; reviews: ReviewView[]; status: string }) {
+export function ReviewPanel({ ticketId, reviews, status, canLead }: { ticketId: string; reviews: ReviewView[]; status: string; canLead: boolean }) {
   const [pending, start] = useTransition();
   const router = useRouter();
   const [note, setNote] = useState<string | null>(null);
@@ -20,7 +20,7 @@ export function ReviewPanel({ ticketId, reviews, status }: { ticketId: string; r
         <button className="btn-primary" disabled={pending} onClick={() => start(async () => { const r = await runReviewAction(ticketId); setNote(r.ok ? `New Claude review round created (${r.source})` : r.error); router.refresh(); })}>
           <Bot size={14} /> Run initial Claude review
         </button>
-        {status === "REVIEW" && <button className="btn" disabled={pending} onClick={() => start(async () => { await startReviewerPassAction(ticketId); router.refresh(); })}><UserCheck size={14} /> Start reviewer pass</button>}
+        {status === "REVIEW" && canLead && <button className="btn" disabled={pending} onClick={() => start(async () => { await startReviewerPassAction(ticketId); router.refresh(); })}><UserCheck size={14} /> Start reviewer pass</button>}
         {note && <span className="text-xs text-mute">{note}</span>}
       </div>
       {[...initial.slice(0, 1), ...reviewer.slice(0, 1)].map((r) => <Checklist key={r.id} ticketId={ticketId} review={r} />)}
