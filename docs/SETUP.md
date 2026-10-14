@@ -54,3 +54,14 @@ Admins get **Admin → Meetings** and **Admin → Workspace** in the app. They a
 - **Meetings:** enable/disable each recurring meeting, set days and times, and a fixed Google Meet link per meeting (empty = Google creates one per occurrence when connected). Saving rebuilds the next two weeks; individual upcoming meetings can have their own link.
 - **Workspace:** timezone, work hours, sprint length and start weekday (used for the New sprint form), default hours/week for new users, capacity buffer, Jira project key / board id / story-point and sprint fields, GitHub org, and each project's repository.
 - **Never in the UI:** tokens, client secrets, `AUTH_SECRET`, webhook secrets. The Workspace page only shows whether each is set.
+
+## Claude PR review (workflow steps 11-12)
+
+When a card with a linked PR moves to **Initial Review**, the app has Claude review that PR and saves the result on the ticket (summary, findings by severity, checklist, pass/fail). The card shows the state; a failing, running or errored review blocks the move to **Review**. Fix, push, and the review re-runs.
+
+1. `ANTHROPIC_API_KEY` (and optionally `ANTHROPIC_REVIEW_MODEL`): an Anthropic API key. Without it only a heuristic diff scan runs, labelled as such, not an AI review.
+2. `GITHUB_TOKEN`: fine-grained token with read access to pull requests and contents on the org repos, plus write access to pull requests if you turn on PR comments. Without it the checklist is left for a lead to tick manually.
+3. GitHub webhook (`pull_request`, to `{APP_URL}/api/webhooks/github`, secret `GITHUB_WEBHOOK_SECRET`): re-runs the review when new commits are pushed to a PR that is in Initial Review.
+4. **Admin → PR review**: edit the team checklist (critical / important), add per-project points and guidance, and choose whether reviews run automatically and whether the result is also posted as a PR comment.
+
+Only a lead can override a Claude review's items; a developer re-runs it after pushing fixes. PR content is sent to the Anthropic API, and is treated as untrusted data in the prompt.

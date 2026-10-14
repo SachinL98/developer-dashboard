@@ -60,7 +60,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
 
           <div className="card-pad">
             <div className="h-section mb-3">PR review</div>
-            <ReviewPanel canLead={atLeast(me.access, "LEAD")} ticketId={t.id} status={t.status} reviews={t.reviews.map((r) => ({ id: r.id, kind: r.kind, round: r.round, passed: r.passed, items: r.items as any, createdAt: r.createdAt.toISOString() }))} />
+            <ReviewPanel canLead={atLeast(me.access, "LEAD")} ticketId={t.id} status={t.status} reviews={t.reviews.map((r) => ({ id: r.id, kind: r.kind, round: r.round, passed: r.passed, items: r.items as any, createdAt: r.createdAt.toISOString(), status: r.status, source: r.source, summary: r.summary, findings: (r.findings ?? []) as any, model: r.model, error: r.error, truncated: r.truncated, trigger: r.trigger }))} />
           </div>
 
           <div className="card-pad">

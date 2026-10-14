@@ -6,6 +6,7 @@ import clsx from "clsx";
 const tabs = [
   { href: "/admin/users", label: "Users & roles" },
   { href: "/admin/meetings", label: "Meetings" },
+  { href: "/admin/review", label: "PR review" },
   { href: "/admin/workspace", label: "Workspace" },
 ];
 

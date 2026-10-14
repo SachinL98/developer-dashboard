@@ -27,6 +27,9 @@ export function setupChecklist(): { group: string; items: EnvCheck[] }[] {
       { name: "JIRA_BOARD_ID", ok: has("JIRA_BOARD_ID"), hint: "Scrum board id, for sprint create/start/close." },
       { name: "JIRA_WEBHOOK_SECRET", ok: has("JIRA_WEBHOOK_SECRET"), hint: "Shared secret on the Jira webhook URL." },
     ] },
+    { group: "Claude PR review", items: [
+      { name: "ANTHROPIC_API_KEY", ok: has("ANTHROPIC_API_KEY"), hint: "Lets Claude review the PR diff of each ticket (also used for meeting summaries). Without it only a heuristic scan runs." },
+    ] },
     { group: "GitHub", items: [
       { name: "GITHUB_TOKEN", ok: githubConfigured(), hint: "Fine-grained token (read pull requests and contents) for the org repos." },
       { name: "GITHUB_WEBHOOK_SECRET", ok: has("GITHUB_WEBHOOK_SECRET"), hint: "Secret on the pull_request webhook." },

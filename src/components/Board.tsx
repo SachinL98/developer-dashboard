@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import clsx from "clsx";
-import { GitPullRequest, Clock, Flame, Lock, ArrowRight, ExternalLink } from "lucide-react";
+import { GitPullRequest, Clock, Flame, Lock, ArrowRight, ExternalLink, Bot, Loader2 } from "lucide-react";
 import { moveTicketAction } from "@/app/(app)/actions";
 import { STATUS_META, TYPE_META, PRIORITY_META, allowedNext, type StatusKey } from "@/lib/workflow";
 import type { BoardColumn } from "@/lib/board-columns";
@@ -14,6 +14,7 @@ export interface BoardTicket {
   points: number | null; estimateHrs: number | null; loggedHrs: number; progressPct: number; prNumber: number | null; prState: string | null;
   assigneeId: string | null; assignee: { name: string; hue: number } | null; project: { key: string; color: string }; complicated: boolean;
   columnId: string; jiraStatus: string | null; labels: string[]; jiraUrl: string | null;
+  review: "none" | "running" | "passed" | "blocked" | "error"; // latest initial Claude review of the linked PR
 }
 
 export function Board({ tickets: initial, columns, readOnlyHint, actor }: { tickets: BoardTicket[]; columns: BoardColumn[]; readOnlyHint?: string; actor: Actor }) {
@@ -105,6 +106,10 @@ function Card({ t, actor, onDragStart, onDragEnd, onMove }: { t: BoardTicket; ac
           {t.points != null && <span className="rounded bg-line px-1.5 font-mono text-ink">{t.points}</span>}
           {t.estimateHrs != null && <span className={clsx("flex items-center gap-1", over && "text-neon-red")}><Clock size={11} />{t.loggedHrs.toFixed(1)}/{t.estimateHrs}h</span>}
           {t.prNumber && <span className="flex items-center gap-1"><GitPullRequest size={11} />#{t.prNumber}</span>}
+          {t.review !== "none" && (
+            <Link href={`/tickets/${t.id}`} title="Initial Claude review" className={clsx("flex items-center gap-1 rounded px-1", t.review === "passed" && "text-neon-lime", t.review === "blocked" && "text-neon-red", t.review === "error" && "text-neon-amber", t.review === "running" && "text-neon")}>
+              {t.review === "running" ? <Loader2 size={11} className="animate-spin" /> : <Bot size={11} />}{{ passed: "passed", blocked: "blocked", error: "failed", running: "reviewing" }[t.review]}
+            </Link>)}
           {t.jiraUrl && <a href={t.jiraUrl} target="_blank" rel="noreferrer" title="Open in Jira" className="hover:text-white"><ExternalLink size={11} /></a>}
         </div>
         <div className="flex items-center gap-1">

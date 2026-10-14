@@ -2,9 +2,11 @@ import { request, IntegrationError } from "./http";
 import { cachedWorkspace } from "../config";
 
 export const githubConfigured = () => !!process.env.GITHUB_TOKEN;
+const API = () => (process.env.GITHUB_API_URL || "https://api.github.com").replace(/\/$/, ""); // GitHub Enterprise or a test double
+
 const call = <T>(path: string, init: RequestInit = {}, accept = "application/vnd.github+json") => {
   if (!githubConfigured()) throw new IntegrationError("GitHub", "not configured (set GITHUB_TOKEN, GITHUB_ORG)");
-  return request<T>("GitHub", `https://api.github.com${path}`, {
+  return request<T>("GitHub", `${API()}${path}`, {
     ...init, headers: { Authorization: `Bearer ${process.env.GITHUB_TOKEN}`, Accept: accept, "X-GitHub-Api-Version": "2022-11-28", ...(init.headers ?? {}) },
   });
 };
@@ -25,7 +27,7 @@ export async function getPullRequest(repo: string, n: number) {
 }
 export async function getPullDiff(repo: string, n: number): Promise<string> {
   if (!githubConfigured()) throw new IntegrationError("GitHub", "not configured (set GITHUB_TOKEN, GITHUB_ORG)");
-  const res = await fetch(`https://api.github.com/repos/${repo}/pulls/${n}`, {
+  const res = await fetch(`${API()}/repos/${repo}/pulls/${n}`, {
     headers: { Authorization: `Bearer ${process.env.GITHUB_TOKEN}`, Accept: "application/vnd.github.diff", "X-GitHub-Api-Version": "2022-11-28" }, cache: "no-store",
   });
   if (!res.ok) throw new IntegrationError("GitHub", `${res.status} ${(await res.text()).slice(0, 200)}`, res.status);
@@ -38,3 +40,7 @@ export function parsePrUrl(url: string) {
   return m ? { repo: m[1], number: Number(m[2]) } : null;
 }
 export const ticketKeyFrom = (text: string) => text.match(/\b([A-Z][A-Z0-9]{1,9}-\d+)\b/)?.[1] ?? null;
+
+/** Post a comment on a pull request (needs the token to have pull-request/issue write access). */
+export const commentOnPr = (repo: string, n: number, body: string) =>
+  call<{ html_url: string }>(`/repos/${repo}/issues/${n}/comments`, { method: "POST", body: JSON.stringify({ body }) });

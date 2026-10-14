@@ -8,7 +8,9 @@ import { parseNotes, summariseWithClaude } from "./notes";
 import * as gcal from "./integrations/google";
 import { fetchTranscript, meetCodeFromUrl } from "./integrations/meet";
 import { occurrences } from "./schedule";
-import { freshChecklist, reviewPassed, scanDiff, type ReviewItem } from "./review-template";
+import { reviewPassed, scanDiff, type ReviewItem } from "./review-template";
+import { getReviewConfig, templateFor } from "./review-config";
+import { anthropicConfigured, passes, reviewWithClaude, type Finding } from "./claude-review";
 
 const warn = (where: string, e: unknown) => console.warn(`[${where}]`, e instanceof Error ? e.message : e);
 
@@ -126,17 +128,64 @@ export async function setProgress(ticketId: string, pct: number, note?: string) 
 }
 
 // ---------- Reviews ----------
-export async function runInitialReview(ticketId: string) {
+const RUNNING_STALE_MS = 10 * 60_000;
+
+/** The Claude review comment posted on the PR (when the admin turned that on). */
+function prComment(t: { key: string; title: string }, r: { passed: boolean; summary: string; items: ReviewItem[]; findings: Finding[]; round: number; model?: string | null }) {
+  const sev = (s: string) => ({ critical: "🔴", important: "🟡", minor: "⚪" }[s] ?? "⚪");
+  return [
+    `### Initial review (round ${r.round}) for ${t.key}: ${r.passed ? "✅ passed" : "❌ needs changes"}`, "", r.summary, "",
+    ...(r.findings.length ? ["**Findings**", ...r.findings.map((f) => `- ${sev(f.severity)} **${f.title}**${f.file ? ` (\`${f.file}${f.line ? ":" + f.line : ""}\`)` : ""}: ${f.detail}`), ""] : []),
+    "**Checklist**", ...r.items.map((i) => `- [${i.checked ? "x" : " "}] ${i.label}${i.severity === "critical" ? " _(critical)_" : ""}${i.note && !i.checked ? ` — ${i.note}` : ""}`), "",
+    "---", `_Automated review by the SpaceIT Dev Dashboard${r.model ? ` using ${r.model}` : ""}. Push fixes and it re-runs._`,
+  ].join("\n");
+}
+
+/**
+ * Run the initial review of a ticket's linked PR. With ANTHROPIC_API_KEY and GITHUB_TOKEN set, Claude reads the PR diff and judges the
+ * team + project checklist; the result (items, findings, summary, pass/fail) is saved on the ticket. Without the key a heuristic diff
+ * scan is used; without GitHub access the checklist is left for a human. A failing review blocks the move to Review.
+ */
+export async function runInitialReview(ticketId: string, trigger: "move" | "manual" | "push" = "manual") {
   const t = await db.ticket.findUniqueOrThrow({ where: { id: ticketId }, include: { project: true } });
-  const prev = await db.prReview.count({ where: { ticketId, kind: "INITIAL_CLAUDE" } });
-  let items: ReviewItem[] = freshChecklist();
-  let source = "template";
+  const cfg = await getReviewConfig();
+  const { items: template, guidance } = templateFor(cfg, t.project.key);
+  const recent = await db.prReview.findFirst({ where: { ticketId, kind: "INITIAL_CLAUDE", status: "RUNNING", createdAt: { gt: new Date(Date.now() - RUNNING_STALE_MS) } } });
+  if (recent) return { review: recent, source: "running" };
+  const round = (await db.prReview.count({ where: { ticketId, kind: "INITIAL_CLAUDE" } })) + 1;
+  const review = await db.prReview.create({ data: { ticketId, kind: "INITIAL_CLAUDE", round, items: template as any, status: "RUNNING", trigger } });
+  const finish = (data: Record<string, unknown>) => db.prReview.update({ where: { id: review.id }, data: data as any });
+
   const pr = t.prUrl ? gh.parsePrUrl(t.prUrl) : null;
-  if (pr && gh.githubConfigured()) {
-    try { items = scanDiff(await gh.getPullDiff(pr.repo, pr.number)); source = "diff scan"; } catch (e) { warn("github.diff", e); }
+  if (!pr) return { review: await finish({ status: "ERROR", error: "Link a GitHub pull request to this ticket first.", source: "manual" }), source: "error" };
+  if (!gh.githubConfigured()) {
+    // No way to read the PR: leave the checklist for a lead to tick by hand.
+    return { review: await finish({ status: "DONE", source: "manual", summary: "GitHub access is not configured, so the pull request could not be read. This checklist is for a manual review." }), source: "manual" };
   }
-  const review = await db.prReview.create({ data: { ticketId, kind: "INITIAL_CLAUDE", round: prev + 1, items: items as any, passed: reviewPassed(items) } });
-  return { review, source };
+  let diff: string;
+  try { diff = await gh.getPullDiff(pr.repo, pr.number); } catch (e) {
+    return { review: await finish({ status: "ERROR", error: `Could not read the PR: ${e instanceof Error ? e.message : e}`, source: "claude" }), source: "error" };
+  }
+  try {
+    let result: { items: ReviewItem[]; findings: Finding[]; summary: string; model: string | null; truncated: boolean; source: string };
+    if (anthropicConfigured()) {
+      const pull = await gh.getPullRequest(pr.repo, pr.number).catch(() => null);
+      const r = await reviewWithClaude({ key: t.key, title: t.title, description: t.description, prTitle: pull?.title, diff, items: template, guidance });
+      result = { ...r, source: "claude" };
+    } else {
+      // Heuristic scan fills in what it can prove; project points stay unchecked for a human.
+      const scanned = scanDiff(diff);
+      const items = template.map((i) => { const s = scanned.find((x) => x.id === i.id); return s ? { ...i, checked: s.checked, note: s.note, auto: true } : i; });
+      result = { items, findings: [], summary: "Heuristic diff scan (set ANTHROPIC_API_KEY for a full Claude review).", model: null, truncated: false, source: "diff scan" };
+    }
+    const passed = passes(result.items, result.findings);
+    const done = await finish({ status: "DONE", items: result.items as any, findings: result.findings as any, summary: result.summary, model: result.model, truncated: result.truncated, source: result.source, passed });
+    if (cfg.postToPr) await gh.commentOnPr(pr.repo, pr.number, prComment(t, { passed, summary: result.summary, items: result.items, findings: result.findings, round, model: result.model })).catch((e) => warn("github.comment", e));
+    return { review: done, source: result.source };
+  } catch (e) {
+    warn("review", e);
+    return { review: await finish({ status: "ERROR", error: e instanceof Error ? e.message : String(e), source: "claude" }), source: "error" };
+  }
 }
 
 export async function saveReview(reviewId: string, items: ReviewItem[]) {

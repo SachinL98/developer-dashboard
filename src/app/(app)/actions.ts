@@ -1,5 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { getReviewConfig, saveReviewConfig, type ReviewConfig } from "@/lib/review-config";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import * as svc from "@/lib/services";
@@ -56,6 +58,8 @@ export async function moveTicketAction(ticketId: string, to: StatusKey): Promise
     if (!canMoveTicket({ id: user.id, access: user.access }, t, to))
       return { ok: false, error: atLeast(user.access, "LEAD") ? "Not allowed" : "You can move your own cards up to Review. Staging and production steps are done by a lead." };
     const r = await svc.moveTicket(ticketId, to, user.id);
+    // Entering Initial Review kicks off the Claude review of the linked PR (in the background: it can take a minute).
+    if (r.ok && to === "INITIAL_REVIEW" && t.prUrl && (await getReviewConfig()).autoRun) after(async () => { await svc.runInitialReview(ticketId, "move").catch(() => {}); });
     touch(); revalidatePath(`/tickets/${ticketId}`);
     return r.ok ? { ok: true, label: r.label, syncError: r.syncError } : { ok: false, error: r.error };
   } catch (e) { return fail(e); }
@@ -99,14 +103,23 @@ export async function startTimerAction(ticketId: string): Promise<Result> { try 
 export async function stopTimerAction(): Promise<Result> { try { await svc.stopTimer((await me()).id); touch(); return { ok: true }; } catch (e) { return fail(e); } }
 
 // ----- reviews -----
-export async function runReviewAction(ticketId: string): Promise<Result<{ source: string }>> {
-  try { await me(); const r = await svc.runInitialReview(id.parse(ticketId)); revalidatePath(`/tickets/${ticketId}`); return { ok: true, source: r.source }; } catch (e) { return fail(e); }
+export async function runReviewAction(ticketId: string): Promise<Result> {
+  try {
+    await me();
+    const tid = id.parse(ticketId);
+    after(async () => { await svc.runInitialReview(tid, "manual").catch(() => {}); revalidatePath(`/tickets/${tid}`); });
+    return { ok: true };
+  } catch (e) { return fail(e); }
 }
 export async function saveReviewAction(reviewId: string, ticketId: string, items: ReviewItem[]): Promise<Result<{ passed: boolean }>> {
   try {
     const user = await me();
     const review = await db.prReview.findUniqueOrThrow({ where: { id: id.parse(reviewId) }, include: { ticket: true } });
     if (review.kind === "REVIEWER" && !atLeast(user.access, "LEAD")) return { ok: false, error: "The reviewer checklist is for leads and admins." };
+    if (review.status === "RUNNING") return { ok: false, error: "The review is still running." };
+    // A Claude / scan result can only be overridden by a lead; the assignee can tick a manual checklist.
+    if (review.kind === "INITIAL_CLAUDE" && !atLeast(user.access, "LEAD") && (review.source !== "manual" || review.ticket.assigneeId !== user.id))
+      return { ok: false, error: "Claude's review can only be overridden by a lead. Fix the findings, push, and it re-runs." };
     // Only the checked flag may change: labels and severities come from the stored template, never from the client.
     const prev = review.items as unknown as ReviewItem[];
     const flags = new Map(items.map((i) => [i.id, !!i.checked]));
@@ -118,9 +131,10 @@ export async function saveReviewAction(reviewId: string, ticketId: string, items
 export async function startReviewerPassAction(ticketId: string): Promise<Result> {
   try {
     await requireAccess("LEAD");
-    const { freshChecklist } = await import("@/lib/review-template");
-    const n = await db.prReview.count({ where: { ticketId: id.parse(ticketId), kind: "REVIEWER" } });
-    await db.prReview.create({ data: { ticketId, kind: "REVIEWER", round: n + 1, items: freshChecklist() as any } });
+    const t = await db.ticket.findUniqueOrThrow({ where: { id: id.parse(ticketId) }, include: { project: true } });
+    const { templateFor } = await import("@/lib/review-config");
+    const n = await db.prReview.count({ where: { ticketId: t.id, kind: "REVIEWER" } });
+    await db.prReview.create({ data: { ticketId: t.id, kind: "REVIEWER", round: n + 1, items: templateFor(await getReviewConfig(), t.project.key).items as any } });
     revalidatePath(`/tickets/${ticketId}`); return { ok: true };
   } catch (e) { return fail(e); }
 }
@@ -439,3 +453,22 @@ export async function saveProjectAction(projectId: string, patch: { name: string
   } catch (e) { return fail(e); }
 }
 void getMeetingSettings;
+
+// ----- admin: review template -----
+const templateItem = z.object({ id: z.string().trim().min(1).max(40).regex(/^[A-Za-z0-9_+\-]+$/), label: z.string().trim().min(1).max(200), severity: z.enum(["critical", "important"]), enabled: z.boolean() });
+const projectReview = z.object({ guidance: z.string().max(4000), items: z.array(templateItem).max(40) });
+const reviewConfigSchema = z.object({
+  autoRun: z.boolean(), postToPr: z.boolean(),
+  global: projectReview.extend({ items: z.array(templateItem).min(1).max(60) }),
+  projects: z.record(z.string().max(12), projectReview),
+}).refine((c) => new Set(c.global.items.map((i) => i.id)).size === c.global.items.length, "Duplicate checklist ids");
+
+/** Admin: the PR review template (team points + per-project points and guidance) and when reviews run. */
+export async function saveReviewConfigAction(input: ReviewConfig): Promise<Result> {
+  try {
+    await requireAccess("ADMIN");
+    await saveReviewConfig(reviewConfigSchema.parse(input) as ReviewConfig);
+    revalidatePath("/admin/review");
+    return { ok: true };
+  } catch (e) { return fail(e); }
+}

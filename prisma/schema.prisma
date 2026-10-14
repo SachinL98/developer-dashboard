@@ -213,6 +213,16 @@ model PrReview {
   items     Json // [{id,label,severity,checked,note}]
   passed    Boolean  @default(false)
   createdAt DateTime @default(now())
+  status    String   @default("DONE") // RUNNING | DONE | ERROR
+  source    String? // claude | diff scan | manual
+  summary   String?
+  findings  Json? // [{severity,title,detail,file,line}]
+  model     String?
+  error     String?
+  truncated Boolean  @default(false) // the PR diff was too large to send in full
+  trigger   String? // move | manual | push
+
+  @@index([ticketId])
 }
 
 model Meeting {

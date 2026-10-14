@@ -1,6 +1,6 @@
 // Prepared PR review template used for the initial Claude review and the reviewer's manual pass.
 export type Severity = "critical" | "important";
-export interface ReviewItem { id: string; label: string; severity: Severity; checked: boolean; note?: string; auto?: boolean }
+export interface ReviewItem { id: string; label: string; severity: Severity; checked: boolean; note?: string; auto?: boolean; project?: boolean }
 
 export const REVIEW_TEMPLATE: Omit<ReviewItem, "checked">[] = [
   { id: "migrations", severity: "critical", label: "Migrations are safe, reversible and don't lock hot tables" },

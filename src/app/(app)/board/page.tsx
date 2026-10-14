@@ -19,7 +19,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
   const current = sp.sprint ? sprints.find((s) => s.id === sp.sprint) : await activeSprint();
   const tickets = await db.ticket.findMany({
     where: current ? { sprintId: current.id } : {}, orderBy: { rank: "asc" },
-    include: { assignee: true, project: true, timeEntries: true },
+    include: { assignee: true, project: true, timeEntries: true, reviews: { where: { kind: "INITIAL_CLAUDE" }, orderBy: { createdAt: "desc" }, take: 1 } },
   });
   // With Jira connected the board shows the team's real Jira columns; otherwise the 10 workflow columns.
   const live = await jiraReady();
@@ -29,6 +29,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
   const lastSync = await getSetting<string>("jira.lastSync");
   const data: BoardTicket[] = tickets.map((t) => ({
     columnId: columnIdFor({ status: t.status as StatusKey, jiraStatus: t.jiraStatus }, columns), jiraStatus: t.jiraStatus, labels: t.labels,
+    review: !t.reviews[0] ? "none" : t.reviews[0].status === "RUNNING" ? "running" : t.reviews[0].status === "ERROR" ? "error" : t.reviews[0].passed ? "passed" : "blocked",
     jiraUrl: site && t.jiraKey ? `${site}/browse/${t.jiraKey}` : null,
     id: t.id, key: t.key, title: t.title, status: t.status, type: t.type, priority: t.priority, points: t.storyPoints, estimateHrs: t.estimateHrs,
     loggedHrs: hours(sumEntries(t.timeEntries)), progressPct: t.progressPct, prNumber: t.prNumber, prState: t.prState,
