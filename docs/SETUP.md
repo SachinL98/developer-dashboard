@@ -83,3 +83,12 @@ Only a lead can override a Claude review's items; a developer re-runs it after p
 - **What updates automatically:** each developer's capacity is their weekly hours spread over five days, minus approved leave and holidays inside the dates. That feeds the sprint planner's capacity bar and per-developer load, Auto-fill, the "at risk" chip on sprint cards (finish forecast, in priority order per assignee, lands after the sprint end), the forecast finish on each ticket, the next-sprint plan and next-month outlook in Reports, and the leave and holiday line in report headlines. Estimates themselves stay as effort hours; what changes is when the work can finish and how much fits.
 - **Google Calendar (optional):** when the developer has connected Google, approving leave creates an out-of-office event on their own calendar and cancelling removes it. It is best effort and never blocks an approval; it needs the Calendar scope already used for meetings.
 - **Deploy:** run `npm run db:deploy` for migration 0005 (the `Leave` table). Holidays are stored in `AppSetting`.
+
+## Review fault patterns
+
+**Reports, Code review patterns** (`/reports/patterns`) learns from the Claude PR reviews already stored on tickets. Each review's failed checklist items and findings are grouped into categories (migrations, security, data safety, scope, tests, performance, error handling, validation, logging, API and config, docs, naming and style, project rules). With `ANTHROPIC_API_KEY` set, Claude tags each finding with a category itself; older findings fall back to a keyword guess.
+
+- Per developer (by the ticket's assignee) and for the team: share of pull requests that pass on the first try, review rounds per PR, weighted faults on the first review, and a trend (needs 4 or more reviewed PRs). A category counts as a **recurring pattern** when it appears in at least 2 PRs and at least a quarter of the reviewed PRs, and at least 3 PRs have been reviewed. Each pattern shows examples and a practical suggestion; "going well" lists improvements.
+- Only full Claude reviews are counted. Heuristic scans and manual checklists are ignored.
+- **Visibility:** a developer sees only their own report; leads and admins see the team rollup (with project breakdown) and any developer. Enforced on the page and on the export endpoint (`/api/reports/patterns?dev=<id>|team&format=pdf|pptx`).
+- No migration is needed; it is computed from existing review rows.

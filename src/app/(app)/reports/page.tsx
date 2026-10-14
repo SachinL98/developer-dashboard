@@ -27,6 +27,7 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
           <a href={`/api/reports/export?${here}&format=pptx`} className="btn"><Download size={14} /> PowerPoint</a>
           <a href={`/api/reports/export?${here}&format=pdf`} className="btn"><Download size={14} /> PDF</a>
           <Link href={`/report-print?${here}`} className="btn"><Printer size={14} /> Print view</Link></> : undefined} />
+      <Link href="/reports/patterns" className="card-pad block transition hover:border-neon/40"><div className="font-medium">Code review patterns</div><p className="text-sm text-mute">What Claude's reviews keep flagging, whether it is improving, and what to focus on. {atLeast(me.access, "LEAD") ? "Team rollup and each developer." : "Your own report."}</p></Link>
 
       <div className="card-pad space-y-4">
         <div role="tablist" aria-label="Report period" className="flex flex-wrap gap-2">

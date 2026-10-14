@@ -35,3 +35,6 @@ export function emailAllowed(email: string | undefined | null): boolean {
   const m = email.toLowerCase().match(/^[^@\s]+@([^@\s]+)$/);
   return !!m && m[1] === allowedDomain();
 }
+
+/** Review fault patterns are personal: the developer themself and leads/admins may see them, other developers may not. */
+export const canViewPatterns = (actor: Actor, developerId: string | "team") => (developerId === "team" ? atLeast(actor.access, "LEAD") : developerId === actor.id || atLeast(actor.access, "LEAD"));

@@ -38,7 +38,7 @@ export function SlideView({ slide, index, total, className }: { slide: Slide; in
               <div>
                 {s.rows.length > 0 && (
                   <table className="w-full table-fixed text-left text-[1.45cqw]">
-                    <thead><tr className="bg-panel2 text-[1.1cqw] uppercase tracking-wider text-mute">{s.columns.map((c) => <th key={c} className={clsx("px-[1cqw] py-[0.8cqw] font-semibold", c === "Title" && "w-[40%]")}>{c}</th>)}</tr></thead>
+                    <thead><tr className="bg-panel2 text-[1.1cqw] uppercase tracking-wider text-mute">{s.columns.map((c, ci) => <th key={c} className={clsx("px-[1cqw] py-[0.8cqw] font-semibold", ci === (s.columns.indexOf("Title") >= 0 ? s.columns.indexOf("Title") : s.columns.length >= 4 ? 0 : -1) && "w-[40%]")}>{c}</th>)}</tr></thead>
                     <tbody>{s.rows.map((r, i) => <tr key={i} className="border-t border-line">{r.map((c, j) => <td key={j} className={clsx("truncate px-[1cqw] py-[0.7cqw]", j === 0 && "font-mono text-mute")}>{c}</td>)}</tr>)}</tbody>
                   </table>)}
                 {s.caption && <p className="mt-[1.2cqw] text-[1.3cqw] italic text-mute">{s.caption}</p>}

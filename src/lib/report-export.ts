@@ -46,7 +46,7 @@ export async function toPptx(slides: Slide[], deckTitle: string): Promise<Buffer
       } else if (s.layout === "table") {
         const head = s.columns.map((c) => ({ text: c, options: { bold: true, color: C.mute, fill: { color: C.panel }, fontSize: 12 } }));
         const body = s.rows.map((r) => r.map((c) => ({ text: c, options: { color: C.ink, fontSize: 12 } })));
-        const wide = s.columns.indexOf("Title");
+        const wide = s.columns.indexOf("Title") >= 0 ? s.columns.indexOf("Title") : s.columns.length >= 4 ? 0 : -1;
         const colW = s.columns.map((_, k) => (wide >= 0 ? (k === wide ? 5.4 : (12.1 - 5.4) / (s.columns.length - 1)) : 12.1 / s.columns.length));
         if (body.length) sl.addTable([head, ...body], { x: 0.6, y: 1.5, w: 12.1, colW, border: { type: "solid", color: C.line, pt: 0.5 }, fontFace: "Calibri", rowH: 0.36 });
         if (s.caption) sl.addText(s.caption, { x: 0.6, y: body.length ? Math.min(bottom - 0.4, 1.5 + 0.36 * (body.length + 1) + 0.15) : 1.6, w: 12.1, h: 0.4, fontSize: 12, color: C.mute, italic: true });
@@ -105,7 +105,7 @@ export async function toPdf(slides: Slide[], deckTitle: string): Promise<Buffer>
       let y = 100;
       for (const b of s.bullets) { doc.text("•  " + b, M, y, { width: CW, height: bottom - y }); y = doc.y + 10; if (y > bottom - 16) break; }
     } else if (s.layout === "table") {
-      const wide = s.columns.indexOf("Title");
+      const wide = s.columns.indexOf("Title") >= 0 ? s.columns.indexOf("Title") : s.columns.length >= 4 ? 0 : -1;
       const widths = s.columns.map((_, k) => (wide >= 0 ? (k === wide ? CW * 0.42 : (CW * 0.58) / (s.columns.length - 1)) : CW / s.columns.length));
       let y = 92; const rowH = 24;
       const drawRow = (cells: string[], head: boolean) => {
