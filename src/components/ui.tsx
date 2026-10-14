@@ -5,11 +5,11 @@ import { STATUS_META, TYPE_META, PRIORITY_META, type StatusKey } from "@/lib/wor
 export function PageHeader({ title, sub, actions }: { title: string; sub?: ReactNode; actions?: ReactNode }) {
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-      <div>
+      <div className="min-w-0">
         <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
         {sub && <p className="mt-1 text-sm text-mute">{sub}</p>}
       </div>
-      <div className="flex items-center gap-2">{actions}</div>
+      <div className="flex max-w-full flex-wrap items-center gap-2">{actions}</div>
     </div>
   );
 }

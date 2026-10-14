@@ -32,3 +32,12 @@ body {
 .live-dot { animation: pulse-ring 1.6s infinite; }
 .fade-in { animation: fade .35s ease both; }
 @keyframes fade { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: none } }
+
+/* Touch devices: 44px targets, 16px inputs (stops iOS zooming into fields), no hover-only controls. */
+@media (pointer: coarse) {
+  .btn { min-height: 44px; }
+  .input { min-height: 44px; font-size: 16px; }
+}
+html { -webkit-text-size-adjust: 100%; }
+.grid > *, .flex > .min-w-0 { min-width: 0; }
+code { overflow-wrap: anywhere; }

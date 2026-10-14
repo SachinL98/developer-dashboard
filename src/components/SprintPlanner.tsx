@@ -66,11 +66,11 @@ export function SprintPlanner({ sprints, selected, backlog, inSprint, fit, perDe
                 className={clsx("group flex items-center gap-2 rounded-lg border bg-panel2 px-2 py-2 text-sm", over === t.id ? "border-neon" : "border-line")}>
                 <GripVertical size={14} className="cursor-grab text-mute" />
                 <span style={{ color: PRIORITY_META[t.priority].color }}>▲</span>
-                <Link href={`/tickets/${t.id}`} className="min-w-0 flex-1 truncate hover:text-white"><span className="font-mono text-xs text-mute">{t.key}</span> {t.title}</Link>
+                <Link href={`/tickets/${t.id}`} className="min-w-0 flex-1 break-words hover:text-white sm:truncate"><span className="font-mono text-xs text-mute">{t.key}</span> {t.title}</Link>
                 {t.complicated && <Flame size={13} className="text-neon-amber" aria-label="Groom" />}
-                <span className="rounded px-1.5 text-[10px]" style={{ color: TYPE_META[t.type].color, background: TYPE_META[t.type].color + "18" }}>{TYPE_META[t.type].label}</span>
+                <span className="hidden rounded px-1.5 text-[10px] sm:inline" style={{ color: TYPE_META[t.type].color, background: TYPE_META[t.type].color + "18" }}>{TYPE_META[t.type].label}</span>
                 <span className="w-10 text-right font-mono text-xs text-mute">{t.estimateHrs != null ? `${t.estimateHrs}h` : "—"}</span>
-                {sprintOpen && <button className="btn-ghost px-2 py-0.5" title="Add to sprint" disabled={pending} onClick={() => run(() => assignToSprintAction(t.id, selected!.id), () => `${t.key} added`)}>+</button>}
+                {sprintOpen && <button className="btn-ghost px-2 py-0.5 [@media(hover:none)]:px-3.5 [@media(hover:none)]:py-2" title="Add to sprint" disabled={pending} onClick={() => run(() => assignToSprintAction(t.id, selected!.id), () => `${t.key} added`)}>+</button>}
               </li>
             ))}
             {!list.length && <li className="py-6 text-center text-sm text-mute">Backlog is empty.</li>}
@@ -100,11 +100,11 @@ export function SprintPlanner({ sprints, selected, backlog, inSprint, fit, perDe
               {inSprint.map((t) => (
                 <li key={t.id} className="flex items-center gap-2 rounded-lg border border-line bg-panel2 px-3 py-2 text-sm">
                   <span style={{ color: PRIORITY_META[t.priority].color }}>▲</span>
-                  <Link href={`/tickets/${t.id}`} className="min-w-0 flex-1 truncate hover:text-white"><span className="font-mono text-xs text-mute">{t.key}</span> {t.title}</Link>
+                  <Link href={`/tickets/${t.id}`} className="min-w-0 flex-1 break-words hover:text-white sm:truncate"><span className="font-mono text-xs text-mute">{t.key}</span> {t.title}</Link>
                   {t.complicated && <Flame size={13} className="text-neon-amber" />}
                   {t.points != null && <span className="rounded bg-line px-1.5 font-mono text-xs">{t.points}</span>}
                   <span className={clsx("w-14 whitespace-nowrap text-right font-mono text-xs", t.estimateHrs == null ? "text-neon-red" : "text-mute")}>{t.estimateHrs != null ? `${t.estimateHrs}h` : "no est."}</span>
-                  {canManage && selected.state === "PLANNING" && <button className="text-mute hover:text-neon-red" onClick={() => run(() => assignToSprintAction(t.id, null), () => `${t.key} returned to backlog`)}><X size={14} /></button>}
+                  {canManage && selected.state === "PLANNING" && <button className="rounded p-1 text-mute hover:text-neon-red [@media(hover:none)]:p-2.5" aria-label="Remove from sprint" onClick={() => run(() => assignToSprintAction(t.id, null), () => `${t.key} returned to backlog`)}><X size={14} /></button>}
                 </li>
               ))}
               {!inSprint.length && <li className="rounded-xl border border-dashed border-line p-8 text-center text-sm text-mute">Drop backlog tickets here.</li>}
