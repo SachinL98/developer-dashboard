@@ -65,3 +65,13 @@ When a card with a linked PR moves to **Initial Review**, the app has Claude rev
 4. **Admin → PR review**: edit the team checklist (critical / important), add per-project points and guidance, and choose whether reviews run automatically and whether the result is also posted as a PR comment.
 
 Only a lead can override a Claude review's items; a developer re-runs it after pushing fixes. PR content is sent to the Anthropic API, and is treated as untrusted data in the prompt.
+
+## Reports and presentations
+
+**Reports** in the sidebar builds a slide deck from live data for the previous week, previous sprint or previous month (or any earlier one from the period picker). Every deck has headline numbers, delivery chart, what shipped, developer highlights, quality and flow, carry-over, risks and asks, decisions and open actions from that period's meetings, the plan for the next sprint (from the Sprints planner, with capacity fit) and an outlook for the next four weeks (from the prioritised, estimated backlog).
+
+- **Present** opens a full-screen presenter (arrow keys, space, Home/End, `F` for fullscreen, `Esc` to leave; swipe on touch). It follows the user's light or dark theme.
+- **PowerPoint** and **PDF** download from `/api/reports/export?kind=week|sprint|month&ref=...&format=pptx|pdf` (signed-in users). Exports always use a light, print-friendly palette.
+- **Print view** (`/report-print`) lays one slide per landscape page for the browser's Save as PDF.
+- **Commentary:** leads and admins can add a line per slide; it is stored per period in `AppSetting` (`report.notes:<period>`) and shows in the presenter and both exports.
+- No new migration or environment variable is needed. Numbers come from `doneAt`, time entries, transitions and meetings already in the database, so with Jira connected they reflect the real board.

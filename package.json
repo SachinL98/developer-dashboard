@@ -23,6 +23,8 @@
     "date-fns": "^4.4.0",
     "lucide-react": "^1.57.0",
     "next": "^15.5.27",
+    "pdfkit": "^0.20.2",
+    "pptxgenjs": "^4.0.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "recharts": "^3.10.1",
@@ -30,6 +32,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
+    "@types/pdfkit": "^0.17.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "autoprefixer": "^10.6.1",

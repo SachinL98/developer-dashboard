@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, KanbanSquare, Rocket, Timer, Calculator, Video, BarChart3, PlusCircle, Plug, Users, Shield } from "lucide-react";
+import { LayoutDashboard, KanbanSquare, Rocket, Timer, Calculator, Video, BarChart3, Presentation, PlusCircle, Plug, Users, Shield } from "lucide-react";
 import clsx from "clsx";
 
 const items = [
@@ -12,6 +12,7 @@ const items = [
   { href: "/estimation", label: "Estimation", icon: Calculator },
   { href: "/meetings", label: "Meetings", icon: Video },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/reports", label: "Reports", icon: Presentation },
   { href: "/team", label: "Team", icon: Users },
   { href: "/tickets/new", label: "New ticket", icon: PlusCircle },
   { href: "/settings", label: "Integrations", icon: Plug },

@@ -12,7 +12,7 @@
   --grid: rgba(255,255,255,.025); --blob1: rgba(167,139,250,.14); --blob2: rgba(110,231,255,.10); --scroll: #1f2740;
   color-scheme: dark;
 }
-html.light {
+html.light, .force-light {
   /* Light theme: accents are darkened so text on white keeps >= 4.5:1 contrast */
   --bg: 244 246 251; --panel: 255 255 255; --panel2: 241 244 250; --line: 214 220 235; --ink: 17 24 39; --mute: 88 99 124; --on-accent: 255 255 255;
   --neon: 10 105 133; --neon-violet: 109 40 217; --neon-lime: 63 98 18; --neon-pink: 190 24 93; --neon-amber: 161 78 4; --neon-red: 190 18 60;

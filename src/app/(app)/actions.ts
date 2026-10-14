@@ -478,3 +478,17 @@ export async function saveReviewConfigAction(input: ReviewConfig): Promise<Resul
 export async function setThemeAction(theme: string): Promise<Result> {
   try { const user = await me(); if (!isTheme(theme)) return { ok: false, error: "Unknown theme" }; await db.developer.update({ where: { id: user.id }, data: { theme } }); return { ok: true }; } catch (e) { return fail(e); }
 }
+
+// ----- reports -----
+/** Short commentary on one slide of a report; leads and admins only. */
+export async function saveReportNoteAction(periodKey: string, slideId: string, text: string): Promise<Result> {
+  try {
+    await requireAccess("LEAD");
+    const key = z.string().regex(/^(week:\d{4}-\d{2}-\d{2}|month:\d{4}-\d{2}|sprint:[\w-]{1,64})$/).parse(periodKey);
+    const sid = z.string().regex(/^[a-z-]{1,32}$/).parse(slideId);
+    const { saveReportNote } = await import("@/lib/report-data");
+    await saveReportNote(key, sid, z.string().max(600).parse(text));
+    revalidatePath("/reports");
+    return { ok: true };
+  } catch (e) { return fail(e); }
+}
