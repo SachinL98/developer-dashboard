@@ -1,10 +1,11 @@
 "use client";
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import clsx from "clsx";
-import { GitPullRequest, Clock, Flame, Lock, ArrowRight } from "lucide-react";
+import { GitPullRequest, Clock, Flame, Lock, ArrowRight, ExternalLink } from "lucide-react";
 import { moveTicketAction } from "@/app/(app)/actions";
-import { STATUS_META, STATUS_ORDER, TYPE_META, PRIORITY_META, allowedNext, type StatusKey } from "@/lib/workflow";
+import { STATUS_META, TYPE_META, PRIORITY_META, allowedNext, type StatusKey } from "@/lib/workflow";
+import type { BoardColumn } from "@/lib/board-columns";
 import { canMoveTicket, type Actor } from "@/lib/permissions";
 import { Avatar, Progress } from "./ui";
 
@@ -12,10 +13,15 @@ export interface BoardTicket {
   id: string; key: string; title: string; status: StatusKey; type: keyof typeof TYPE_META; priority: keyof typeof PRIORITY_META;
   points: number | null; estimateHrs: number | null; loggedHrs: number; progressPct: number; prNumber: number | null; prState: string | null;
   assigneeId: string | null; assignee: { name: string; hue: number } | null; project: { key: string; color: string }; complicated: boolean;
+  columnId: string; jiraStatus: string | null; labels: string[]; jiraUrl: string | null;
 }
 
-export function Board({ tickets: initial, readOnlyHint, actor }: { tickets: BoardTicket[]; readOnlyHint?: string; actor: Actor }) {
+export function Board({ tickets: initial, columns, readOnlyHint, actor }: { tickets: BoardTicket[]; columns: BoardColumn[]; readOnlyHint?: string; actor: Actor }) {
   const [tickets, setTickets] = useState(initial);
+  useEffect(() => setTickets(initial), [initial]); // pick up realtime changes from Jira after a refresh
+  const colOf = (s: StatusKey, fallback: string) => columns.find((c) => c.statuses.includes(s))?.id ?? fallback;
+  /** The workflow status a card takes when dropped into a column: the first legal forward move that column allows. */
+  const targetIn = (t: BoardTicket, c: BoardColumn) => c.id === t.columnId ? undefined : c.statuses.find((k) => allowedNext(t.status).includes(k) && canMoveTicket(actor, t, k));
   const [drag, setDrag] = useState<BoardTicket | null>(null);
   const [toast, setToast] = useState<{ msg: string; bad?: boolean } | null>(null);
   const [, start] = useTransition();
@@ -27,7 +33,7 @@ export function Board({ tickets: initial, readOnlyHint, actor }: { tickets: Boar
   function move(t: BoardTicket, to: StatusKey) {
     const prev = tickets;
     if (t.status === to) return;
-    setTickets((xs) => xs.map((x) => (x.id === t.id ? { ...x, status: to } : x))); // optimistic
+    setTickets((xs) => xs.map((x) => (x.id === t.id ? { ...x, status: to, columnId: colOf(to, x.columnId) } : x))); // optimistic
     start(async () => {
       const r = await moveTicketAction(t.id, to);
       if (!r.ok) { setTickets(prev); say(r.error, true); } else say(`${t.key} → ${r.label}${r.syncError ? " (Jira sync failed: " + r.syncError.slice(0, 80) + ")" : ""}`);
@@ -45,19 +51,20 @@ export function Board({ tickets: initial, readOnlyHint, actor }: { tickets: Boar
         <span className="text-xs text-mute">{readOnlyHint ?? "Drag a card forward, or use the → button. Backward moves are disabled; you can move your own cards, leads move any."}</span>
       </div>
       <div className="-mx-4 overflow-x-auto px-4 pb-4 md:-mx-8 md:px-8">
-        <div className="flex gap-3" style={{ minWidth: STATUS_ORDER.length * 268 }}>
-          {STATUS_ORDER.map((s) => {
-            const meta = STATUS_META[s];
-            const col = visible.filter((t) => t.status === s);
-            const droppable = !!drag && allowedNext(drag.status).includes(s) && canMoveTicket(actor, drag, s);
-            const blocked = !!drag && drag.status !== s && !droppable;
+        <div className="flex gap-3" style={{ minWidth: columns.length * 268 }}>
+          {columns.map((c) => {
+            const col = visible.filter((t) => t.columnId === c.id);
+            const target = drag ? targetIn(drag, c) : undefined;
+            const droppable = !!target;
+            const blocked = !!drag && drag.columnId !== c.id && !droppable;
             return (
-              <div key={s} onDragOver={(e) => droppable && e.preventDefault()} onDrop={() => { if (drag && droppable) move(drag, s); setDrag(null); }}
+              <div key={c.id} onDragOver={(e) => droppable && e.preventDefault()} onDrop={() => { if (drag && target) move(drag, target); setDrag(null); }}
                 className={clsx("w-[256px] shrink-0 rounded-2xl border bg-panel/60 p-2 transition", droppable ? "border-neon shadow-glow" : "border-line", blocked && "opacity-40")}>
-                <div className="mb-2 flex items-center justify-between px-2 pt-1" title={meta.hint}>
-                  <span className="flex items-center gap-2 text-sm font-semibold"><span className="h-2 w-2 rounded-full" style={{ background: meta.color }} />{meta.label}</span>
+                <div className="mb-2 flex items-center justify-between px-2 pt-1" title={c.hint}>
+                  <span className="flex items-center gap-2 text-sm font-semibold"><span className="h-2 w-2 rounded-full" style={{ background: c.color }} />{c.label}</span>
                   <span className="rounded-md bg-panel2 px-1.5 font-mono text-xs text-mute">{col.length}</span>
                 </div>
+                {c.jiraStatuses.length > 1 && <div className="mb-2 truncate px-2 text-[10px] text-mute" title={c.jiraStatuses.join(" · ")}>{c.jiraStatuses.join(" · ")}</div>}
                 <div className="space-y-2">
                   {col.map((t) => <Card key={t.id} t={t} actor={actor} onDragStart={() => setDrag(t)} onDragEnd={() => setDrag(null)} onMove={(to) => move(t, to)} />)}
                   {!col.length && <div className="rounded-xl border border-dashed border-line/70 p-4 text-center text-xs text-mute/70">{drag ? (droppable ? "Drop here" : <Lock size={14} className="mx-auto" />) : "Empty"}</div>}
@@ -87,12 +94,18 @@ function Card({ t, actor, onDragStart, onDragEnd, onMove }: { t: BoardTicket; ac
         </span>
       </div>
       <Link href={`/tickets/${t.id}`} className="mt-1.5 block text-sm leading-snug hover:text-white">{t.title}</Link>
+      {(t.jiraStatus || t.labels.length > 0) && (
+        <div className="mt-1.5 flex flex-wrap gap-1 text-[10px]">
+          {t.jiraStatus && <span className="rounded border border-line px-1 text-mute" title="Status in Jira">{t.jiraStatus}</span>}
+          {t.labels.slice(0, 3).map((l) => <span key={l} className="rounded bg-line/60 px-1 text-mute">{l}</span>)}
+        </div>)}
       {t.status === "IN_PROGRESS" && <div className="mt-2"><Progress pct={t.progressPct} color="#a78bfa" /><div className="mt-1 text-right font-mono text-[10px] text-mute">{t.progressPct}%</div></div>}
       <div className="mt-2 flex items-center justify-between">
         <div className="flex items-center gap-2 text-[11px] text-mute">
           {t.points != null && <span className="rounded bg-line px-1.5 font-mono text-ink">{t.points}</span>}
           {t.estimateHrs != null && <span className={clsx("flex items-center gap-1", over && "text-neon-red")}><Clock size={11} />{t.loggedHrs.toFixed(1)}/{t.estimateHrs}h</span>}
           {t.prNumber && <span className="flex items-center gap-1"><GitPullRequest size={11} />#{t.prNumber}</span>}
+          {t.jiraUrl && <a href={t.jiraUrl} target="_blank" rel="noreferrer" title="Open in Jira" className="hover:text-white"><ExternalLink size={11} /></a>}
         </div>
         <div className="flex items-center gap-1">
           {next.map((n) => (

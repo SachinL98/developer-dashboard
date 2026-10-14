@@ -10,6 +10,8 @@ import { ProfileForm } from "@/components/ProfileForm";
 import { headers } from "next/headers";
 import { CheckCircle2, CircleDashed, Link2 } from "lucide-react";
 import { GOOGLE_WORK_SCOPES } from "@/lib/auth/scopes";
+import { StatusMapEditor } from "@/components/StatusMapEditor";
+import { cachedBoardInfo, jiraReady, loadStatusMap, statusFromJira } from "@/lib/integrations/jira";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +30,9 @@ export default async function Settings({ searchParams }: { searchParams: Promise
   const googleFull = !!google && GOOGLE_WORK_SCOPES.every((s) => googleScopes.includes(s));
   const isAdmin = atLeast(me.access, "ADMIN");
   const h = await headers();
+  const jiraLive = await jiraReady();
+  const board = jiraLive && atLeast(me.access, "LEAD") ? await cachedBoardInfo() : null;
+  const statusMap = board ? await loadStatusMap() : {};
   const origin = process.env.APP_URL || `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host")}`;
 
   const cards = [
@@ -63,6 +68,17 @@ export default async function Settings({ searchParams }: { searchParams: Promise
         <ProfileForm userId={me.id} role={me.role} capacityHrs={me.capacityHrs} githubLogin={me.githubLogin ?? ""} email={me.email} access={me.access} />
       </div>
 
+      {jiraLive && atLeast(me.access, "LEAD") && (
+        <div className="card-pad">
+          <div className="h-section mb-3">Jira board → workflow mapping</div>
+          {board ? (
+            <StatusMapEditor canEdit={isAdmin} initial={statusMap as Record<string, string>} fetchedAt={board.fetchedAt}
+              unit={board.estimation.mode === "points" ? `story points (${board.estimation.field})` : "original estimate (hours)"}
+              columns={board.columns.map((c) => ({ name: c.name, statuses: c.statuses.map((s) => ({ name: s.name, auto: statusFromJira(s.name, {}, s.category) })) }))} />
+          ) : <p className="text-sm text-mute">The real board hasn't been read yet. Press <b>Sync Jira</b> above to load its columns, statuses and estimation unit.</p>}
+        </div>
+      )}
+
       {isAdmin && (
         <div className="card-pad space-y-5">
           <div className="h-section">Server setup checklist (admins)</div>
@@ -78,7 +94,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
             <div className="h-section mb-1">URLs to register</div>
             <div>Google OAuth redirect URI: <code className="text-ink">{origin}/api/auth/google/callback</code></div>
             <div>Atlassian callback URL: <code className="text-ink">{origin}/api/auth/atlassian/callback</code></div>
-            <div>Jira webhook: <code className="text-ink">{origin}/api/webhooks/jira?secret=&lt;JIRA_WEBHOOK_SECRET&gt;</code></div>
+            <div>Jira webhook (realtime; events: issue created/updated/deleted, sprint created/started/closed/updated, board configuration changed): <code className="text-ink">{origin}/api/webhooks/jira?secret=&lt;JIRA_WEBHOOK_SECRET&gt;</code></div>
             <div>GitHub webhook (pull_request): <code className="text-ink">{origin}/api/webhooks/github</code></div>
             <div>Cron (every 10 min): <code className="text-ink">GET {origin}/api/cron/sync</code> and <code className="text-ink">/api/cron/transcripts</code> with <code>Authorization: Bearer &lt;CRON_SECRET&gt;</code></div>
           </div>

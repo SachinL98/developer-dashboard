@@ -23,7 +23,9 @@ Everything below is configuration; no code changes. Until it is done the app run
 5. Set `ATLASSIAN_CLIENT_ID`, `ATLASSIAN_CLIENT_SECRET`, `JIRA_SITE_URL`, `JIRA_PROJECT_KEY`, `JIRA_BOARD_ID` (the number in the board URL `/boards/<id>`).
 6. Check the board's statuses are named exactly like the columns (Backlog, Ready to Dev, In Progress, Initial Review, Review, Deployed to Stg, Failed in Staging, Documented, Deployed to Production, Done) and the workflow has transitions between them.
 7. Each person clicks **Connect** on *Integrations → Jira Cloud*. Tickets, sprint moves and worklogs they make in the dashboard are then done as them.
-8. Webhook for live updates: Jira → System → WebHooks → URL `{APP_URL}/api/webhooks/jira?secret={JIRA_WEBHOOK_SECRET}`, event *Issue updated*.
+8. Realtime: Jira → System → WebHooks → URL `{APP_URL}/api/webhooks/jira?secret={JIRA_WEBHOOK_SECRET}`, events *Issue created / updated / deleted*, *Sprint created / started / closed / updated* and *Board configuration changed*. Every issue field the dashboard shows (status, assignee, sprint, labels, priority, story points, original estimate) is mirrored on each event. If Jira can't reach the app (localhost, VPN), nothing else is needed: open boards poll every 30 s, and the cron sync covers the rest.
+9. The board reads the real Jira board: after the first **Sync Jira** (Integrations page) it shows the board's own columns, and detects how it estimates (story points or original estimate, from the board's *Estimation* setting). Jira statuses are matched to the workflow by name, then by Jira's status category. Admins can override any status in *Integrations → Jira board → workflow mapping*.
+10. Estimates: *Apply* in Estimation writes the agreed value to the Jira issue in the detected unit; *Push estimates to Jira* writes a whole sprint. Failed writes are shown on the ticket and can be retried.
 
 > The Atlassian scope names were written from the docs and have not been exercised against a live site. If Jira answers 401/403 "scope does not match", add the scope named in the error to the app's Permissions and to `src/lib/auth/scopes.ts`.
 

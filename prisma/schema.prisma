@@ -117,6 +117,9 @@ model Ticket {
   prNumber     Int?
   prState      String? // open | merged | closed
   jiraKey      String?
+  jiraStatus   String? // the real Jira status name, mirrored so the board can show the team's own columns
+  estimateSyncedAt  DateTime? // last time the estimate was written to the Jira issue
+  estimateSyncError String? // why the last write-back failed, if it did
   complicated  Boolean     @default(false) // flagged for grooming
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
@@ -271,4 +274,11 @@ model Connection {
   createdAt   DateTime  @default(now())
 
   @@unique([userId, provider])
+}
+
+/// Small key/value store: cached Jira board config, status-name mapping, last poll time.
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
 }

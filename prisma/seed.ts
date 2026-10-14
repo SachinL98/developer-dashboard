@@ -52,7 +52,7 @@ const rank = (s: Status) => STATUS_ORDER.indexOf(s);
 async function main() {
   await db.$transaction([
     db.actionItem.deleteMany(), db.meeting.deleteMany(), db.prReview.deleteMany(), db.estimateVote.deleteMany(), db.progressLog.deleteMany(),
-    db.timeEntry.deleteMany(), db.workSession.deleteMany(), db.connection.deleteMany(), db.authSession.deleteMany(), db.transition.deleteMany(), db.ticket.deleteMany(), db.sprint.deleteMany(),
+    db.timeEntry.deleteMany(), db.workSession.deleteMany(), db.connection.deleteMany(), db.authSession.deleteMany(), db.appSetting.deleteMany(), db.transition.deleteMany(), db.ticket.deleteMany(), db.sprint.deleteMany(),
     db.project.deleteMany(), db.developer.deleteMany(),
   ]);
   const D = await Promise.all(devs.map((d) => db.developer.create({ data: d })));

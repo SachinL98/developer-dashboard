@@ -3,28 +3,53 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
-import { Eye, EyeOff, Sparkles, Check, RotateCcw, Flame } from "lucide-react";
-import { applyEstimateAction, clearVotesAction, voteAction } from "@/app/(app)/actions";
-import { POKER_HOURS, STORY_POINTS } from "@/lib/workflow";
+import { Eye, EyeOff, Sparkles, Check, RotateCcw, Flame, CloudUpload, AlertTriangle } from "lucide-react";
+import { applyEstimateAction, clearVotesAction, pushSprintEstimatesAction, voteAction } from "@/app/(app)/actions";
+import { POKER_HOURS, pointsForHours } from "@/lib/workflow";
 import { summarisePoker, type Suggestion } from "@/lib/estimation";
 
 export interface EstTicket {
   id: string; key: string; title: string; description: string; type: string; points: number | null; estimateHrs: number | null; complicated: boolean;
+  jira: "synced" | "error" | "pending" | "local"; jiraError: string | null;
   suggestion: Suggestion; votes: { dev: string; hours: number; mine: boolean }[]; myVote: number | null;
 }
-const pointsFor = (h: number) => STORY_POINTS.find((p) => h <= p * 2.5) ?? 13;
+const pointsFor = pointsForHours;
 
-export function EstimationBoard({ tickets, devCount, canLead }: { tickets: EstTicket[]; devCount: number; canLead: boolean }) {
+const unitLabel = (m: "points" | "hours") => (m === "points" ? "story points" : "original estimate (hours)");
+
+export function EstimationBoard({ tickets, devCount, canLead, sprintId, sprintName, unit, jiraLive }: {
+  tickets: EstTicket[]; devCount: number; canLead: boolean; sprintId: string | null; sprintName: string; unit: { mode: "points" | "hours"; field: string } | null; jiraLive: boolean;
+}) {
+  const [note, setNote] = useState<{ t: string; bad?: boolean } | null>(null);
   const [sel, setSel] = useState(tickets[0]?.id);
   const [reveal, setReveal] = useState<Record<string, boolean>>({});
   const [pending, start] = useTransition();
   const router = useRouter();
   const t = tickets.find((x) => x.id === sel);
-  const run = (fn: () => Promise<any>) => start(async () => { await fn(); router.refresh(); });
+  const run = (fn: () => Promise<any>) => start(async () => {
+    const r = await fn();
+    if (r && r.ok === false) setNote({ t: r.error, bad: true });
+    else if (r?.jira?.status === "synced") setNote({ t: `Written to Jira: ${r.jira.value} ${r.jira.mode === "points" ? "story points" : "h original estimate"}` });
+    else if (r?.jira?.status === "error") setNote({ t: `Saved here, but Jira rejected it: ${r.jira.message}`, bad: true });
+    router.refresh();
+  });
+  const pushAll = () => sprintId && start(async () => {
+    const r = await pushSprintEstimatesAction(sprintId);
+    setNote(!r.ok ? { t: r.error, bad: true } : r.failed.length ? { t: `${r.synced} written, ${r.failed.length} failed: ${r.failed.slice(0, 2).map((f) => `${f.key} (${f.message.slice(0, 60)})`).join("; ")}`, bad: true } : { t: `${r.synced} estimate(s) written to Jira${r.skipped ? `, ${r.skipped} skipped (no estimate)` : ""}` });
+    router.refresh();
+  });
+  const unsynced = tickets.filter((x) => x.jira !== "local" && x.jira !== "synced" && (x.estimateHrs != null || x.points != null)).length;
   const summary = t ? summarisePoker(t.votes.map((v) => v.hours)) : null;
   const shown = t ? reveal[t.id] : false;
 
   return (
+    <>
+    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-line bg-panel px-4 py-3 text-sm">
+      <CloudUpload size={16} className="text-neon" />
+      <span className="text-mute">{jiraLive ? <>Jira estimates in <b className="text-ink">{unit ? unitLabel(unit.mode) : "an unknown unit — press Sync Jira in Integrations"}</b>. Applying an estimate updates the Jira ticket right away.</> : "Jira isn't connected: estimates stay in this dashboard. Connect Jira in Integrations to write them to the real tickets."}</span>
+      {jiraLive && sprintId && canLead && <button className="btn ml-auto" disabled={pending} onClick={pushAll}><CloudUpload size={14} /> Push {sprintName} estimates to Jira{unsynced ? ` (${unsynced} pending)` : ""}</button>}
+      {note && <span className={clsx("w-full text-xs", note.bad ? "text-neon-red" : "text-neon-lime")}>{note.t}</span>}
+    </div>
     <div className="grid gap-6 xl:grid-cols-3">
       <div className="card-pad max-h-[760px] overflow-y-auto xl:col-span-1">
         <div className="h-section mb-3">To estimate · {tickets.length}</div>
@@ -33,6 +58,8 @@ export function EstimationBoard({ tickets, devCount, canLead }: { tickets: EstTi
             <li key={x.id}><button onClick={() => setSel(x.id)} className={clsx("flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm", x.id === sel ? "border-neon/60 bg-neon/10" : "border-line hover:border-line/80 hover:bg-panel2")}>
               <span className="min-w-0 flex-1 truncate"><span className="font-mono text-xs text-mute">{x.key}</span> {x.title}</span>
               {x.complicated && <Flame size={13} className="text-neon-amber" />}
+              {x.jira === "error" && <AlertTriangle size={13} className="text-neon-red" aria-label={x.jiraError ?? "Jira write failed"} />}
+              {x.jira === "synced" && <CloudUpload size={13} className="text-neon-lime" aria-label="Written to Jira" />}
               <span className="font-mono text-xs text-mute">{x.estimateHrs != null ? `${x.estimateHrs}h` : `${x.votes.length}/${devCount}`}</span>
             </button></li>
           ))}
@@ -45,7 +72,12 @@ export function EstimationBoard({ tickets, devCount, canLead }: { tickets: EstTi
           <div className="card-pad">
             <div className="flex items-start justify-between gap-3">
               <div><Link href={`/tickets/${t.id}`} className="text-lg font-semibold hover:text-neon">{t.title}</Link><div className="font-mono text-xs text-mute">{t.key} · {t.type.toLowerCase()}{t.points ? ` · ${t.points} pts` : ""}</div></div>
-              {t.estimateHrs != null && <span className="chip border-neon-lime/40 text-neon-lime"><Check size={11} /> {t.estimateHrs}h agreed</span>}
+              <div className="flex flex-col items-end gap-1">
+                {t.estimateHrs != null && <span className="chip border-neon-lime/40 text-neon-lime"><Check size={11} /> {t.estimateHrs}h agreed</span>}
+                {t.jira === "synced" && <span className="text-[11px] text-neon-lime">In Jira ✓</span>}
+                {t.jira === "pending" && t.estimateHrs != null && <span className="text-[11px] text-neon-amber">Not written to Jira yet</span>}
+                {t.jira === "error" && <span className="max-w-[260px] text-right text-[11px] text-neon-red">Jira write failed: {t.jiraError}</span>}
+              </div>
             </div>
             <p className="mt-3 line-clamp-4 whitespace-pre-wrap text-sm text-mute">{t.description || "No description."}</p>
           </div>
@@ -92,5 +124,6 @@ export function EstimationBoard({ tickets, devCount, canLead }: { tickets: EstTi
         </div>
       )}
     </div>
+    </>
   );
 }

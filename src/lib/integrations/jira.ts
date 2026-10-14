@@ -3,6 +3,7 @@ import type { StatusKey } from "../workflow";
 import { STATUS_META } from "../workflow";
 
 import { boundUserId } from "../context";
+import { getSetting, setSetting } from "../settings";
 import { accessTokenFor, getConnection } from "./connections";
 
 const env = () => ({
@@ -48,21 +49,46 @@ export async function jiraBrowseUrl(key: string): Promise<string | null> {
 const adf = (text: string) => ({ type: "doc", version: 1, content: text.split("\n").map((l) => ({ type: "paragraph", content: l ? [{ type: "text", text: l }] : [] })) });
 const adfText = (n: any): string => !n ? "" : n.text ?? (n.content ?? []).map(adfText).join(n.type === "doc" ? "\n" : "");
 
-/** Map a Jira status name to a board column key (by name, case/space-insensitive). */
-export function statusFromJira(name: string): StatusKey | null {
-  const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
+export type StatusMap = Record<string, StatusKey | "">;
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
+
+/**
+ * Map a Jira status to a workflow column. Order: an admin's explicit mapping, then the status name, then Jira's own
+ * status category (To Do → Backlog, In Progress → In Progress, Done → Done).
+ */
+export function statusFromJira(name: string, overrides: StatusMap = {}, category?: string): StatusKey | null {
+  const ov = Object.entries(overrides).find(([k]) => norm(k) === norm(name))?.[1];
+  if (ov) return ov;
   const hit = (Object.keys(STATUS_META) as StatusKey[]).find((k) => norm(STATUS_META[k].label) === norm(name));
   if (hit) return hit;
   const n = norm(name);
   if (n.includes("stag") && n.includes("fail")) return "FAILED_STG";
   if (n.includes("stg") || n.includes("staging")) return "DEPLOYED_STG";
   if (n.includes("prod")) return "DEPLOYED_PROD";
+  if (n === "todo" || n === "open" || n === "backlog") return "BACKLOG";
+  if (n === "selectedfordevelopment" || n === "ready") return "READY_TO_DEV";
+  if (n === "inprogress") return "IN_PROGRESS";
+  if (n === "inreview" || n === "codereview" || n === "peerreview") return "REVIEW";
+  if (n === "done" || n === "closed" || n === "resolved") return "DONE";
+  if (category === "new") return "BACKLOG";
+  if (category === "indeterminate") return "IN_PROGRESS";
+  if (category === "done") return "DONE";
   return null;
 }
 
+let mapCache: { at: number; map: StatusMap } | null = null;
+/** The admin-edited Jira status → workflow column mapping (cached briefly). */
+export async function loadStatusMap(): Promise<StatusMap> {
+  if (mapCache && Date.now() - mapCache.at < 15_000) return mapCache.map;
+  const map = (await getSetting<StatusMap>("jira.statusMap").catch(() => null)) ?? {};
+  mapCache = { at: Date.now(), map };
+  return map;
+}
+export async function saveStatusMap(map: StatusMap) { await setSetting("jira.statusMap", map); mapCache = null; }
+
 export interface JiraIssue {
-  key: string; title: string; description: string; type: string; priority: string; status: string; points: number | null;
-  assigneeEmail?: string; assigneeId?: string; sprintId?: string; sprintName?: string; labels: string[]; estimateHrs: number | null;
+  key: string; title: string; description: string; type: string; priority: string; status: string; statusCategory?: string; points: number | null;
+  assigneeEmail?: string; assigneeId?: string; sprintId?: string; sprintName?: string; labels: string[]; estimateHrs: number | null; updated?: string;
 }
 
 /** The sprint field is an array of every sprint the issue has been in: prefer the active one, else the newest. */
@@ -75,6 +101,19 @@ function pickSprint(v: any): { sprintId?: string; sprintName?: string } {
 const mapType = (t: string) => (/bug/i.test(t) ? "BUG" : /story|feature|epic/i.test(t) ? "FEATURE" : /improve|enhance/i.test(t) ? "ENHANCEMENT" : "TASK");
 const mapPriority = (p?: string) => (/highest|blocker|critical/i.test(p ?? "") ? "CRITICAL" : /high/i.test(p ?? "") ? "HIGH" : /low/i.test(p ?? "") ? "LOW" : "MEDIUM");
 
+/** Turn a Jira issue payload (search result or webhook body) into our shape. */
+export function parseIssue(i: any): JiraIssue {
+  const e = env();
+  const f = i.fields ?? {};
+  const pts = f[e.spField];
+  return {
+    key: i.key, title: f.summary ?? "", description: adfText(f.description), type: mapType(f.issuetype?.name ?? ""), priority: mapPriority(f.priority?.name),
+    status: f.status?.name ?? "", statusCategory: f.status?.statusCategory?.key, points: typeof pts === "number" ? pts : null,
+    assigneeEmail: f.assignee?.emailAddress, assigneeId: f.assignee?.accountId, ...pickSprint(f[e.sprintField]), labels: f.labels ?? [],
+    estimateHrs: f.timeoriginalestimate ? f.timeoriginalestimate / 3600 : null, updated: f.updated,
+  };
+}
+
 export async function searchIssues(jql?: string): Promise<JiraIssue[]> {
   const e = env();
   const query = jql ?? `project = ${e.project} AND (sprint in openSprints() OR sprint is EMPTY) ORDER BY Rank ASC`;
@@ -83,17 +122,9 @@ export async function searchIssues(jql?: string): Promise<JiraIssue[]> {
   do {
     const data: any = await call("/rest/api/3/search/jql", {
       method: "POST",
-      body: JSON.stringify({ jql: query, maxResults: 100, nextPageToken, fields: ["summary", "description", "issuetype", "priority", "status", "assignee", "labels", "timeoriginalestimate", e.sprintField, e.spField] }),
+      body: JSON.stringify({ jql: query, maxResults: 100, nextPageToken, fields: ["summary", "description", "issuetype", "priority", "status", "assignee", "labels", "timeoriginalestimate", "updated", e.sprintField, e.spField] }),
     });
-    for (const i of data.issues ?? []) {
-      const f = i.fields;
-      out.push({
-        key: i.key, title: f.summary, description: adfText(f.description), type: mapType(f.issuetype?.name ?? ""), priority: mapPriority(f.priority?.name),
-        status: f.status?.name ?? "", points: f[e.spField] ?? null, assigneeEmail: f.assignee?.emailAddress, assigneeId: f.assignee?.accountId,
-        ...pickSprint(f[e.sprintField]), labels: f.labels ?? [],
-        estimateHrs: f.timeoriginalestimate ? f.timeoriginalestimate / 3600 : null,
-      });
-    }
+    for (const i of data.issues ?? []) out.push(parseIssue(i));
     nextPageToken = data.nextPageToken;
   } while (nextPageToken);
   return out;
@@ -104,27 +135,103 @@ export async function createIssue(i: { title: string; description: string; type:
   const typeName = { BUG: "Bug", FEATURE: "Story", ENHANCEMENT: "Improvement", TASK: "Task" }[i.type] ?? "Task";
   const priorityName = { CRITICAL: "Highest", HIGH: "High", MEDIUM: "Medium", LOW: "Low" }[i.priority] ?? "Medium";
   const fields: any = { project: { key: e.project }, summary: i.title, description: adf(i.description || i.title), issuetype: { name: typeName }, priority: { name: priorityName }, labels: i.labels ?? [] };
-  if (i.points != null) fields[e.spField] = i.points;
-  if (i.estimateHrs != null) fields.timetracking = { originalEstimate: `${Math.round(i.estimateHrs * 60)}m` };
+  const est = await estimationMode();
+  if (est.mode === "points" && i.points != null) fields[est.field] = i.points;
+  if (est.mode === "hours" && i.estimateHrs != null) fields.timetracking = { originalEstimate: `${Math.max(1, Math.round(i.estimateHrs * 60))}m` };
   if (i.assigneeAccountId) fields.assignee = { accountId: i.assigneeAccountId };
   const res = await call<{ key: string }>("/rest/api/3/issue", { method: "POST", body: JSON.stringify({ fields }) });
   return res.key;
 }
 
-export async function updateEstimate(key: string, p: { points?: number | null; hours?: number | null }) {
+// ---- Board columns + estimation field (read from the real board) ----
+export interface BoardColumn { name: string; statuses: { id: string; name: string; category?: string }[] }
+export interface EstimationInfo { mode: "points" | "hours"; field: string }
+export interface JiraBoardInfo { boardId: string; boardName?: string; columns: BoardColumn[]; estimation: EstimationInfo; fetchedAt: string }
+
+async function resolveBoardId(): Promise<string> {
   const e = env();
+  if (e.board) return e.board;
+  const data = await call<{ values: { id: number }[] }>(`/rest/agile/1.0/board?projectKeyOrId=${encodeURIComponent(e.project ?? "")}&type=scrum`);
+  if (!data.values?.[0]) throw new IntegrationError("Jira", "No scrum board found for the project — set JIRA_BOARD_ID");
+  return String(data.values[0].id);
+}
+
+/**
+ * Read the real board: its columns (each with the Jira statuses it contains) and how it estimates.
+ * Estimation: a board estimating by "Original time estimate" uses hours; by the Story point field uses points.
+ */
+export async function fetchBoardInfo(): Promise<JiraBoardInfo> {
+  const e = env();
+  const boardId = await resolveBoardId();
+  const [cfg, statuses] = await Promise.all([
+    call<any>(`/rest/agile/1.0/board/${boardId}/configuration`),
+    call<any[]>("/rest/api/3/status"),
+  ]);
+  const byId = new Map(statuses.map((s) => [String(s.id), { id: String(s.id), name: s.name as string, category: s.statusCategory?.key as string | undefined }]));
+  const columns: BoardColumn[] = (cfg.columnConfig?.columns ?? []).map((c: any) => ({
+    name: c.name, statuses: (c.statuses ?? []).map((s: any) => byId.get(String(s.id)) ?? { id: String(s.id), name: String(s.id) }),
+  }));
+  const field: string | undefined = cfg.estimation?.field?.fieldId;
+  let estimation: EstimationInfo;
+  if (field === "timeoriginalestimate" || field === "aggregatetimeoriginalestimate") estimation = { mode: "hours", field: "timeoriginalestimate" };
+  else if (field) estimation = { mode: "points", field };
+  else estimation = await guessEstimation();
+  if (estimation.mode === "points" && field === undefined) estimation.field = e.spField;
+  return { boardId, boardName: cfg.name, columns, estimation, fetchedAt: new Date().toISOString() };
+}
+
+/** Boards without an estimation statistic: look for a story-points field, else fall back to original estimate. */
+async function guessEstimation(): Promise<EstimationInfo> {
+  const e = env();
+  try {
+    const fields = await call<any[]>("/rest/api/3/field");
+    const sp = fields.find((f) => f.id === e.spField) ?? fields.find((f) => /^story point/i.test(f.name));
+    if (sp) return { mode: "points", field: sp.id };
+  } catch { /* fall through */ }
+  return { mode: "hours", field: "timeoriginalestimate" };
+}
+
+let infoCache: { at: number; info: JiraBoardInfo } | null = null;
+/** The live board info (cached for a minute) — also persisted so pages can render the columns without a Jira call. */
+export async function boardInfo(force = false): Promise<JiraBoardInfo> {
+  if (!force && infoCache && Date.now() - infoCache.at < 60_000) return infoCache.info;
+  const info = await fetchBoardInfo();
+  infoCache = { at: Date.now(), info };
+  await setSetting("jira.board", info).catch(() => {});
+  return info;
+}
+export const cachedBoardInfo = () => getSetting<JiraBoardInfo>("jira.board");
+export async function estimationMode(): Promise<EstimationInfo> {
+  try { return (await boardInfo()).estimation; } catch { return (await cachedBoardInfo())?.estimation ?? guessEstimation(); }
+}
+
+/**
+ * Write an estimate to the Jira issue in whatever unit the project uses (detected from the board).
+ * Story-point projects get points; time-estimate projects get the original estimate. Throws on failure.
+ */
+export async function updateEstimate(key: string, v: { points?: number | null; hours?: number | null }) {
+  const est = await estimationMode();
   const fields: any = {};
-  if (p.points != null) fields[e.spField] = p.points;
-  if (p.hours != null) fields.timetracking = { originalEstimate: `${Math.round(p.hours * 60)}m` };
+  let value: number;
+  if (est.mode === "points") {
+    if (v.points == null) throw new IntegrationError("Jira", "This project estimates in story points but the ticket has no points");
+    fields[est.field] = value = v.points;
+  } else {
+    if (v.hours == null) throw new IntegrationError("Jira", "This project estimates in time but the ticket has no hours");
+    fields.timetracking = { originalEstimate: `${Math.max(1, Math.round(v.hours * 60))}m` }; value = v.hours;
+  }
   await call(`/rest/api/3/issue/${key}`, { method: "PUT", body: JSON.stringify({ fields }) });
+  return { mode: est.mode, field: est.field, value };
 }
 
 /** Move an issue to the Jira status named like our column (transitions are looked up by target status). */
 export async function transitionIssue(key: string, to: StatusKey) {
-  const data = await call<{ transitions: { id: string; to: { name: string } }[] }>(`/rest/api/3/issue/${key}/transitions`);
-  const hit = data.transitions.find((t) => statusFromJira(t.to.name) === to);
+  const map = await loadStatusMap();
+  const data = await call<{ transitions: { id: string; to: { name: string; statusCategory?: { key: string } } }[] }>(`/rest/api/3/issue/${key}/transitions`);
+  const hit = data.transitions.find((t) => statusFromJira(t.to.name, map, t.to.statusCategory?.key) === to);
   if (!hit) throw new IntegrationError("Jira", `No transition from current status to "${STATUS_META[to].label}" on ${key}`);
   await call(`/rest/api/3/issue/${key}/transitions`, { method: "POST", body: JSON.stringify({ transition: { id: hit.id } }) });
+  return hit.to.name;
 }
 
 export async function addWorklog(key: string, startedAt: Date, seconds: number, comment?: string) {

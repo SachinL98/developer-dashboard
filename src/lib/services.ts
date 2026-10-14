@@ -1,5 +1,6 @@
 import { db } from "./db";
-import { gateError, STATUS_META, type StatusKey } from "./workflow";
+import { gateError, hoursForPoints, pointsForHours, STATUS_META, type StatusKey } from "./workflow";
+import { getSetting, setSetting } from "./settings";
 import * as jira from "./integrations/jira";
 import * as gh from "./integrations/github";
 import { parseNotes, summariseWithClaude } from "./notes";
@@ -55,7 +56,7 @@ export async function moveTicket(ticketId: string, to: StatusKey, byId?: string 
   const t = await db.ticket.findUniqueOrThrow({ where: { id: ticketId } });
   const from = t.status as StatusKey;
   const err = gateError(from, to, {
-    assigneeId: t.assigneeId, sprintId: t.sprintId, estimateHrs: t.estimateHrs, prUrl: t.prUrl,
+    assigneeId: t.assigneeId, sprintId: t.sprintId, estimateHrs: t.estimateHrs, storyPoints: t.storyPoints, prUrl: t.prUrl,
     initialReviewPassed: to === "REVIEW" ? await latestInitialReviewPassed(ticketId) : true,
   });
   if (err) return { ok: false as const, error: err };
@@ -76,7 +77,10 @@ export async function moveTicket(ticketId: string, to: StatusKey, byId?: string 
 
   let syncError: string | null = null;
   if (t.jiraKey && (await jira.jiraReady())) {
-    try { await jira.transitionIssue(t.jiraKey, to); } catch (e) { syncError = e instanceof Error ? e.message : String(e); warn("jira.transition", e); }
+    try {
+      const name = await jira.transitionIssue(t.jiraKey, to);
+      await db.ticket.update({ where: { id: ticketId }, data: { jiraStatus: name } });
+    } catch (e) { syncError = e instanceof Error ? e.message : String(e); warn("jira.transition", e); }
   }
   return { ok: true as const, from, to, label: STATUS_META[to].label, syncError };
 }
@@ -138,39 +142,111 @@ export async function saveReview(reviewId: string, items: ReviewItem[]) {
   return db.prReview.update({ where: { id: reviewId }, data: { items: items as any, passed: reviewPassed(items) } });
 }
 
-// ---------- Sync ----------
-export async function syncJira() {
-  const issues = await jira.searchIssues();
-  const project = await db.project.findFirst({ orderBy: { key: "asc" } });
+// ---------- Jira sync ----------
+const STATUS_ORDER_LIST = ["BACKLOG", "READY_TO_DEV", "IN_PROGRESS", "INITIAL_REVIEW", "REVIEW", "DEPLOYED_STG", "FAILED_STG", "DOCUMENTED", "DEPLOYED_PROD", "DONE"];
+
+async function syncContext() {
+  return { devs: await db.developer.findMany(), projects: await db.project.findMany({ orderBy: { key: "asc" } }), map: await jira.loadStatusMap() };
+}
+
+/**
+ * Mirror one Jira issue into the local ticket: fields, real status, assignee, sprint and estimate.
+ * Used by the webhook (realtime), the poller and the full sync.
+ */
+export async function applyJiraIssue(i: jira.JiraIssue, c?: Awaited<ReturnType<typeof syncContext>>) {
+  const ctx = c ?? (await syncContext());
+  const project = ctx.projects.find((p) => p.key === i.key.split("-")[0]) ?? ctx.projects[0];
   if (!project) throw new Error("Create a project first");
-  const devs = await db.developer.findMany();
-  let created = 0, updated = 0;
-  for (const i of issues) {
-    const status = jira.statusFromJira(i.status) ?? "BACKLOG";
-    const dev = devs.find((d) => (i.assigneeEmail && d.email === i.assigneeEmail) || (i.assigneeId && d.jiraAccount === i.assigneeId));
-    let sprintId: string | null = null;
-    if (i.sprintId) {
-      const sp = await db.sprint.findFirst({ where: { jiraId: i.sprintId } });
-      sprintId = sp?.id ?? null;
-    }
-    const proj = (await db.project.findFirst({ where: { key: i.key.split("-")[0] } })) ?? project;
-    const existing = await db.ticket.findUnique({ where: { key: i.key } });
-    const data = {
-      title: i.title, description: i.description, type: i.type as any, priority: i.priority as any, status: status as any,
-      storyPoints: i.points ? Math.round(i.points) : null, labels: i.labels, jiraKey: i.key, assigneeId: dev?.id ?? null, sprintId,
-      estimateHrs: i.estimateHrs ?? existing?.estimateHrs ?? null,
-    };
-    if (existing) {
-      // Never let a stale Jira poll move a card backwards.
-      const order = ["BACKLOG", "READY_TO_DEV", "IN_PROGRESS", "INITIAL_REVIEW", "REVIEW", "DEPLOYED_STG", "FAILED_STG", "DOCUMENTED", "DEPLOYED_PROD", "DONE"];
-      const keep = order.indexOf(existing.status) > order.indexOf(status) && !(existing.status === "FAILED_STG" && status === "IN_PROGRESS");
-      await db.ticket.update({ where: { id: existing.id }, data: keep ? { ...data, status: existing.status } : data });
-      updated++;
-    } else {
-      await db.ticket.create({ data: { ...data, key: i.key, projectId: proj.id } }); created++;
-    }
+  const status = jira.statusFromJira(i.status, ctx.map, i.statusCategory) ?? "BACKLOG";
+  const dev = ctx.devs.find((d) => (i.assigneeEmail && d.email === i.assigneeEmail) || (i.assigneeId && d.jiraAccount === i.assigneeId));
+  const sprint = i.sprintId ? await db.sprint.findFirst({ where: { jiraId: i.sprintId } }) : null;
+  const existing = await db.ticket.findUnique({ where: { key: i.key } });
+  const points = i.points != null ? Math.round(i.points) : existing?.storyPoints ?? null;
+  // Hours follow Jira when it has a time estimate; points-only projects get hours from the point value so capacity planning works.
+  const pointsChanged = !!existing && points !== existing.storyPoints;
+  const estimateHrs = i.estimateHrs ?? (points != null && (pointsChanged || existing?.estimateHrs == null) ? hoursForPoints(points) : existing?.estimateHrs ?? null);
+  const data = {
+    title: i.title, description: i.description, type: i.type as any, priority: i.priority as any, status: status as any, jiraStatus: i.status,
+    storyPoints: points, labels: i.labels, jiraKey: i.key, assigneeId: dev?.id ?? null, sprintId: i.sprintId ? sprint?.id ?? existing?.sprintId ?? null : null, estimateHrs,
+  };
+  if (existing) {
+    // Never let a stale Jira update move a card backwards in the workflow.
+    const keep = STATUS_ORDER_LIST.indexOf(existing.status) > STATUS_ORDER_LIST.indexOf(status) && !(existing.status === "FAILED_STG" && status === "IN_PROGRESS");
+    const moved = !keep && existing.status !== status;
+    const extra = moved ? { ...(status === "IN_PROGRESS" && !existing.startedAt ? { startedAt: new Date() } : {}), ...(status === "DEPLOYED_PROD" || status === "DONE" ? { doneAt: existing.doneAt ?? new Date() } : {}) } : {};
+    await db.$transaction([
+      db.ticket.update({ where: { id: existing.id }, data: { ...data, ...(keep ? { status: existing.status } : {}), ...extra } }),
+      ...(moved ? [db.transition.create({ data: { ticketId: existing.id, from: existing.status, to: status as any } })] : []),
+    ]);
+    return "updated" as const;
   }
+  const top = await db.ticket.aggregate({ where: { status: "BACKLOG" }, _max: { rank: true } });
+  await db.ticket.create({ data: { ...data, key: i.key, projectId: project.id, rank: (top._max.rank ?? 0) + 1 } });
+  return "created" as const;
+}
+
+/** Pull issues from Jira. `sinceMinutes` makes it incremental (used by the live poller). */
+export async function syncJira(opts: { sinceMinutes?: number } = {}) {
+  const project = process.env.JIRA_PROJECT_KEY;
+  const issues = await jira.searchIssues(opts.sinceMinutes ? `project = ${project} AND updated >= -${Math.max(1, Math.ceil(opts.sinceMinutes))}m ORDER BY Rank ASC` : undefined);
+  const ctx = await syncContext();
+  let created = 0, updated = 0;
+  for (const i of issues) (await applyJiraIssue(i, ctx)) === "created" ? created++ : updated++;
+  if (!opts.sinceMinutes) await syncBoard().catch((e) => warn("jira.board", e));
+  await setSetting("jira.lastSync", new Date().toISOString());
   return { created, updated, total: issues.length };
+}
+
+/** Refresh the cached real board (columns and estimation unit) from Jira. */
+export async function syncBoard() { return jira.boardInfo(true); }
+
+/**
+ * Poll fallback for realtime: at most one incremental pull per 15 s across all viewers. Webhooks make this
+ * redundant where Jira can reach the app; otherwise this keeps the board within ~30 s of Jira.
+ */
+export async function liveSync() {
+  if (!(await jira.jiraReady())) return { ran: false, changed: 0, lastSync: null as string | null };
+  const last = await getSetting<string>("jira.lastPoll");
+  const now = Date.now();
+  if (last && now - new Date(last).getTime() < 15_000) return { ran: false, changed: 0, lastSync: await getSetting<string>("jira.lastSync") };
+  await setSetting("jira.lastPoll", new Date(now).toISOString());
+  const sinceMin = last ? (now - new Date(last).getTime()) / 60_000 + 1 : 5;
+  const r = await syncJira({ sinceMinutes: Math.min(sinceMin, 60) });
+  return { ran: true, changed: r.total, lastSync: await getSetting<string>("jira.lastSync") };
+}
+
+// ---------- Estimate write-back ----------
+export type PushResult = { status: "synced"; mode: "points" | "hours"; value: number } | { status: "local" } | { status: "error"; message: string };
+
+/** Write a ticket's agreed estimate to its real Jira issue, in the unit the Jira project uses. */
+export async function pushEstimate(ticketId: string): Promise<PushResult> {
+  const t = await db.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+  if (!t.jiraKey) return { status: "local" };
+  const fail = async (message: string): Promise<PushResult> => { await db.ticket.update({ where: { id: t.id }, data: { estimateSyncError: message } }); return { status: "error", message }; };
+  if (!(await jira.jiraReady())) return fail("Jira is not connected — connect it in Integrations");
+  if (t.estimateHrs == null && t.storyPoints == null) return fail("The ticket has no estimate yet");
+  try {
+    const points = t.storyPoints ?? pointsForHours(t.estimateHrs!);
+    const hours = t.estimateHrs ?? hoursForPoints(points);
+    const r = await jira.updateEstimate(t.jiraKey, { points, hours });
+    await db.ticket.update({ where: { id: t.id }, data: { estimateSyncedAt: new Date(), estimateSyncError: null, ...(t.storyPoints == null ? { storyPoints: points } : {}) } });
+    return { status: "synced", mode: r.mode, value: r.value };
+  } catch (e) {
+    warn("jira.estimate", e);
+    return fail(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/** Push every estimated, Jira-linked ticket of a sprint. */
+export async function pushSprintEstimates(sprintId: string) {
+  const tickets = await db.ticket.findMany({ where: { sprintId, jiraKey: { not: null } }, orderBy: { rank: "asc" } });
+  const out = { synced: 0, skipped: 0, failed: [] as { key: string; message: string }[], mode: null as "points" | "hours" | null };
+  for (const t of tickets) {
+    if (t.estimateHrs == null && t.storyPoints == null) { out.skipped++; continue; }
+    const r = await pushEstimate(t.id);
+    if (r.status === "synced") { out.synced++; out.mode = r.mode; } else if (r.status === "error") out.failed.push({ key: t.key, message: r.message });
+  }
+  return out;
 }
 
 export async function syncSprintsFromJira() {

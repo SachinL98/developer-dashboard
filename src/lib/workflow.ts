@@ -39,6 +39,7 @@ export interface MoveContext {
   assigneeId: string | null;
   sprintId: string | null;
   estimateHrs: number | null;
+  storyPoints?: number | null;
   prUrl: string | null;
   initialReviewPassed: boolean;
 }
@@ -52,7 +53,7 @@ export function gateError(from: StatusKey, to: StatusKey, c: MoveContext): strin
   }
   if (to === "READY_TO_DEV") {
     if (!c.sprintId) return "Add the ticket to a sprint before it is Ready to Dev.";
-    if (c.estimateHrs == null) return "Estimate the ticket before it is Ready to Dev.";
+    if (c.estimateHrs == null && c.storyPoints == null) return "Estimate the ticket before it is Ready to Dev.";
   }
   if (to === "IN_PROGRESS" && from === "READY_TO_DEV" && !c.assigneeId) return "Assign a developer before starting work.";
   if (to === "INITIAL_REVIEW" && !c.prUrl) return "Link the pull request before Initial Review.";
@@ -77,3 +78,7 @@ export const PRIORITY_META = {
 export const STORY_POINTS = [1, 2, 3, 5, 8, 13];
 export const POKER_HOURS = [1, 2, 4, 6, 8, 12, 16, 24, 40];
 export const DONE_STATES: StatusKey[] = ["DEPLOYED_PROD", "DONE"];
+
+/** Rough conversions between the two estimation units (a point ≈ 2.5 hours, matching the poker scale). */
+export const pointsForHours = (h: number) => STORY_POINTS.find((p) => h <= p * 2.5) ?? 13;
+export const hoursForPoints = (p: number) => Math.round(p * 2.5 * 2) / 2;

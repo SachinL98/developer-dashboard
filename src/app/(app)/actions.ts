@@ -66,7 +66,7 @@ const patchSchema = z.object({
   complicated: z.boolean(), priority, title: z.string().trim().min(1).max(240), description: z.string().max(20_000),
 }).partial().strict();
 
-export async function updateTicketAction(ticketId: string, patch: z.input<typeof patchSchema>): Promise<Result> {
+export async function updateTicketAction(ticketId: string, patch: z.input<typeof patchSchema>): Promise<Result<{ jira?: svc.PushResult }>> {
   try {
     const user = await me();
     const p = patchSchema.parse(patch);
@@ -74,10 +74,10 @@ export async function updateTicketAction(ticketId: string, patch: z.input<typeof
     if (!canPatchTicket({ id: user.id, access: user.access }, t, Object.keys(p)))
       return { ok: false, error: "You can edit your own tickets. Reassigning and re-prioritising are for leads." };
     const upd = await db.ticket.update({ where: { id: ticketId }, data: { ...p, ...(p.prUrl ? { prNumber: Number(p.prUrl.match(/pull\/(\d+)/)?.[1]) || null, prState: "open" } : {}) } });
-    if (upd.jiraKey && (p.storyPoints != null || p.estimateHrs != null) && (await jira.jiraReady()))
-      await jira.updateEstimate(upd.jiraKey, { points: p.storyPoints, hours: p.estimateHrs }).catch(() => {});
+    // An estimate change is written straight to the real Jira issue, in the unit that project uses.
+    const jiraResult = upd.jiraKey && (p.storyPoints != null || p.estimateHrs != null) ? await svc.pushEstimate(upd.id) : undefined;
     touch(); revalidatePath(`/tickets/${ticketId}`);
-    return { ok: true };
+    return { ok: true, jira: jiraResult };
   } catch (e) { return fail(e); }
 }
 
@@ -134,7 +134,7 @@ export async function voteAction(ticketId: string, hours: number): Promise<Resul
   } catch (e) { return fail(e); }
 }
 export async function clearVotesAction(ticketId: string): Promise<Result> { try { await requireAccess("LEAD"); await db.estimateVote.deleteMany({ where: { ticketId: id.parse(ticketId) } }); revalidatePath("/estimation"); return { ok: true }; } catch (e) { return fail(e); } }
-export async function applyEstimateAction(ticketId: string, hours: number, points: number | null): Promise<Result> {
+export async function applyEstimateAction(ticketId: string, hours: number, points: number | null): Promise<Result<{ jira?: svc.PushResult }>> {
   try { await requireAccess("LEAD"); return await updateTicketAction(ticketId, { estimateHrs: hours, storyPoints: points }); } catch (e) { return fail(e); }
 }
 
@@ -191,7 +191,7 @@ export async function startSprintAction(sprintId: string): Promise<Result<{ move
     const active = await db.sprint.findFirst({ where: { state: "ACTIVE", NOT: { id: sprintId } } });
     if (active) return { ok: false, error: `${active.name} is still active. Close it first.` };
     const tickets = await db.ticket.findMany({ where: { sprintId, status: "BACKLOG" } });
-    const unready = tickets.filter((t) => t.estimateHrs == null);
+    const unready = tickets.filter((t) => t.estimateHrs == null && t.storyPoints == null);
     if (unready.length) return { ok: false, error: `${unready.length} ticket(s) have no estimate: ${unready.slice(0, 4).map((t) => t.key).join(", ")}. Estimate them before starting.` };
     const now = new Date();
     let moved = 0;
@@ -344,3 +344,22 @@ export async function fitAction(sprintId: string) {
   return sprintFit(devs.reduce((a, d) => a + d.capacityHrs * weeks, 0), s.tickets.map((t) => t.estimateHrs));
 }
 void currentUser;
+
+// ----- Jira: estimate write-back, realtime poll, status mapping -----
+export async function pushSprintEstimatesAction(sprintId: string): Promise<Result<{ synced: number; skipped: number; failed: { key: string; message: string }[]; mode: "points" | "hours" | null }>> {
+  try { await requireAccess("LEAD"); const r = await svc.pushSprintEstimates(id.parse(sprintId)); touch(); return { ok: true, ...r }; } catch (e) { return fail(e); }
+}
+
+/** Called by the board's poller (every ~30 s) when the webhook can't reach the app. */
+export async function liveSyncAction(): Promise<Result<{ changed: number; lastSync: string | null }>> {
+  try { await me(); const r = await svc.liveSync(); if (r.ran && r.changed) touch(); return { ok: true, changed: r.changed, lastSync: r.lastSync }; } catch (e) { return fail(e); }
+}
+
+export async function refreshBoardAction(): Promise<Result> {
+  try { await requireAccess("LEAD"); await svc.syncBoard(); touch(); return { ok: true }; } catch (e) { return fail(e); }
+}
+
+const statusMapSchema = z.record(z.string().max(120), z.union([z.literal(""), z.enum(STATUS_ORDER as unknown as [StatusKey, ...StatusKey[]])]));
+export async function saveStatusMapAction(map: Record<string, string>): Promise<Result> {
+  try { await requireAccess("ADMIN"); await jira.saveStatusMap(statusMapSchema.parse(map)); touch(); revalidatePath("/settings"); return { ok: true }; } catch (e) { return fail(e); }
+}
