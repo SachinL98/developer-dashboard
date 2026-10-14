@@ -1,4 +1,5 @@
 import { request, IntegrationError } from "./http";
+import { cachedWorkspace } from "../config";
 
 export const githubConfigured = () => !!process.env.GITHUB_TOKEN;
 const call = <T>(path: string, init: RequestInit = {}, accept = "application/vnd.github+json") => {
@@ -8,7 +9,7 @@ const call = <T>(path: string, init: RequestInit = {}, accept = "application/vnd
   });
 };
 
-export const listOrgRepos = () => call<{ full_name: string; name: string; html_url: string; pushed_at: string; open_issues_count: number }[]>(`/orgs/${process.env.GITHUB_ORG}/repos?per_page=100&sort=pushed`);
+export const listOrgRepos = () => call<{ full_name: string; name: string; html_url: string; pushed_at: string; open_issues_count: number }[]>(`/orgs/${cachedWorkspace().github.org}/repos?per_page=100&sort=pushed`);
 
 export interface PrSummary { number: number; title: string; url: string; state: "open" | "merged" | "closed"; draft: boolean; author: string; branch: string; base: string; updatedAt: string; additions?: number; deletions?: number }
 export async function listPullRequests(repo: string, state: "open" | "closed" | "all" = "all"): Promise<PrSummary[]> {

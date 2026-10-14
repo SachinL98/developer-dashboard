@@ -5,6 +5,7 @@ import { runAs } from "@/lib/context";
 import { serviceUserId } from "@/lib/integrations/connections";
 import { db } from "@/lib/db";
 import * as svc from "@/lib/services";
+import { getWorkspace } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, unlinked: key ?? null });
   }
   if (body.issue?.key && body.issue?.fields) {
-    const project = process.env.JIRA_PROJECT_KEY;
+    const project = (await getWorkspace()).jira.projectKey;
     if (project && !String(body.issue.key).startsWith(project + "-")) return NextResponse.json({ ok: true, ignored: "other project" });
     const result = await svc.applyJiraIssue(parseIssue(body.issue));
     return NextResponse.json({ ok: true, issue: body.issue.key, result });

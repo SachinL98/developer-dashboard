@@ -1,6 +1,7 @@
 import { db } from "./db";
 import { gateError, hoursForPoints, pointsForHours, STATUS_META, type StatusKey } from "./workflow";
 import { getSetting, setSetting } from "./settings";
+import { getMeetingDefs, getWorkspace } from "./config";
 import * as jira from "./integrations/jira";
 import * as gh from "./integrations/github";
 import { parseNotes, summariseWithClaude } from "./notes";
@@ -187,7 +188,7 @@ export async function applyJiraIssue(i: jira.JiraIssue, c?: Awaited<ReturnType<t
 
 /** Pull issues from Jira. `sinceMinutes` makes it incremental (used by the live poller). */
 export async function syncJira(opts: { sinceMinutes?: number } = {}) {
-  const project = process.env.JIRA_PROJECT_KEY;
+  const project = (await getWorkspace()).jira.projectKey;
   const issues = await jira.searchIssues(opts.sinceMinutes ? `project = ${project} AND updated >= -${Math.max(1, Math.ceil(opts.sinceMinutes))}m ORDER BY Rank ASC` : undefined);
   const ctx = await syncContext();
   let created = 0, updated = 0;
@@ -312,7 +313,9 @@ export async function importMeetTranscript(meetingId: string) {
  */
 export async function syncMeetingCadence(days = 14) {
   const from = new Date(); from.setHours(0, 0, 0, 0);
-  const occ = occurrences(from, days);
+  const defs = (await getMeetingDefs()).filter((d) => d.enabled);
+  const fixedLink = new Map(defs.filter((d) => d.meetUrl).map((d) => [d.kind, d.meetUrl]));
+  const occ = occurrences(from, days, defs);
   const existing = await db.meeting.findMany({ where: { startsAt: { gte: from } } });
   const have = new Map(existing.map((m) => [`${m.kind}|${m.startsAt.toISOString()}`, m]));
   const devs = await db.developer.findMany({ where: { active: true } });
@@ -323,12 +326,14 @@ export async function syncMeetingCadence(days = 14) {
     const key = `${o.kind}|${o.startsAt.toISOString()}`;
     const ev = events.find((e) => e.summary.trim().toLowerCase() === o.title.toLowerCase() && Math.abs(new Date(e.start).getTime() - o.startsAt.getTime()) < 60_000);
     const mine = have.get(key);
+    const fixed = fixedLink.get(o.kind);
     if (mine) {
-      if (ev && (mine.googleEvId !== ev.id || (ev.meetUrl && mine.meetUrl !== ev.meetUrl))) { await db.meeting.update({ where: { id: mine.id }, data: { googleEvId: ev.id, meetUrl: ev.meetUrl ?? mine.meetUrl } }); linked++; }
+      if (ev && (mine.googleEvId !== ev.id || (!fixed && ev.meetUrl && mine.meetUrl !== ev.meetUrl))) { await db.meeting.update({ where: { id: mine.id }, data: { googleEvId: ev.id, meetUrl: fixed ?? ev.meetUrl ?? mine.meetUrl } }); linked++; }
       continue;
     }
-    let meetUrl = ev?.meetUrl, googleEvId = ev?.id;
-    if (google && !ev) {
+    // An admin-set recurring link wins; otherwise reuse the calendar event's Meet link, or create one through Google.
+    let meetUrl = fixed ?? ev?.meetUrl, googleEvId = ev?.id;
+    if (google && !ev && !fixed) {
       const r = await gcal.createMeetEvent({ title: o.title, start: o.startsAt, end: o.endsAt, attendees: devs.map((d) => d.email) }).catch((e) => { warn("google.create", e); return null; });
       meetUrl = r?.meetUrl; googleEvId = r?.id;
     }
@@ -336,4 +341,20 @@ export async function syncMeetingCadence(days = 14) {
     created++;
   }
   return { created, linked, google };
+}
+
+/**
+ * After an admin edits the schedule or links: drop upcoming meetings that no longer match (only untouched ones: no
+ * calendar event, notes or action items), apply fixed links to the rest, then create what's missing.
+ */
+export async function rebuildUpcomingMeetings(days = 14) {
+  const now = new Date();
+  const defs = (await getMeetingDefs()).filter((d) => d.enabled);
+  const wanted = new Set(occurrences(new Date(now.getTime() - 86_400_000), days + 1, defs).map((o) => `${o.kind}|${o.startsAt.toISOString()}`));
+  const upcoming = await db.meeting.findMany({ where: { startsAt: { gt: now } }, include: { _count: { select: { actionItems: true } } } });
+  const stale = upcoming.filter((m) => !wanted.has(`${m.kind}|${m.startsAt.toISOString()}`) && !m.googleEvId && !m.transcript && !m.summary && m._count.actionItems === 0);
+  if (stale.length) await db.meeting.deleteMany({ where: { id: { in: stale.map((m) => m.id) } } });
+  for (const d of defs.filter((x) => x.meetUrl)) await db.meeting.updateMany({ where: { kind: d.kind, startsAt: { gt: now } }, data: { meetUrl: d.meetUrl } });
+  const r = await syncMeetingCadence(days);
+  return { removed: stale.length, ...r };
 }

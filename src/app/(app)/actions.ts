@@ -5,7 +5,8 @@ import { db } from "@/lib/db";
 import * as svc from "@/lib/services";
 import * as jira from "@/lib/integrations/jira";
 import * as gcal from "@/lib/integrations/google";
-import { MEETING_DEFS, occurrences } from "@/lib/schedule";
+import { occurrences } from "@/lib/schedule";
+import { getMeetingDefs, getMeetingSettings, getWorkspace, parseHHMM, saveMeetingSettings, saveWorkspace, type MeetingSetting, type WorkspaceConfig } from "@/lib/config";
 import { currentUser, requireAccess, destroySession } from "@/lib/auth/session";
 import { canMoveTicket, canPatchTicket, atLeast } from "@/lib/permissions";
 import { fillSprint, sprintFit } from "@/lib/estimation";
@@ -145,7 +146,7 @@ export async function createSprintAction(input: { name: string; goal?: string; s
     const v = z.object({ name: z.string().trim().min(1).max(80), goal: z.string().max(300).optional(), start: z.string().date(), end: z.string().date() }).parse(input);
     if (new Date(v.end) <= new Date(v.start)) return { ok: false, error: "End date must be after the start date." };
     let jiraId: string | null = null;
-    if (process.env.JIRA_BOARD_ID && (await jira.jiraReady())) jiraId = await jira.createSprint(v.name, new Date(v.start), new Date(v.end), v.goal).catch(() => null);
+    if ((await getWorkspace()).jira.boardId && (await jira.jiraReady())) jiraId = await jira.createSprint(v.name, new Date(v.start), new Date(v.end), v.goal).catch(() => null);
     const s = await db.sprint.create({ data: { name: v.name, goal: v.goal, startDate: new Date(v.start), endDate: new Date(v.end), jiraId } });
     touch(); return { ok: true, id: s.id };
   } catch (e) { return fail(e); }
@@ -176,9 +177,10 @@ export async function autoFillSprintAction(sprintId: string): Promise<Result<{ a
     const weeks = Math.max(1, Math.round((sprint.endDate.getTime() - sprint.startDate.getTime()) / (7 * 86_400_000)));
     const capacity = devs.reduce((a, d) => a + d.capacityHrs * weeks, 0);
     const inSprint = await db.ticket.findMany({ where: { sprintId } });
-    const remainingCap = capacity * 0.85 - inSprint.reduce((a, t) => a + (t.estimateHrs ?? 0), 0);
+    const buffer = (await getWorkspace()).bufferPct / 100;
+    const remainingCap = capacity * (1 - buffer) - inSprint.reduce((a, t) => a + (t.estimateHrs ?? 0), 0);
     const candidates = await db.ticket.findMany({ where: { sprintId: null, status: "BACKLOG", estimateHrs: { not: null } }, orderBy: { rank: "asc" } });
-    const { take, leave } = fillSprint(candidates, Math.max(0, remainingCap) / 0.85);
+    const { take, leave } = fillSprint(candidates, Math.max(0, remainingCap) / (1 - buffer), buffer * 100);
     for (const t of take) await assignToSprintAction(t.id, sprintId);
     return { ok: true, added: take.length, skipped: leave.length };
   } catch (e) { return fail(e); }
@@ -263,8 +265,9 @@ export async function createRecurringMeetEventsAction(): Promise<Result<{ create
     if (!(await gcal.googleReady())) return { ok: false, error: "Connect Google Calendar & Meet first (Integrations)." };
     const devs = await db.developer.findMany({ where: { active: true } });
     let created = 0;
-    for (const def of MEETING_DEFS) {
-      const first = occurrences(new Date(), 8).find((o) => o.kind === def.kind)!;
+    for (const def of (await getMeetingDefs()).filter((d) => d.enabled && !d.meetUrl)) {
+      const first = occurrences(new Date(), 8, [def])[0];
+      if (!first) continue;
       await gcal.createMeetEvent({ title: def.title, start: first.startsAt, end: first.endsAt, attendees: devs.map((d) => d.email), description: def.blurb, rrule: gcal.rruleFor(def.days) });
       created++;
     }
@@ -341,7 +344,7 @@ export async function fitAction(sprintId: string) {
   const devs = await db.developer.findMany({ where: { active: true, role: { not: "Engineering Manager" } } });
   const s = await db.sprint.findUniqueOrThrow({ where: { id: sprintId }, include: { tickets: true } });
   const weeks = Math.max(1, Math.round((s.endDate.getTime() - s.startDate.getTime()) / (7 * 86_400_000)));
-  return sprintFit(devs.reduce((a, d) => a + d.capacityHrs * weeks, 0), s.tickets.map((t) => t.estimateHrs));
+  return sprintFit(devs.reduce((a, d) => a + d.capacityHrs * weeks, 0), s.tickets.map((t) => t.estimateHrs), (await getWorkspace()).bufferPct);
 }
 void currentUser;
 
@@ -363,3 +366,76 @@ const statusMapSchema = z.record(z.string().max(120), z.union([z.literal(""), z.
 export async function saveStatusMapAction(map: Record<string, string>): Promise<Result> {
   try { await requireAccess("ADMIN"); await jira.saveStatusMap(statusMapSchema.parse(map)); touch(); revalidatePath("/settings"); return { ok: true }; } catch (e) { return fail(e); }
 }
+
+// ----- admin: meetings and workspace settings -----
+const MEET_LINK = /^https:\/\/meet\.google\.com\/[A-Za-z0-9\-_/?=&.]+$/;
+const meetLink = z.string().trim().max(200).refine((v) => v === "" || MEET_LINK.test(v), "Use a Google Meet link, like https://meet.google.com/abc-defg-hij");
+const hhmmStr = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM (24-hour)");
+const minutes = (t: string) => { const [h, m] = parseHHMM(t); return h * 60 + m; };
+
+const meetingSchema = z.array(z.object({
+  kind: z.enum(["STANDUP", "GROOMING", "ESTIMATION", "SPRINT_PLAN", "WEEKLY_SUMMARY", "DEMO"]),
+  title: z.string().trim().min(1).max(80), days: z.array(z.number().int().min(0).max(6)).max(7), start: hhmmStr, end: hhmmStr,
+  enabled: z.boolean(), meetUrl: meetLink, blurb: z.string().trim().max(200),
+}).refine((m) => minutes(m.end) > minutes(m.start), { message: "A meeting must end after it starts" })
+  .refine((m) => !m.enabled || m.days.length > 0, { message: "Pick at least one day for each enabled meeting" })).length(6);
+
+/** Admin: edit the recurring meeting schedule and each meeting's fixed Google Meet link, then rebuild the upcoming meetings. */
+export async function saveMeetingsAction(list: MeetingSetting[]): Promise<Result<{ created: number; removed: number }>> {
+  try {
+    await requireAccess("ADMIN");
+    const parsed = meetingSchema.parse(list) as MeetingSetting[];
+    await saveMeetingSettings(parsed);
+    const r = await svc.rebuildUpcomingMeetings();
+    touch(); revalidatePath("/admin/meetings");
+    return { ok: true, created: r.created, removed: r.removed };
+  } catch (e) { return fail(e); }
+}
+
+/** Admin: set or clear the Meet link of one upcoming meeting. */
+export async function setMeetingLinkAction(meetingId: string, url: string): Promise<Result> {
+  try {
+    await requireAccess("ADMIN");
+    const link = meetLink.parse(url);
+    await db.meeting.update({ where: { id: id.parse(meetingId) }, data: { meetUrl: link || null } });
+    touch(); revalidatePath("/admin/meetings");
+    return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
+const workspaceSchema = z.object({
+  timezone: z.string().refine((tz) => { try { new Intl.DateTimeFormat("en", { timeZone: tz }); return true; } catch { return false; } }, "Unknown timezone"),
+  workStart: hhmmStr, workEnd: hhmmStr,
+  sprintLengthDays: z.number().int().min(1).max(42), sprintStartWeekday: z.number().int().min(0).max(6),
+  defaultCapacityHrs: z.number().min(1).max(80), bufferPct: z.number().min(0).max(50),
+  jira: z.object({
+    projectKey: z.string().trim().regex(/^([A-Z][A-Z0-9_]{1,9})?$/, "Project key is upper-case letters/digits, like ATL"),
+    boardId: z.string().trim().regex(/^\d{0,10}$/, "Board id is a number"),
+    storyPointsField: z.string().trim().regex(/^(customfield_\d+)?$/, "Looks like customfield_10016"),
+    sprintField: z.string().trim().regex(/^(customfield_\d+)?$/, "Looks like customfield_10020"),
+  }),
+  github: z.object({ org: z.string().trim().regex(/^([A-Za-z0-9-]{1,39})?$/, "Not a valid GitHub org name") }),
+}).refine((c) => minutes(c.workEnd) > minutes(c.workStart), { message: "Work day must end after it starts" });
+
+/** Admin: workspace settings (timezone, hours, sprint cadence, capacity defaults, Jira and GitHub mapping). */
+export async function saveWorkspaceAction(input: WorkspaceConfig): Promise<Result> {
+  try {
+    await requireAccess("ADMIN");
+    await saveWorkspace(workspaceSchema.parse(input) as WorkspaceConfig);
+    jira.resetBoardCache();
+    touch(); revalidatePath("/admin/workspace"); revalidatePath("/settings");
+    return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
+/** Admin: which GitHub repo (org/name) and display name each project uses. */
+export async function saveProjectAction(projectId: string, patch: { name: string; repo: string }): Promise<Result> {
+  try {
+    await requireAccess("ADMIN");
+    const v = z.object({ name: z.string().trim().min(1).max(80), repo: z.string().trim().regex(/^([A-Za-z0-9-]+\/[A-Za-z0-9._-]+)?$/, "Use org/repo, like spaceitlabs/api") }).parse(patch);
+    await db.project.update({ where: { id: id.parse(projectId) }, data: { name: v.name, repo: v.repo || null } });
+    touch(); revalidatePath("/admin/workspace");
+    return { ok: true };
+  } catch (e) { return fail(e); }
+}
+void getMeetingSettings;

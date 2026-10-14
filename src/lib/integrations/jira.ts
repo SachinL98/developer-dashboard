@@ -4,12 +4,14 @@ import { STATUS_META } from "../workflow";
 
 import { boundUserId } from "../context";
 import { getSetting, setSetting } from "../settings";
+import { cachedWorkspace, getWorkspace } from "../config";
 import { accessTokenFor, getConnection } from "./connections";
 
 const env = () => ({
   base: process.env.JIRA_BASE_URL?.replace(/\/$/, ""), email: process.env.JIRA_EMAIL, token: process.env.JIRA_API_TOKEN,
-  project: process.env.JIRA_PROJECT_KEY, board: process.env.JIRA_BOARD_ID, spField: process.env.JIRA_STORY_POINTS_FIELD || "customfield_10016",
-  sprintField: process.env.JIRA_SPRINT_FIELD || "customfield_10020",
+  // Project, board and field ids come from the admin-set workspace config (env vars are the defaults).
+  project: cachedWorkspace().jira.projectKey || undefined, board: cachedWorkspace().jira.boardId || undefined,
+  spField: cachedWorkspace().jira.storyPointsField, sprintField: cachedWorkspace().jira.sprintField,
 });
 
 /** Optional org-wide service account (basic auth). Per-user OAuth connections are preferred when present. */
@@ -31,12 +33,14 @@ async function resolveAuth(): Promise<JiraAuth> {
 
 /** True when a Jira call can be made now (user connected or service account set) and the team project is configured. */
 export async function jiraReady(): Promise<boolean> {
+  await getWorkspace();
   if (!env().project) return false;
   try { await resolveAuth(); return true; } catch { return false; }
 }
 export const jiraProjectConfigured = () => !!env().project;
 
 const call = async <T>(path: string, init: RequestInit = {}) => {
+  await getWorkspace();
   const auth = await resolveAuth();
   return request<T>("Jira", `${auth.base}${path}`, { ...init, headers: { ...auth.headers, "Content-Type": "application/json", ...(init.headers ?? {}) } });
 };
@@ -192,6 +196,7 @@ async function guessEstimation(): Promise<EstimationInfo> {
 }
 
 let infoCache: { at: number; info: JiraBoardInfo } | null = null;
+export const resetBoardCache = () => { infoCache = null; };
 /** The live board info (cached for a minute) — also persisted so pages can render the columns without a Jira call. */
 export async function boardInfo(force = false): Promise<JiraBoardInfo> {
   if (!force && infoCache && Date.now() - infoCache.at < 60_000) return infoCache.info;

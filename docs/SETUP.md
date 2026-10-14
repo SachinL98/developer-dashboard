@@ -46,3 +46,11 @@ curl -fsS -H "Authorization: Bearer $CRON_SECRET" $APP_URL/api/cron/transcripts 
 | Manage users and roles | | | ✔ |
 
 New `@spaceitlabs.com` sign-ins start as Developer. The first sign-in on an instance with no admin, and anyone in `ADMIN_EMAILS`, becomes Admin.
+
+## Admin settings (no redeploy needed)
+
+Admins get **Admin → Meetings** and **Admin → Workspace** in the app. They are stored in the database; env vars are only the defaults and a saved value wins.
+
+- **Meetings:** enable/disable each recurring meeting, set days and times, and a fixed Google Meet link per meeting (empty = Google creates one per occurrence when connected). Saving rebuilds the next two weeks; individual upcoming meetings can have their own link.
+- **Workspace:** timezone, work hours, sprint length and start weekday (used for the New sprint form), default hours/week for new users, capacity buffer, Jira project key / board id / story-point and sprint fields, GitHub org, and each project's repository.
+- **Never in the UI:** tokens, client secrets, `AUTH_SECRET`, webhook secrets. The Workspace page only shows whether each is set.

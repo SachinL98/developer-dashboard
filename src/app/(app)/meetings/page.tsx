@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { PageHeader, Kpi } from "@/components/ui";
-import { MEETING_DEFS, defFor } from "@/lib/schedule";
+import { getMeetingDefs } from "@/lib/config";
 import { NotesTaker, type MeetingView } from "@/components/NotesTaker";
 import { SyncButtons } from "@/components/SyncButtons";
 import { fmtDay, fmtTime } from "@/lib/time";
@@ -17,6 +17,7 @@ export default async function Meetings() {
   const me = await requireUser();
   const canLead = atLeast(me.access, "LEAD");
   const google = await googleReady();
+  const defs = (await getMeetingDefs()).filter((d) => d.enabled);
   const now = new Date();
   const [past, upcoming, projects] = await Promise.all([
     db.meeting.findMany({ where: { endsAt: { lt: now } }, orderBy: { startsAt: "desc" }, take: 8, include: { actionItems: { include: { ticket: true } } } }),
@@ -43,7 +44,7 @@ export default async function Meetings() {
         <div className="grid min-w-[760px] grid-cols-5 gap-3">
           {DAYS.map((d, i) => (
             <div key={d}><div className="mb-2 text-sm font-medium">{d}</div>
-              <div className="space-y-2">{MEETING_DEFS.filter((m) => m.days.includes(i + 1)).sort((a, b) => a.start[0] * 60 + a.start[1] - (b.start[0] * 60 + b.start[1])).map((m) => (
+              <div className="space-y-2">{defs.filter((m) => m.days.includes(i + 1)).sort((a, b) => a.start[0] * 60 + a.start[1] - (b.start[0] * 60 + b.start[1])).map((m) => (
                 <div key={m.kind} className="rounded-lg border-l-4 bg-panel2 p-2" style={{ borderColor: m.color }}>
                   <div className="text-xs font-medium">{m.title}</div><div className="font-mono text-[11px] text-mute">{hh(m.start)}–{hh(m.end)}</div></div>))}</div></div>))}
         </div>
@@ -55,7 +56,7 @@ export default async function Meetings() {
           {upcoming.map((m) => (
             <div key={m.id} id={m.id} className="card-pad">
               <div className="flex items-center justify-between gap-3">
-                <div><div className="font-medium">{m.title}</div><div className="text-xs text-mute">{fmtDay(m.startsAt)} · {fmtTime(m.startsAt)}–{fmtTime(m.endsAt)} · {defFor(m.kind)?.blurb}</div></div>
+                <div><div className="font-medium">{m.title}</div><div className="text-xs text-mute">{fmtDay(m.startsAt)} · {fmtTime(m.startsAt)}–{fmtTime(m.endsAt)} · {defs.find((d) => d.kind === m.kind)?.blurb}</div></div>
                 {m.meetUrl && <a href={m.meetUrl} target="_blank" className="btn-primary"><Video size={14} /> Join</a>}
               </div>
             </div>))}

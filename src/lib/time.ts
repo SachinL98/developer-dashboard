@@ -1,4 +1,6 @@
-export const TZ = process.env.TEAM_TIMEZONE || "Asia/Colombo";
+/** Team timezone. Starts from the env var and is replaced by the admin-set value when the workspace config loads. */
+export let TZ = process.env.TEAM_TIMEZONE || "Asia/Colombo";
+export const setTimezone = (tz: string) => { TZ = tz; };
 
 /** Offset (ms) of `tz` from UTC at the given instant. */
 function tzOffset(tz: string, at: Date): number {

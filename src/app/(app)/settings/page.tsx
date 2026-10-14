@@ -98,7 +98,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
             <div>GitHub webhook (pull_request): <code className="text-ink">{origin}/api/webhooks/github</code></div>
             <div>Cron (every 10 min): <code className="text-ink">GET {origin}/api/cron/sync</code> and <code className="text-ink">/api/cron/transcripts</code> with <code>Authorization: Bearer &lt;CRON_SECRET&gt;</code></div>
           </div>
-          <Link href="/admin/users" className="btn w-fit">Manage users and roles</Link>
+          <div className="flex flex-wrap gap-2"><Link href="/admin/users" className="btn">Users and roles</Link><Link href="/admin/meetings" className="btn">Meeting links</Link><Link href="/admin/workspace" className="btn">Workspace settings</Link></div>
         </div>
       )}
     </div>

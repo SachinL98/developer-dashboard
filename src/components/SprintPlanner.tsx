@@ -12,7 +12,7 @@ export interface PlanTicket { id: string; key: string; title: string; type: keyo
 export interface PlanSprint { id: string; name: string; goal: string | null; state: string; start: string; end: string }
 export interface Fit { capacityHrs: number; committedHrs: number; loadPct: number; fits: boolean; overBy: number }
 
-export function SprintPlanner({ sprints, selected, backlog, inSprint, fit, perDev, canManage }: { canManage: boolean; sprints: PlanSprint[]; selected: PlanSprint | null; backlog: PlanTicket[]; inSprint: PlanTicket[]; fit: Fit | null; perDev: { name: string; hrs: number; cap: number }[] }) {
+export function SprintPlanner({ sprints, selected, backlog, inSprint, fit, perDev, canManage, newSprint }: { newSprint: { name: string; start: string; end: string }; canManage: boolean; sprints: PlanSprint[]; selected: PlanSprint | null; backlog: PlanTicket[]; inSprint: PlanTicket[]; fit: Fit | null; perDev: { name: string; hrs: number; cap: number }[] }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [list, setList] = useState(backlog);
@@ -20,7 +20,7 @@ export function SprintPlanner({ sprints, selected, backlog, inSprint, fit, perDe
   const [dragId, setDragId] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({ name: "", goal: "", start: "", end: "" });
+  const [form, setForm] = useState({ name: newSprint.name, goal: "", start: newSprint.start, end: newSprint.end });
   const say = (t: string, bad = false) => setMsg({ t, bad });
   const run = (fn: () => Promise<any>, ok?: (r: any) => string) => start(async () => { const r = await fn(); r.ok ? say(ok?.(r) ?? "Done") : say(r.error, true); router.refresh(); });
 

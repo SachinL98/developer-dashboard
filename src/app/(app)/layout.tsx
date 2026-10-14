@@ -8,6 +8,7 @@ import { Avatar } from "@/components/ui";
 import { logoutAction } from "./actions";
 import { LogOut, Plug } from "lucide-react";
 import { atLeast } from "@/lib/permissions";
+import { getWorkspace, parseHHMM } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
@@ -18,11 +19,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     db.timeEntry.findFirst({ where: { developerId: me.id, endedAt: null }, include: { ticket: true } }),
     db.connection.findMany({ where: { userId: me.id }, select: { provider: true } }),
   ]);
+  const cfg = await getWorkspace(); // also applies the admin-set timezone
+  const [sh, sm] = parseHHMM(cfg.workStart), [eh, em] = parseHHMM(cfg.workEnd);
+  const targetHrs = Math.round(((eh * 60 + em - (sh * 60 + sm)) / 60) * 10) / 10;
   const has = new Set(conns.map((c) => c.provider));
   const missing = [!has.has("JIRA") && "Jira", !has.has("GOOGLE") && "Google Calendar & Meet"].filter(Boolean) as string[];
   const footer = (
     <>
-          <WorkClock sessionStart={session?.startedAt.toISOString() ?? null} timer={timer ? { key: timer.ticket.key, title: timer.ticket.title, startedAt: timer.startedAt.toISOString() } : null} />
+          <WorkClock targetHrs={targetHrs} sessionStart={session?.startedAt.toISOString() ?? null} timer={timer ? { key: timer.ticket.key, title: timer.ticket.title, startedAt: timer.startedAt.toISOString() } : null} />
           <div className="flex items-center gap-2 rounded-xl border border-line bg-panel/60 p-2">
             <Avatar name={me.name} hue={me.avatarHue} />
             <div className="min-w-0 flex-1"><div className="truncate text-sm">{me.name}</div><div className="text-[10px] uppercase tracking-wider text-mute">{me.access.toLowerCase()}</div></div>

@@ -4,7 +4,7 @@ import { Play, Square, LogIn, LogOut } from "lucide-react";
 import { clockInAction, clockOutAction, stopTimerAction } from "@/app/(app)/actions";
 import { fmtDur } from "@/lib/time";
 
-export function WorkClock({ sessionStart, timer }: { sessionStart: string | null; timer: { key: string; title: string; startedAt: string } | null }) {
+export function WorkClock({ sessionStart, timer, targetHrs }: { targetHrs?: number; sessionStart: string | null; timer: { key: string; title: string; startedAt: string } | null }) {
   const [now, setNow] = useState<number | null>(null);
   const [pending, start] = useTransition();
   useEffect(() => { setNow(Date.now()); const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
@@ -18,7 +18,8 @@ export function WorkClock({ sessionStart, timer }: { sessionStart: string | null
       </div>
       {sessionStart ? (
         <>
-          <div className="font-mono text-xl">{secs(nowMs - new Date(sessionStart).getTime())}</div>
+          <div className="font-mono text-xl">{secs(nowMs - new Date(sessionStart).getTime())}{targetHrs ? <span className="ml-1 text-xs text-mute">/ {targetHrs}h</span> : null}</div>
+          {targetHrs ? <div className="h-1 overflow-hidden rounded-full bg-line"><div className="h-full rounded-full bg-neon" style={{ width: `${Math.min(100, ((nowMs - new Date(sessionStart).getTime()) / 3_600_000 / targetHrs) * 100)}%` }} /></div> : null}
           <button className="btn w-full" disabled={pending} onClick={() => start(async () => { await clockOutAction(); })}><LogOut size={14} /> End day</button>
         </>
       ) : (

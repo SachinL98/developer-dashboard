@@ -19,7 +19,7 @@ const items = [
 
 export function Nav({ isAdmin }: { isAdmin?: boolean }) {
   const path = usePathname();
-  const list = isAdmin ? [...items, { href: "/admin/users", label: "Admin", icon: Shield }] : items;
+  const list = isAdmin ? [...items, { href: "/admin", label: "Admin", icon: Shield }] : items;
   return (
     <nav className="flex flex-col gap-1">
       {list.map(({ href, label, icon: Icon }) => {

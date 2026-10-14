@@ -22,12 +22,12 @@ export const defFor = (k: string) => MEETING_DEFS.find((d) => d.kind === k);
 export interface Occurrence { kind: MeetingKindKey; title: string; startsAt: Date; endsAt: Date }
 
 /** All scheduled meetings between `from` (inclusive) and `days` days ahead, in team time. */
-export function occurrences(from: Date, days: number): Occurrence[] {
+export function occurrences(from: Date, days: number, defs: MeetingDef[] = MEETING_DEFS): Occurrence[] {
   const out: Occurrence[] = [];
   for (let i = 0; i < days; i++) {
     const p = zonedParts(new Date(from.getTime() + i * 86_400_000));
     // anchor each day in zoned calendar to avoid DST drift
-    for (const def of MEETING_DEFS) {
+    for (const def of defs) {
       if (!def.days.includes(p.wd)) continue;
       out.push({
         kind: def.kind, title: def.title,

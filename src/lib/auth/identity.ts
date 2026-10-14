@@ -1,3 +1,4 @@
+import { getWorkspace } from "../config";
 import { db } from "../db";
 import { allowedDomain, bootstrapAdmins, emailAllowed } from "../permissions";
 
@@ -38,6 +39,6 @@ export async function provisionUser(id: { sub: string; email: string; name: stri
     });
   }
   return db.developer.create({
-    data: { email: id.email, name: id.name, googleSub: id.sub, picture: id.picture, lastLoginAt: new Date(), access: admin ? "ADMIN" : "DEVELOPER", avatarHue: Math.floor(Math.random() * 360) },
+    data: { email: id.email, name: id.name, googleSub: id.sub, picture: id.picture, lastLoginAt: new Date(), access: admin ? "ADMIN" : "DEVELOPER", capacityHrs: (await getWorkspace()).defaultCapacityHrs, avatarHue: Math.floor(Math.random() * 360) },
   });
 }

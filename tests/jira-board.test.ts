@@ -54,3 +54,12 @@ describe("estimates", () => {
     expect(i).toMatchObject({ key: "ATL-1", type: "BUG", priority: "HIGH", points: 3, estimateHrs: 2, statusCategory: "indeterminate" });
   });
 });
+
+import { defaultWorkspace, nextSprintDefaults } from "../src/lib/config";
+describe("sprint cadence defaults", () => {
+  it("starts the next sprint on the configured weekday after the last one ends", () => {
+    const cfg = { ...defaultWorkspace(), sprintLengthDays: 14, sprintStartWeekday: 1 };
+    const r = nextSprintDefaults("Sprint 24", new Date("2026-10-23T12:00:00Z"), cfg); // Friday
+    expect(r).toEqual({ name: "Sprint 25", start: "2026-10-26", end: "2026-11-08" }); // Mon → +13 days
+  });
+});
