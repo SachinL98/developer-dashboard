@@ -1,3 +1,4 @@
+import { fg } from "@/lib/theme";
 import { db } from "@/lib/db";
 import { PageHeader, Kpi } from "@/components/ui";
 import { VelocityChart, StackedBars, LineSeries, HBar } from "@/components/Charts";
@@ -43,7 +44,7 @@ export default async function Analytics() {
             <tr key={s.d.id} className="border-t border-line/60">
               <td className="p-3"><a href={`/team/${s.d.id}`} className="hover:text-neon">{s.d.name}</a></td>
               <td className="font-mono">{s.donePoints}</td><td className="font-mono">{s.doneCount}</td><td className="font-mono">{s.cycleDays ? s.cycleDays.toFixed(1) + "d" : "—"}</td>
-              <td className="font-mono" style={{ color: s.accuracy == null ? undefined : s.accuracy > 1.25 ? "#fb7185" : s.accuracy < 0.75 ? "#fbbf24" : "#a3e635" }}>{s.accuracy ? Math.round(s.accuracy * 100) + "%" : "—"}</td>
+              <td className="font-mono" style={{ color: s.accuracy == null ? undefined : s.accuracy > 1.25 ? fg("#fb7185") : s.accuracy < 0.75 ? fg("#fbbf24") : fg("#a3e635") }}>{s.accuracy ? Math.round(s.accuracy * 100) + "%" : "—"}</td>
               <td className="font-mono">{s.worked.toFixed(0)}h</td><td className="font-mono">{s.worked ? Math.round((s.tracked / s.worked) * 100) + "%" : "—"}</td><td className="font-mono">{s.bugs}</td><td className="font-mono">{s.failedStg}</td>
             </tr>))}</tbody>
         </table>

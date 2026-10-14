@@ -1,3 +1,4 @@
+import { fg } from "@/lib/theme";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { activeSprint, sprintSnapshot, DAY } from "@/lib/queries";
@@ -31,7 +32,7 @@ export default async function Overview() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={sprint.name} sub={<>{sprint.goal} · {fmtDay(sprint.startDate)} → {fmtDay(sprint.endDate)} · <span style={{ color: health[1] }}>{health[0]}</span></>}
+      <PageHeader title={sprint.name} sub={<>{sprint.goal} · {fmtDay(sprint.startDate)} → {fmtDay(sprint.endDate)} · <span style={{ color: fg(health[1]) }}>{health[0]}</span></>}
         actions={<><Link href="/tickets/new" className="btn">New ticket</Link><Link href="/board" className="btn-primary">Open board</Link></>} />
 
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
@@ -87,8 +88,8 @@ export default async function Overview() {
         <div className="card-pad">
           <div className="mb-3 flex items-center gap-2 h-section"><AlertTriangle size={14} className="text-neon-amber" /> Needs attention</div>
           <ul className="space-y-2 text-sm">
-            {failed.map((t) => <li key={t.id}><Link href={`/tickets/${t.id}`} className="flex items-start gap-2 hover:text-white"><StatusBadge status="FAILED_STG" /><span className="min-w-0 truncate"><span className="font-mono text-mute">{t.key}</span> {t.title}</span></Link></li>)}
-            {waiting.slice(0, 4).map((t) => <li key={t.id}><Link href={`/tickets/${t.id}`} className="flex items-start gap-2 hover:text-white"><StatusBadge status={t.status} /><span className="min-w-0 truncate"><span className="font-mono text-mute">{t.key}</span> {t.title}</span></Link></li>)}
+            {failed.map((t) => <li key={t.id}><Link href={`/tickets/${t.id}`} className="flex items-start gap-2 hover:text-ink"><StatusBadge status="FAILED_STG" /><span className="min-w-0 truncate"><span className="font-mono text-mute">{t.key}</span> {t.title}</span></Link></li>)}
+            {waiting.slice(0, 4).map((t) => <li key={t.id}><Link href={`/tickets/${t.id}`} className="flex items-start gap-2 hover:text-ink"><StatusBadge status={t.status} /><span className="min-w-0 truncate"><span className="font-mono text-mute">{t.key}</span> {t.title}</span></Link></li>)}
             {stale.map((t) => <li key={t.id} className="text-xs text-neon-amber">⏱ {t.key} has no tracked time for 2+ days</li>)}
             {!failed.length && !waiting.length && !stale.length && <li className="text-mute">Nothing blocked. Nice.</li>}
           </ul>

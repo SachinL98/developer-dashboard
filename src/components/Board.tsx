@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { fg, tint } from "@/lib/theme";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import clsx from "clsx";
 import { GitPullRequest, Clock, Flame, Lock, ArrowRight, ExternalLink, Bot, Loader2 } from "lucide-react";
@@ -68,14 +69,14 @@ export function Board({ tickets: initial, columns, readOnlyHint, actor }: { tick
                 {c.jiraStatuses.length > 1 && <div className="mb-2 truncate px-2 text-[10px] text-mute" title={c.jiraStatuses.join(" · ")}>{c.jiraStatuses.join(" · ")}</div>}
                 <div className="space-y-2">
                   {col.map((t) => <Card key={t.id} t={t} actor={actor} onDragStart={() => setDrag(t)} onDragEnd={() => setDrag(null)} onMove={(to) => move(t, to)} />)}
-                  {!col.length && <div className="rounded-xl border border-dashed border-line/70 p-4 text-center text-xs text-mute/70">{drag ? (droppable ? "Drop here" : <Lock size={14} className="mx-auto" />) : "Empty"}</div>}
+                  {!col.length && <div className="rounded-xl border border-dashed border-line/70 p-4 text-center text-xs text-mute">{drag ? (droppable ? "Drop here" : <Lock size={14} className="mx-auto" />) : "Empty"}</div>}
                 </div>
               </div>
             );
           })}
         </div>
       </div>
-      {toast && <div className={clsx("fixed bottom-6 right-6 z-50 max-w-sm rounded-xl border px-4 py-3 text-sm shadow-2xl fade-in", toast.bad ? "border-neon-red/50 bg-[#2a1018] text-neon-red" : "border-neon-lime/40 bg-[#101c10] text-neon-lime")}>{toast.msg}</div>}
+      {toast && <div className={clsx("fixed bottom-6 right-6 z-50 max-w-sm rounded-xl border px-4 py-3 text-sm shadow-2xl fade-in", toast.bad ? "border-neon-red/50 bg-panel text-neon-red" : "border-neon-lime/40 bg-panel text-neon-lime")}>{toast.msg}</div>}
     </>
   );
 }
@@ -90,11 +91,11 @@ function Card({ t, actor, onDragStart, onDragEnd, onMove }: { t: BoardTicket; ac
         <span className="font-mono text-mute">{t.key}</span>
         <span className="flex items-center gap-1.5">
           {t.complicated && <Flame size={12} className="text-neon-amber" aria-label="Needs grooming" />}
-          <span style={{ color: PRIORITY_META[t.priority].color }}>▲</span>
-          <span className="rounded px-1 py-px" style={{ color: TYPE_META[t.type].color, background: TYPE_META[t.type].color + "18" }}>{TYPE_META[t.type].label}</span>
+          <span style={{ color: fg(PRIORITY_META[t.priority].color) }}>▲</span>
+          <span className="rounded px-1 py-px" style={{ color: fg(TYPE_META[t.type].color), background: tint(TYPE_META[t.type].color, 10) }}>{TYPE_META[t.type].label}</span>
         </span>
       </div>
-      <Link href={`/tickets/${t.id}`} className="mt-1.5 block text-sm leading-snug hover:text-white">{t.title}</Link>
+      <Link href={`/tickets/${t.id}`} className="mt-1.5 block text-sm leading-snug hover:text-ink">{t.title}</Link>
       {(t.jiraStatus || t.labels.length > 0) && (
         <div className="mt-1.5 flex flex-wrap gap-1 text-[10px]">
           {t.jiraStatus && <span className="rounded border border-line px-1 text-mute" title="Status in Jira">{t.jiraStatus}</span>}
@@ -110,11 +111,11 @@ function Card({ t, actor, onDragStart, onDragEnd, onMove }: { t: BoardTicket; ac
             <Link href={`/tickets/${t.id}`} title="Initial Claude review" className={clsx("flex items-center gap-1 rounded px-1", t.review === "passed" && "text-neon-lime", t.review === "blocked" && "text-neon-red", t.review === "error" && "text-neon-amber", t.review === "running" && "text-neon")}>
               {t.review === "running" ? <Loader2 size={11} className="animate-spin" /> : <Bot size={11} />}{{ passed: "passed", blocked: "blocked", error: "failed", running: "reviewing" }[t.review]}
             </Link>)}
-          {t.jiraUrl && <a href={t.jiraUrl} target="_blank" rel="noreferrer" title="Open in Jira" className="hover:text-white"><ExternalLink size={11} /></a>}
+          {t.jiraUrl && <a href={t.jiraUrl} target="_blank" rel="noreferrer" title="Open in Jira" className="hover:text-ink"><ExternalLink size={11} /></a>}
         </div>
         <div className="flex items-center gap-1">
           {next.map((n) => (
-            <button key={n} onClick={() => onMove(n)} title={`Move to ${STATUS_META[n].label}`} className="rounded-md p-1 text-mute opacity-0 transition hover:bg-line hover:text-white group-hover:opacity-100 [@media(hover:none)]:p-2.5 [@media(hover:none)]:opacity-100" style={{ color: n === "FAILED_STG" ? "#fb7185" : undefined }}>
+            <button key={n} onClick={() => onMove(n)} title={`Move to ${STATUS_META[n].label}`} className="rounded-md p-1 text-mute opacity-0 transition hover:bg-line hover:text-ink group-hover:opacity-100 [@media(hover:none)]:p-2.5 [@media(hover:none)]:opacity-100" style={{ color: n === "FAILED_STG" ? fg("#fb7185") : undefined }}>
               <ArrowRight size={13} />
             </button>
           ))}

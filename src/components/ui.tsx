@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import type { ReactNode } from "react";
+import { fg, tint } from "@/lib/theme";
 import { STATUS_META, TYPE_META, PRIORITY_META, type StatusKey } from "@/lib/workflow";
 
 export function PageHeader({ title, sub, actions }: { title: string; sub?: ReactNode; actions?: ReactNode }) {
@@ -24,7 +25,7 @@ export function Kpi({ label, value, sub, accent = "#6ee7ff", spark }: { label: s
       {sub && <div className="mt-1 text-xs text-mute">{sub}</div>}
       {spark && (
         <div className="mt-3 flex h-8 items-end gap-[3px]">
-          {spark.map((v, i) => <div key={i} className="w-full rounded-sm" style={{ height: `${Math.max(8, (v / max) * 100)}%`, background: accent, opacity: 0.35 + (i / spark.length) * 0.65 }} />)}
+          {spark.map((v, i) => <div key={i} className="w-full rounded-sm" style={{ height: `${Math.max(8, (v / max) * 100)}%`, background: fg(accent), opacity: 0.35 + (i / spark.length) * 0.65 }} />)}
         </div>
       )}
     </div>
@@ -34,7 +35,7 @@ export function Kpi({ label, value, sub, accent = "#6ee7ff", spark }: { label: s
 export const StatusBadge = ({ status }: { status: string }) => {
   const m = STATUS_META[status as StatusKey];
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium" style={{ borderColor: m.color + "55", color: m.color, background: m.color + "14" }}>
+    <span className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium" style={{ borderColor: tint(m.color, 35), color: fg(m.color), background: tint(m.color, 9) }}>
       <span className="h-1.5 w-1.5 rounded-full" style={{ background: m.color }} />{m.label}
     </span>
   );
@@ -45,7 +46,7 @@ export const TypeDot = ({ type }: { type: string }) => {
 };
 export const PriorityTag = ({ p }: { p: string }) => {
   const m = PRIORITY_META[p as keyof typeof PRIORITY_META];
-  return <span className="text-[11px] font-medium" style={{ color: m.color }}>▲ {m.label}</span>;
+  return <span className="text-[11px] font-medium" style={{ color: fg(m.color) }}>▲ {m.label}</span>;
 };
 
 export function Avatar({ name, hue, size = 28 }: { name: string; hue: number; size?: number }) {

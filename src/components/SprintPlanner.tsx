@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { fg, tint } from "@/lib/theme";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
@@ -37,7 +38,7 @@ export function SprintPlanner({ sprints, selected, backlog, inSprint, fit, perDe
       <div className="card-pad">
         <div className="flex flex-wrap items-center gap-2">
           {sprints.map((s) => (
-            <Link key={s.id} href={`/sprints?sprint=${s.id}`} className={clsx("rounded-lg border px-3 py-1.5 text-sm", s.id === selected?.id ? "border-neon/60 bg-neon/10 text-white" : "border-line text-mute hover:text-ink")}>
+            <Link key={s.id} href={`/sprints?sprint=${s.id}`} className={clsx("rounded-lg border px-3 py-1.5 text-sm", s.id === selected?.id ? "border-neon/60 bg-neon/10 text-ink" : "border-line text-mute hover:text-ink")}>
               {s.name} <span className="ml-1 text-[10px] uppercase tracking-wider opacity-70">{s.state.toLowerCase()}</span>
             </Link>
           ))}
@@ -65,10 +66,10 @@ export function SprintPlanner({ sprints, selected, backlog, inSprint, fit, perDe
               <li key={t.id} draggable={canManage} onDragStart={() => setDragId(t.id)} onDragEnd={() => { setDragId(null); setOver(null); }} onDragOver={(e) => { e.preventDefault(); setOver(t.id); }} onDrop={() => { reorder(t.id); setOver(null); }}
                 className={clsx("group flex items-center gap-2 rounded-lg border bg-panel2 px-2 py-2 text-sm", over === t.id ? "border-neon" : "border-line")}>
                 <GripVertical size={14} className="cursor-grab text-mute" />
-                <span style={{ color: PRIORITY_META[t.priority].color }}>▲</span>
-                <Link href={`/tickets/${t.id}`} className="min-w-0 flex-1 break-words hover:text-white sm:truncate"><span className="font-mono text-xs text-mute">{t.key}</span> {t.title}</Link>
+                <span style={{ color: fg(PRIORITY_META[t.priority].color) }}>▲</span>
+                <Link href={`/tickets/${t.id}`} className="min-w-0 flex-1 break-words hover:text-ink sm:truncate"><span className="font-mono text-xs text-mute">{t.key}</span> {t.title}</Link>
                 {t.complicated && <Flame size={13} className="text-neon-amber" aria-label="Groom" />}
-                <span className="hidden rounded px-1.5 text-[10px] sm:inline" style={{ color: TYPE_META[t.type].color, background: TYPE_META[t.type].color + "18" }}>{TYPE_META[t.type].label}</span>
+                <span className="hidden rounded px-1.5 text-[10px] sm:inline" style={{ color: fg(TYPE_META[t.type].color), background: tint(TYPE_META[t.type].color, 10) }}>{TYPE_META[t.type].label}</span>
                 <span className="w-10 text-right font-mono text-xs text-mute">{t.estimateHrs != null ? `${t.estimateHrs}h` : "—"}</span>
                 {sprintOpen && <button className="btn-ghost px-2 py-0.5 [@media(hover:none)]:px-3.5 [@media(hover:none)]:py-2" title="Add to sprint" disabled={pending} onClick={() => run(() => assignToSprintAction(t.id, selected!.id), () => `${t.key} added`)}>+</button>}
               </li>
@@ -99,8 +100,8 @@ export function SprintPlanner({ sprints, selected, backlog, inSprint, fit, perDe
             <ul className="mt-5 space-y-1.5">
               {inSprint.map((t) => (
                 <li key={t.id} className="flex items-center gap-2 rounded-lg border border-line bg-panel2 px-3 py-2 text-sm">
-                  <span style={{ color: PRIORITY_META[t.priority].color }}>▲</span>
-                  <Link href={`/tickets/${t.id}`} className="min-w-0 flex-1 break-words hover:text-white sm:truncate"><span className="font-mono text-xs text-mute">{t.key}</span> {t.title}</Link>
+                  <span style={{ color: fg(PRIORITY_META[t.priority].color) }}>▲</span>
+                  <Link href={`/tickets/${t.id}`} className="min-w-0 flex-1 break-words hover:text-ink sm:truncate"><span className="font-mono text-xs text-mute">{t.key}</span> {t.title}</Link>
                   {t.complicated && <Flame size={13} className="text-neon-amber" />}
                   {t.points != null && <span className="rounded bg-line px-1.5 font-mono text-xs">{t.points}</span>}
                   <span className={clsx("w-14 whitespace-nowrap text-right font-mono text-xs", t.estimateHrs == null ? "text-neon-red" : "text-mute")}>{t.estimateHrs != null ? `${t.estimateHrs}h` : "no est."}</span>

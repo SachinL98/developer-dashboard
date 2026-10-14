@@ -31,8 +31,8 @@ export default async function Estimation({ searchParams }: { searchParams: Promi
     <div className="space-y-6">
       <PageHeader title="Time estimation" sub="Monday 09:15–09:45 session: poker votes + suggestions learned from your finished tickets. Agreed estimates are written to the real Jira tickets."
         actions={<div className="flex flex-wrap items-center gap-1 rounded-lg border border-line bg-panel p-1">{sprints.map((x) => (
-          <Link key={x.id} href={`/estimation?sprint=${x.id}`} className={`rounded-md px-2.5 py-1 text-xs ${x.id === selected?.id ? "bg-line text-white" : "text-mute hover:text-ink"}`}>{x.name}</Link>))}
-          <Link href="/estimation?sprint=backlog" className={`rounded-md px-2.5 py-1 text-xs ${!selected ? "bg-line text-white" : "text-mute hover:text-ink"}`}>Backlog</Link></div>} />
+          <Link key={x.id} href={`/estimation?sprint=${x.id}`} className={`rounded-md px-2.5 py-1 text-xs ${x.id === selected?.id ? "bg-line text-ink" : "text-mute hover:text-ink"}`}>{x.name}</Link>))}
+          <Link href="/estimation?sprint=backlog" className={`rounded-md px-2.5 py-1 text-xs ${!selected ? "bg-line text-ink" : "text-mute hover:text-ink"}`}>Backlog</Link></div>} />
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <Kpi label="Needing estimates" value={data.filter((d) => d.estimateHrs == null).length} accent="#fbbf24" />
         <Kpi label="Estimate accuracy" value={acc.n ? `${Math.round(acc.avg * 100)}%` : "—"} sub={acc.avg > 1.05 ? "Team under-estimates (actual > estimate)" : acc.avg && acc.avg < 0.95 ? "Team over-estimates" : "Well calibrated"} accent="#6ee7ff" />

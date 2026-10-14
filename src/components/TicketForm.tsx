@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useTransition } from "react";
+import { fg, tint } from "@/lib/theme";
 import { useRouter } from "next/navigation";
 import { Sparkles, Plus, ListPlus } from "lucide-react";
 import clsx from "clsx";
@@ -37,7 +38,7 @@ export function TicketForm({ projects, devs, sprints, jira }: { projects: Opt[];
     <div className="grid gap-6 xl:grid-cols-3">
       <div className="card-pad space-y-4 xl:col-span-2">
         <div className="flex gap-1 rounded-lg border border-line bg-bg/50 p-1 w-fit">
-          {(["single", "bulk"] as const).map((m) => <button key={m} onClick={() => setMode(m)} className={clsx("flex items-center gap-1.5 rounded-md px-3 py-1 text-sm", mode === m ? "bg-line text-white" : "text-mute")}>{m === "single" ? <Plus size={14} /> : <ListPlus size={14} />}{m === "single" ? "Single ticket" : "Quick capture (bulk)"}</button>)}
+          {(["single", "bulk"] as const).map((m) => <button key={m} onClick={() => setMode(m)} className={clsx("flex items-center gap-1.5 rounded-md px-3 py-1 text-sm", mode === m ? "bg-line text-ink" : "text-mute")}>{m === "single" ? <Plus size={14} /> : <ListPlus size={14} />}{m === "single" ? "Single ticket" : "Quick capture (bulk)"}</button>)}
         </div>
         <div><label className="label">Project</label><select className="input" value={f.projectId} onChange={(e) => set("projectId", e.target.value)}>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
 
@@ -65,8 +66,8 @@ export function TicketForm({ projects, devs, sprints, jira }: { projects: Opt[];
               <p className="mt-1 text-xs text-mute">Syntax: <code>[bug|feature|enhancement|task]</code> prefix, <code>!high</code>, <code>#label</code>, <code>(3)</code> points. Type and priority are inferred when omitted.</p></div>
             <div className="space-y-1.5">{prev.map((p, i) => (
               <div key={i} className="flex items-center gap-2 rounded-lg border border-line px-3 py-1.5 text-sm">
-                <span className="rounded px-1.5 text-[11px]" style={{ color: TYPE_META[p.type].color, background: TYPE_META[p.type].color + "18" }}>{TYPE_META[p.type].label}</span>
-                <span className="flex-1 truncate">{p.title}</span><span className="text-xs" style={{ color: PRIORITY_META[p.priority].color }}>{PRIORITY_META[p.priority].label}</span>
+                <span className="rounded px-1.5 text-[11px]" style={{ color: fg(TYPE_META[p.type].color), background: tint(TYPE_META[p.type].color, 10) }}>{TYPE_META[p.type].label}</span>
+                <span className="flex-1 truncate">{p.title}</span><span className="text-xs" style={{ color: fg(PRIORITY_META[p.priority].color) }}>{PRIORITY_META[p.priority].label}</span>
                 {p.storyPoints && <span className="chip">{p.storyPoints} pts</span>}{(p.labels ?? []).map((l) => <span key={l} className="chip">{l}</span>)}
               </div>))}</div>
           </>

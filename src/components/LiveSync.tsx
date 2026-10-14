@@ -45,7 +45,7 @@ export function LiveSync({ enabled, lastSync }: { enabled: boolean; lastSync: st
 
   if (!enabled) return <span className="chip" title="Connect Jira in Integrations to see your real board">Demo data · Jira not connected</span>;
   return (
-    <span className="chip" title={err ?? "Updates arrive from Jira by webhook, with a 30 s poll as fallback"} style={err ? { color: "#fb7185" } : undefined}>
+    <span className={`chip ${err ? "text-neon-red" : ""}`} title={err ?? "Updates arrive from Jira by webhook, with a 30 s poll as fallback"}>
       <span className={`h-1.5 w-1.5 rounded-full ${err ? "bg-neon-red" : "bg-neon-lime"}`} /> {err ? "Jira sync error" : `Live from Jira · ${now ? ago(last, now) : "…"}`}
     </span>
   );

@@ -26,7 +26,7 @@ export function Nav({ isAdmin }: { isAdmin?: boolean }) {
         const active = href === "/" ? path === "/" : path.startsWith(href);
         return (
           <Link key={href} href={href} className={clsx("group flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition",
-            active ? "bg-gradient-to-r from-neon/15 to-transparent text-white shadow-[inset_2px_0_0_#6ee7ff]" : "text-mute hover:bg-panel2 hover:text-ink")}>
+            active ? "bg-gradient-to-r from-neon/15 to-transparent text-ink shadow-[inset_2px_0_0_rgb(var(--neon))]" : "text-mute hover:bg-panel2 hover:text-ink")}>
             <Icon size={17} className={active ? "text-neon" : "group-hover:text-neon"} />{label}
           </Link>
         );

@@ -1,6 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
+import { isTheme } from "@/lib/theme";
 import { getReviewConfig, saveReviewConfig, type ReviewConfig } from "@/lib/review-config";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -471,4 +472,9 @@ export async function saveReviewConfigAction(input: ReviewConfig): Promise<Resul
     revalidatePath("/admin/review");
     return { ok: true };
   } catch (e) { return fail(e); }
+}
+
+/** The signed-in user's colour theme (light, dark or follow the system). */
+export async function setThemeAction(theme: string): Promise<Result> {
+  try { const user = await me(); if (!isTheme(theme)) return { ok: false, error: "Unknown theme" }; await db.developer.update({ where: { id: user.id }, data: { theme } }); return { ok: true }; } catch (e) { return fail(e); }
 }

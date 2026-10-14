@@ -32,7 +32,7 @@ export function MeetingSettings({ initial, upcoming, google }: { initial: Meetin
           {list.map((m) => (
             <div key={m.kind} className={clsx("rounded-xl border border-line bg-panel2 p-4", !m.enabled && "opacity-60")}>
               <div className="flex flex-wrap items-center gap-3">
-                <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-5 w-5 accent-[#6ee7ff]" checked={m.enabled} onChange={(e) => patch(m.kind, { enabled: e.target.checked })} /> Enabled</label>
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-5 w-5 accent-[rgb(var(--neon))]" checked={m.enabled} onChange={(e) => patch(m.kind, { enabled: e.target.checked })} /> Enabled</label>
                 <input className="input min-w-[180px] flex-1 sm:max-w-xs" aria-label="Title" value={m.title} onChange={(e) => patch(m.kind, { title: e.target.value })} />
                 <input type="time" className="input w-[120px]" aria-label="Start" value={m.start} onChange={(e) => patch(m.kind, { start: e.target.value })} />
                 <span className="text-mute">to</span>
@@ -41,7 +41,7 @@ export function MeetingSettings({ initial, upcoming, google }: { initial: Meetin
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {DAYS.map(([d, label]) => (
                   <button key={d} type="button" aria-pressed={m.days.includes(d)} onClick={() => toggleDay(m, d)}
-                    className={clsx("h-9 min-w-[44px] rounded-lg border px-2 text-xs", m.days.includes(d) ? "border-neon/60 bg-neon/10 text-white" : "border-line text-mute hover:text-ink")}>{label}</button>))}
+                    className={clsx("h-9 min-w-[44px] rounded-lg border px-2 text-xs", m.days.includes(d) ? "border-neon/60 bg-neon/10 text-ink" : "border-line text-mute hover:text-ink")}>{label}</button>))}
               </div>
               <div className="mt-3 flex items-center gap-2">
                 <Video size={16} className="shrink-0 text-mute" />

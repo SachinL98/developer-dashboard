@@ -1,3 +1,4 @@
+import { fg, tint } from "@/lib/theme";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
@@ -30,7 +31,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t.title} sub={<span className="flex flex-wrap items-center gap-3"><span className="font-mono">{t.key}</span><span style={{ color: t.project.color }}>{t.project.name}</span><TypeDot type={t.type} /><PriorityTag p={t.priority} />{t.sprint && <span>{t.sprint.name}</span>}</span>}
+      <PageHeader title={t.title} sub={<span className="flex flex-wrap items-center gap-3"><span className="font-mono">{t.key}</span><span style={{ color: fg(t.project.color) }}>{t.project.name}</span><TypeDot type={t.type} /><PriorityTag p={t.priority} />{t.sprint && <span>{t.sprint.name}</span>}</span>}
         actions={<>{jiraHref && <a className="btn" href={jiraHref} target="_blank" rel="noreferrer">Jira <ExternalLink size={13} /></a>}{t.prUrl && <a className="btn" href={t.prUrl} target="_blank"><GitPullRequest size={14} /> PR #{t.prNumber} <ExternalLink size={13} /></a>}</>} />
 
       <div className="card-pad overflow-x-auto">
@@ -40,10 +41,10 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
             return (
               <div key={s} className="flex flex-1 items-center">
                 <div className="flex flex-col items-center gap-1.5">
-                  <div className={clsx("grid h-7 w-7 place-items-center rounded-full border text-[11px] font-mono", current && "shadow-glow")} style={{ borderColor: current || past ? m.color : "#1f2740", background: current ? m.color : past ? m.color + "22" : "transparent", color: current ? "#07090f" : past ? m.color : "#8a94b2" }}>{i + 1}</div>
-                  <span className={clsx("w-16 text-center text-[10px] leading-tight", current ? "text-white" : "text-mute")}>{m.label}</span>
+                  <div className={clsx("grid h-7 w-7 place-items-center rounded-full border text-[11px] font-mono", current && "shadow-glow")} style={{ borderColor: current || past ? m.color : "rgb(var(--line))", background: current ? m.color : past ? tint(m.color, 13) : "transparent", color: current ? "#07090f" : past ? fg(m.color) : "rgb(var(--mute))" }}>{i + 1}</div>
+                  <span className={clsx("w-16 text-center text-[10px] leading-tight", current ? "text-ink" : "text-mute")}>{m.label}</span>
                 </div>
-                {i < STATUS_ORDER.length - 1 && <div className="mb-5 h-px flex-1" style={{ background: i < idx ? m.color : "#1f2740" }} />}
+                {i < STATUS_ORDER.length - 1 && <div className="mb-5 h-px flex-1" style={{ background: i < idx ? m.color : "rgb(var(--line))" }} />}
               </div>
             );
           })}

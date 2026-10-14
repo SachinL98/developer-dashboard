@@ -36,7 +36,7 @@ export function TicketControls(p: {
       {p.status === "IN_PROGRESS" && (
         <div className="space-y-2">
           <div className="label">Implementation progress · {pct}%</div>
-          <input type="range" min={0} max={100} step={5} value={pct} onChange={(e) => setPct(+e.target.value)} className="w-full accent-[#a78bfa]" />
+          <input type="range" min={0} max={100} step={5} value={pct} onChange={(e) => setPct(+e.target.value)} className="w-full accent-[rgb(var(--neon-violet))]" />
           <div className="flex gap-2">
             <input className="input" placeholder="What changed? (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
             <button className="btn" disabled={pending} onClick={() => run(() => setProgressAction(p.id, pct, note), "Progress logged")}><Save size={14} /> Log</button>

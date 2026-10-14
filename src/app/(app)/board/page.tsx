@@ -39,7 +39,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
     <div>
       <PageHeader title="Sprint board" sub={current ? `${current.name} · ${current.goal ?? ""}` : "All tickets"}
         actions={<><div className="flex gap-1 rounded-lg border border-line bg-panel p-1">{sprints.slice(0, 4).map((s) => (
-          <Link key={s.id} href={`/board?sprint=${s.id}`} className={`rounded-md px-2.5 py-1 text-xs ${s.id === current?.id ? "bg-line text-white" : "text-mute hover:text-ink"}`}>{s.name}</Link>))}</div>
+          <Link key={s.id} href={`/board?sprint=${s.id}`} className={`rounded-md px-2.5 py-1 text-xs ${s.id === current?.id ? "bg-line text-ink" : "text-mute hover:text-ink"}`}>{s.name}</Link>))}</div>
           <LiveSync enabled={live} lastSync={lastSync} /><Link href="/tickets/new" className="btn-primary">New ticket</Link></>} />
       {live && !info && <div className="mb-4 rounded-lg border border-neon-amber/40 bg-neon-amber/10 px-4 py-2 text-sm text-neon-amber">Jira is connected but the real board hasn't been read yet. A lead can press <Link href="/settings" className="underline">Sync Jira</Link> to load its columns.</div>}
       <Board key={`${current?.id ?? "all"}:${columns.map((c) => c.id).join("|")}`} tickets={data} columns={columns} actor={{ id: me.id, access: me.access }} />

@@ -3,25 +3,42 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: dark; }
-html, body { background: #07090f; color: #e6ebf7; }
+:root {
+  /* Dark theme (default) */
+  --bg: 7 9 15; --panel: 13 17 27; --panel2: 18 24 38; --line: 31 39 64; --ink: 230 235 247; --mute: 138 148 178; --on-accent: 7 9 15;
+  --neon: 110 231 255; --neon-violet: 167 139 250; --neon-lime: 163 230 53; --neon-pink: 244 114 182; --neon-amber: 251 191 36; --neon-red: 251 113 133;
+  --accent-darken: 0%;
+  --glow: 0 0 0 1px rgba(110,231,255,.25), 0 0 24px -6px rgba(110,231,255,.35);
+  --grid: rgba(255,255,255,.025); --blob1: rgba(167,139,250,.14); --blob2: rgba(110,231,255,.10); --scroll: #1f2740;
+  color-scheme: dark;
+}
+html.light {
+  /* Light theme: accents are darkened so text on white keeps >= 4.5:1 contrast */
+  --bg: 244 246 251; --panel: 255 255 255; --panel2: 241 244 250; --line: 214 220 235; --ink: 17 24 39; --mute: 88 99 124; --on-accent: 255 255 255;
+  --neon: 10 105 133; --neon-violet: 109 40 217; --neon-lime: 63 98 18; --neon-pink: 190 24 93; --neon-amber: 161 78 4; --neon-red: 190 18 60;
+  --accent-darken: 42%;
+  --glow: 0 0 0 1px rgba(14,116,144,.25), 0 6px 20px -8px rgba(14,116,144,.35);
+  --grid: rgba(15,23,42,.045); --blob1: rgba(124,58,237,.07); --blob2: rgba(14,116,144,.07); --scroll: #c3cbe0;
+  color-scheme: light;
+}
+html, body { background: rgb(var(--bg)); color: rgb(var(--ink)); }
 body {
   background-image:
-    radial-gradient(900px 500px at 85% -10%, rgba(167,139,250,.14), transparent 60%),
-    radial-gradient(700px 400px at 0% 0%, rgba(110,231,255,.10), transparent 60%),
-    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+    radial-gradient(900px 500px at 85% -10%, var(--blob1), transparent 60%),
+    radial-gradient(700px 400px at 0% 0%, var(--blob2), transparent 60%),
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
   background-size: auto, auto, 36px 36px, 36px 36px;
   background-attachment: fixed;
 }
 ::selection { background: rgba(110,231,255,.3); }
-* { scrollbar-width: thin; scrollbar-color: #1f2740 transparent; }
+* { scrollbar-width: thin; scrollbar-color: var(--scroll) transparent; }
 
 @layer components {
   .card { @apply rounded-2xl border border-line bg-panel/80 backdrop-blur-sm; }
   .card-pad { @apply card p-5; }
   .btn { @apply inline-flex items-center justify-center gap-2 rounded-lg border border-line bg-panel2 px-3 py-1.5 text-sm font-medium text-ink transition hover:border-neon/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40; }
-  .btn-primary { @apply btn border-transparent bg-gradient-to-r from-neon to-neon-violet text-[#07090f] hover:text-[#07090f] hover:brightness-110; }
+  .btn-primary { @apply btn border-transparent bg-gradient-to-r from-neon to-neon-violet text-on-accent hover:text-on-accent hover:brightness-110; }
   .btn-ghost { @apply btn border-transparent bg-transparent hover:bg-panel2; }
   .input { @apply w-full rounded-lg border border-line bg-bg/60 px-3 py-2 text-sm text-ink placeholder:text-mute/70 outline-none transition focus:border-neon/60 focus:shadow-glow; }
   .label { @apply mb-1 block text-xs font-medium uppercase tracking-wider text-mute; }

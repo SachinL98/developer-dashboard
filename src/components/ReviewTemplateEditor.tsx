@@ -14,7 +14,7 @@ function Items({ items, onChange }: { items: TemplateItem[]; onChange: (i: Templ
     <ul className="space-y-2">
       {items.map((i) => (
         <li key={i.id} className={clsx("flex flex-col gap-2 rounded-lg border border-line bg-panel2 p-3 sm:flex-row sm:items-center", !i.enabled && "opacity-60")}>
-          <label className="flex items-center gap-2 text-xs"><input type="checkbox" className="h-5 w-5 accent-[#6ee7ff]" checked={i.enabled} onChange={(e) => set(i.id, { enabled: e.target.checked })} /> On</label>
+          <label className="flex items-center gap-2 text-xs"><input type="checkbox" className="h-5 w-5 accent-[rgb(var(--neon))]" checked={i.enabled} onChange={(e) => set(i.id, { enabled: e.target.checked })} /> On</label>
           <input className="input" aria-label="Checklist point" value={i.label} onChange={(e) => set(i.id, { label: e.target.value })} />
           <select className="input sm:w-36" aria-label="Severity" value={i.severity} onChange={(e) => set(i.id, { severity: e.target.value as TemplateItem["severity"] })}><option value="critical">Critical</option><option value="important">Important</option></select>
           <button className="btn-ghost p-2" aria-label="Remove point" onClick={() => onChange(items.filter((x) => x.id !== i.id))}><Trash2 size={15} /></button>
@@ -45,8 +45,8 @@ export function ReviewTemplateEditor({ initial, projects, status }: { initial: R
           <Status ok={status.claude} label="ANTHROPIC_API_KEY" hint={status.claude ? `Claude (${status.model}) reviews the diff` : "without it only a heuristic diff scan runs, not an AI review"} />
           <Status ok={status.github} label="GITHUB_TOKEN" hint="needed to read the PR diff (and to comment on the PR if enabled)" />
         </ul>
-        <label className="flex items-start gap-3 text-sm"><input type="checkbox" className="mt-0.5 h-5 w-5 accent-[#6ee7ff]" checked={cfg.autoRun} onChange={(e) => setCfg({ ...cfg, autoRun: e.target.checked })} /><span>Run automatically when a card with a PR moves to Initial Review, and again when new commits are pushed to that PR.<span className="block text-xs text-mute">Push re-runs need the GitHub webhook (pull_request events). A failing review blocks the move to Review either way.</span></span></label>
-        <label className="flex items-start gap-3 text-sm"><input type="checkbox" className="mt-0.5 h-5 w-5 accent-[#6ee7ff]" checked={cfg.postToPr} onChange={(e) => setCfg({ ...cfg, postToPr: e.target.checked })} /><span>Also post the result as a comment on the pull request.<span className="block text-xs text-mute">The GitHub token needs write access to pull requests.</span></span></label>
+        <label className="flex items-start gap-3 text-sm"><input type="checkbox" className="mt-0.5 h-5 w-5 accent-[rgb(var(--neon))]" checked={cfg.autoRun} onChange={(e) => setCfg({ ...cfg, autoRun: e.target.checked })} /><span>Run automatically when a card with a PR moves to Initial Review, and again when new commits are pushed to that PR.<span className="block text-xs text-mute">Push re-runs need the GitHub webhook (pull_request events). A failing review blocks the move to Review either way.</span></span></label>
+        <label className="flex items-start gap-3 text-sm"><input type="checkbox" className="mt-0.5 h-5 w-5 accent-[rgb(var(--neon))]" checked={cfg.postToPr} onChange={(e) => setCfg({ ...cfg, postToPr: e.target.checked })} /><span>Also post the result as a comment on the pull request.<span className="block text-xs text-mute">The GitHub token needs write access to pull requests.</span></span></label>
       </div>
 
       <div className="card-pad space-y-4">

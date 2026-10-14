@@ -6,6 +6,7 @@ import { authMode } from "@/lib/integrations/status";
 import { safeNext } from "@/lib/auth/oauth";
 import { demoLoginAction } from "./actions";
 import { Avatar } from "@/components/ui";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
   const error = sp.error ? ERRORS[sp.error] ?? sp.error : null;
   return (
     <main className="grid min-h-screen place-items-center p-4">
+      <div className="fixed right-4 top-4"><ThemeToggle signedIn={false} compact /></div>
       <div className="card-pad w-full max-w-md space-y-6 shadow-glow">
         <div className="flex items-center gap-3">
           <div className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-neon to-neon-violet text-lg font-bold text-bg">S</div>
@@ -28,7 +30,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
 
         {mode === "google" && (
           <a href={`/api/auth/google/login${sp.next ? `?next=${encodeURIComponent(safeNext(sp.next))}` : ""}`} className="btn-primary w-full py-2.5">
-            <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden><path fill="#07090f" d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.8 1.1 8 2.9l6.4-6.4C34.5 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z" /></svg>
+            <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden><path fill="currentColor" d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.8 1.1 8 2.9l6.4-6.4C34.5 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z" /></svg>
             Sign in with Google (@{allowedDomain()})
           </a>
         )}

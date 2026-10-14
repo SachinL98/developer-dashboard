@@ -5,12 +5,12 @@ export default {
   theme: {
     extend: {
       colors: {
-        bg: "#07090f", panel: "#0d111b", panel2: "#121826", line: "#1f2740",
-        ink: "#e6ebf7", mute: "#8a94b2",
-        neon: { DEFAULT: "#6ee7ff", violet: "#a78bfa", lime: "#a3e635", pink: "#f472b6", amber: "#fbbf24", red: "#fb7185" },
+        bg: "rgb(var(--bg) / <alpha-value>)", panel: "rgb(var(--panel) / <alpha-value>)", panel2: "rgb(var(--panel2) / <alpha-value>)", line: "rgb(var(--line) / <alpha-value>)",
+        ink: "rgb(var(--ink) / <alpha-value>)", mute: "rgb(var(--mute) / <alpha-value>)", "on-accent": "rgb(var(--on-accent) / <alpha-value>)",
+        neon: { DEFAULT: "rgb(var(--neon) / <alpha-value>)", violet: "rgb(var(--neon-violet) / <alpha-value>)", lime: "rgb(var(--neon-lime) / <alpha-value>)", pink: "rgb(var(--neon-pink) / <alpha-value>)", amber: "rgb(var(--neon-amber) / <alpha-value>)", red: "rgb(var(--neon-red) / <alpha-value>)" },
       },
       fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"], mono: ["JetBrains Mono", "ui-monospace", "monospace"] },
-      boxShadow: { glow: "0 0 0 1px rgba(110,231,255,.25), 0 0 24px -6px rgba(110,231,255,.35)" },
+      boxShadow: { glow: "var(--glow)" },
     },
   },
   plugins: [],

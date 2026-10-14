@@ -30,7 +30,7 @@ export default async function TimePage() {
   const todayKey = dayKey(now);
   const clockedIn = sessions.filter((s) => !s.endedAt);
   const mySessions = sessions.filter((s) => s.developerId === me?.id).slice(0, 8);
-  const heat = (h: number) => (h <= 0 ? "#10162a" : `rgba(110,231,255,${Math.min(1, 0.15 + h / 10)})`);
+  const heat = (h: number) => (h <= 0 ? "rgb(var(--panel2))" : `rgba(110,231,255,${Math.min(1, 0.15 + h / 10)})`);
 
   return (
     <div className="space-y-6">
@@ -48,8 +48,8 @@ export default async function TimePage() {
           <thead><tr><th className="w-44 text-left font-normal text-mute" />{days.map((k) => <th key={k} className="pb-2 font-normal text-mute">{k.slice(8)}</th>)}<th className="pb-2 text-right font-normal text-mute">Total</th></tr></thead>
           <tbody>{grid.map(({ d, perDay, worked }) => (
             <tr key={d.id}>
-              <td className="py-1"><Link href={`/team/${d.id}`} className="flex items-center gap-2 hover:text-white"><Avatar name={d.name} hue={d.avatarHue} size={22} />{d.name}</Link></td>
-              {days.map((k) => <td key={k} className="p-0.5"><div title={`${k}: ${perDay[k].toFixed(1)}h`} className="grid h-7 place-items-center rounded font-mono text-[10px]" style={{ background: heat(perDay[k]), color: perDay[k] > 5 ? "#07090f" : "#8a94b2" }}>{perDay[k] > 0 ? perDay[k].toFixed(0) : ""}</div></td>)}
+              <td className="py-1"><Link href={`/team/${d.id}`} className="flex items-center gap-2 hover:text-ink"><Avatar name={d.name} hue={d.avatarHue} size={22} />{d.name}</Link></td>
+              {days.map((k) => <td key={k} className="p-0.5"><div title={`${k}: ${perDay[k].toFixed(1)}h`} className="grid h-7 place-items-center rounded font-mono text-[10px]" style={{ background: heat(perDay[k]), color: perDay[k] > 5 ? "#07090f" : "rgb(var(--mute))" }}>{perDay[k] > 0 ? perDay[k].toFixed(0) : ""}</div></td>)}
               <td className="pl-2 text-right font-mono">{worked.toFixed(0)}h</td>
             </tr>))}</tbody>
         </table>
@@ -65,7 +65,7 @@ export default async function TimePage() {
               return (
                 <div key={t.id} className="rounded-xl border border-line bg-panel2 p-3">
                   <div className="flex items-center gap-3">
-                    <div className="min-w-0 flex-1"><Link href={`/tickets/${t.id}`} className="block truncate text-sm hover:text-white"><span className="font-mono text-xs text-mute">{t.key}</span> {t.title}</Link>
+                    <div className="min-w-0 flex-1"><Link href={`/tickets/${t.id}`} className="block truncate text-sm hover:text-ink"><span className="font-mono text-xs text-mute">{t.key}</span> {t.title}</Link>
                       <div className="mt-1 flex items-center gap-3 text-xs text-mute"><StatusBadge status={t.status} /><span className="font-mono">{logged.toFixed(1)}h{t.estimateHrs ? ` / ${t.estimateHrs}h` : ""}</span></div></div>
                     {t.status === "IN_PROGRESS" && <TimerButton ticketId={t.id} running={running} />}
                   </div>

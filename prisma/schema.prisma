@@ -64,6 +64,7 @@ model Developer {
   jiraAccount String?
   role        String   @default("Developer")
   avatarHue   Int      @default(200)
+  theme       String   @default("system") // light | dark | system, remembered per user
   capacityHrs Float    @default(30) // productive hours per sprint week
   access      Access   @default(DEVELOPER)
   active      Boolean  @default(true)

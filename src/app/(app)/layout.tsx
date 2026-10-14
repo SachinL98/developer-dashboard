@@ -2,6 +2,8 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
 import { Nav } from "@/components/Nav";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import type { ThemeChoice } from "@/lib/theme";
 import { MobileNav } from "@/components/MobileNav";
 import { WorkClock } from "@/components/WorkClock";
 import { Avatar } from "@/components/ui";
@@ -27,6 +29,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const footer = (
     <>
           <WorkClock targetHrs={targetHrs} sessionStart={session?.startedAt.toISOString() ?? null} timer={timer ? { key: timer.ticket.key, title: timer.ticket.title, startedAt: timer.startedAt.toISOString() } : null} />
+          <ThemeToggle saved={me.theme as ThemeChoice} />
           <div className="flex items-center gap-2 rounded-xl border border-line bg-panel/60 p-2">
             <Avatar name={me.name} hue={me.avatarHue} />
             <div className="min-w-0 flex-1"><div className="truncate text-sm">{me.name}</div><div className="text-[10px] uppercase tracking-wider text-mute">{me.access.toLowerCase()}</div></div>
