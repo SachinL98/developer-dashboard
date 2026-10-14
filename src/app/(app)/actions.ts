@@ -13,6 +13,9 @@ import { getMeetingDefs, getMeetingSettings, getWorkspace, parseHHMM, saveMeetin
 import { currentUser, requireAccess, destroySession } from "@/lib/auth/session";
 import { canMoveTicket, canPatchTicket, atLeast } from "@/lib/permissions";
 import { fillSprint, sprintFit } from "@/lib/estimation";
+import { capacityDevs, getHolidays, removeLeaveEvent, saveHolidays, sprintDates, syncLeaveEvent, teamAvailability } from "@/lib/leave";
+import { checkRequest, isDateStr, requestDays } from "@/lib/capacity";
+import { localDate } from "@/lib/time";
 import { STATUS_ORDER, type StatusKey } from "@/lib/workflow";
 import type { ReviewItem } from "@/lib/review-template";
 import { redirect } from "next/navigation";
@@ -188,9 +191,8 @@ export async function autoFillSprintAction(sprintId: string): Promise<Result<{ a
   try {
     await requireAccess("LEAD");
     const sprint = await db.sprint.findUniqueOrThrow({ where: { id: id.parse(sprintId) } });
-    const devs = await db.developer.findMany({ where: { active: true, role: { not: "Engineering Manager" } } });
-    const weeks = Math.max(1, Math.round((sprint.endDate.getTime() - sprint.startDate.getTime()) / (7 * 86_400_000)));
-    const capacity = devs.reduce((a, d) => a + d.capacityHrs * weeks, 0);
+    const { start, end } = sprintDates(sprint);
+    const capacity = (await teamAvailability(await capacityDevs(), start, end)).hours; // leave and public holidays already taken out
     const inSprint = await db.ticket.findMany({ where: { sprintId } });
     const buffer = (await getWorkspace()).bufferPct / 100;
     const remainingCap = capacity * (1 - buffer) - inSprint.reduce((a, t) => a + (t.estimateHrs ?? 0), 0);
@@ -356,10 +358,9 @@ export async function updateProfileAction(userId: string, patch: { capacityHrs?:
 
 export async function fitAction(sprintId: string) {
   await me();
-  const devs = await db.developer.findMany({ where: { active: true, role: { not: "Engineering Manager" } } });
   const s = await db.sprint.findUniqueOrThrow({ where: { id: sprintId }, include: { tickets: true } });
-  const weeks = Math.max(1, Math.round((s.endDate.getTime() - s.startDate.getTime()) / (7 * 86_400_000)));
-  return sprintFit(devs.reduce((a, d) => a + d.capacityHrs * weeks, 0), s.tickets.map((t) => t.estimateHrs), (await getWorkspace()).bufferPct);
+  const { start, end } = sprintDates(s);
+  return sprintFit((await teamAvailability(await capacityDevs(), start, end)).hours, s.tickets.map((t) => t.estimateHrs), (await getWorkspace()).bufferPct);
 }
 void currentUser;
 
@@ -492,3 +493,64 @@ export async function saveReportNoteAction(periodKey: string, slideId: string, t
     return { ok: true };
   } catch (e) { return fail(e); }
 }
+
+// ----- leave -----
+const leaveInput = z.object({
+  type: z.enum(["ANNUAL", "CASUAL", "SICK", "UNPAID", "OTHER"]), start: z.string(), end: z.string(), portion: z.enum(["FULL", "HALF"]), reason: z.string().trim().max(300),
+  developerId: id.optional(),
+});
+const touchLeave = () => { for (const p of ["/leave", "/sprints", "/board", "/estimation", "/reports", "/team", "/"]) revalidatePath(p); };
+
+/** Register leave. Developers request for themselves (pending approval); leads and admins can also register it for someone, which is approved straight away. */
+export async function requestLeaveAction(input: z.input<typeof leaveInput>): Promise<Result> {
+  try {
+    const user = await me();
+    const i = leaveInput.parse(input);
+    const onBehalf = !!i.developerId && i.developerId !== user.id;
+    if (onBehalf && !atLeast(user.access, "LEAD")) throw new Error("Only leads and admins can register leave for someone else.");
+    const who = onBehalf ? i.developerId! : user.id;
+    const mine = (await db.leave.findMany({ where: { developerId: who, status: { in: ["PENDING", "APPROVED"] } } })).map((l) => ({ start: l.startDate, end: l.endDate, status: l.status }));
+    const err = checkRequest(i, mine, await getHolidays(), localDate(new Date()));
+    if (err) return { ok: false, error: err };
+    const row = await db.leave.create({ data: { developerId: who, type: i.type, startDate: i.start, endDate: i.end, portion: i.portion, reason: i.reason, ...(onBehalf ? { status: "APPROVED", decidedById: user.id, decidedAt: new Date() } : {}) } });
+    if (onBehalf) after(() => syncLeaveEvent(row.id));
+    touchLeave(); return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
+/** Approve or reject a pending request. Leads and admins; only an admin can decide their own. */
+export async function decideLeaveAction(leaveId: string, approve: boolean, note?: string): Promise<Result> {
+  try {
+    const user = await requireAccess("LEAD");
+    const l = await db.leave.findUniqueOrThrow({ where: { id: id.parse(leaveId) } });
+    if (l.status !== "PENDING") throw new Error("That request was already decided.");
+    if (l.developerId === user.id && !atLeast(user.access, "ADMIN")) throw new Error("Ask another lead or an admin to decide your own leave.");
+    await db.leave.update({ where: { id: l.id }, data: { status: approve ? "APPROVED" : "REJECTED", decidedById: user.id, decidedAt: new Date(), decisionNote: z.string().max(300).optional().parse(note)?.trim() || null } });
+    if (approve) after(() => syncLeaveEvent(l.id));
+    touchLeave(); return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
+/** Cancel your own pending or approved leave (leads and admins can cancel anyone's). Capacity is restored. */
+export async function cancelLeaveAction(leaveId: string): Promise<Result> {
+  try {
+    const user = await me();
+    const l = await db.leave.findUniqueOrThrow({ where: { id: id.parse(leaveId) } });
+    if (l.developerId !== user.id && !atLeast(user.access, "LEAD")) throw new Error("You can only cancel your own leave.");
+    if (l.status !== "PENDING" && l.status !== "APPROVED") throw new Error("That leave is already closed.");
+    await db.leave.update({ where: { id: l.id }, data: { status: "CANCELLED" } });
+    after(() => removeLeaveEvent(l));
+    touchLeave(); return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
+/** Public holidays that remove a working day from everyone's capacity. Admin only. */
+export async function saveHolidaysAction(list: { date: string; name: string }[]): Promise<Result> {
+  try {
+    await requireAccess("ADMIN");
+    const clean = z.array(z.object({ date: z.string().refine(isDateStr, "Invalid date"), name: z.string().trim().min(1).max(80) })).max(200).parse(list);
+    await saveHolidays([...new Map(clean.map((h) => [h.date, h])).values()].sort((a, b) => a.date.localeCompare(b.date)));
+    touchLeave(); revalidatePath("/admin/holidays"); return { ok: true };
+  } catch (e) { return fail(e); }
+}
+void requestDays;

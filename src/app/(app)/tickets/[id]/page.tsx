@@ -13,6 +13,11 @@ import { sumEntries } from "@/lib/analytics";
 import { ExternalLink, GitPullRequest } from "lucide-react";
 import clsx from "clsx";
 import { jiraBrowseUrl } from "@/lib/integrations/jira";
+import { approvedLeave, getHolidays } from "@/lib/leave";
+import { addDays } from "@/lib/capacity";
+import { forecastFinish } from "@/lib/capacity";
+import { localDate } from "@/lib/time";
+import { DONE_STATES } from "@/lib/workflow";
 
 export default async function TicketPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -25,6 +30,15 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
   const [devs, sprints] = await Promise.all([db.developer.findMany({ orderBy: { name: "asc" } }), db.sprint.findMany({ where: { state: { not: "CLOSED" } }, orderBy: { startDate: "asc" } })]);
   const jiraHref = t.jiraKey ? await jiraBrowseUrl(t.jiraKey) : null;
   const logged = sumEntries(t.timeEntries);
+  // Finish forecast for this card alone, using the assignee's leave and public holidays.
+  let forecast: { date: string; leaveDays: number } | null = null;
+  if (t.assignee && t.estimateHrs && !(DONE_STATES as string[]).includes(t.status)) {
+    const today = localDate(new Date()), horizon = addDays(today, 120);
+    const [leaves, holidays] = await Promise.all([approvedLeave(today, horizon), getHolidays()]);
+    const d = forecastFinish(today, Math.max(0, t.estimateHrs - logged / 3_600_000), t.assignee.capacityHrs / 5, leaves, t.assignee.id, holidays);
+    const plain = forecastFinish(today, Math.max(0, t.estimateHrs - logged / 3_600_000), t.assignee.capacityHrs / 5, [], t.assignee.id, holidays);
+    if (d) forecast = { date: d, leaveDays: plain && plain !== d ? Math.round((new Date(d).getTime() - new Date(plain).getTime()) / 86_400_000) : 0 };
+  }
   const running = t.timeEntries.some((e) => !e.endedAt && e.developerId === me?.id);
   const idx = STATUS_ORDER.indexOf(t.status as StatusKey);
   const visited = new Set([t.status, ...t.transitions.map((x) => x.to), ...t.transitions.map((x) => x.from)]);
@@ -84,6 +98,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
           <div className="card-pad">
             <div className="h-section mb-2">Time</div>
             <div className="flex items-end justify-between"><span className="font-mono text-2xl">{fmtDur(logged)}</span><span className="text-xs text-mute">{t.estimateHrs ? `of ${t.estimateHrs}h estimate` : "no estimate"}</span></div>
+            {forecast && <p className="mt-2 text-xs text-mute">Forecast finish <b className="text-ink">{new Date(forecast.date + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })}</b> at {t.assignee!.name.split(" ")[0]}&apos;s pace{forecast.leaveDays > 0 ? `, ${forecast.leaveDays} day(s) later because of leave or holidays` : ""}.</p>}
             {t.estimateHrs ? <Progress className="mt-2" pct={(logged / 3_600_000 / t.estimateHrs) * 100} color={logged / 3_600_000 > t.estimateHrs ? "#fb7185" : "#6ee7ff"} /> : null}
             <ul className="mt-4 space-y-2 text-xs">
               {t.timeEntries.slice(0, 8).map((e) => (

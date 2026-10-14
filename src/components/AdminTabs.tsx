@@ -7,6 +7,7 @@ const tabs = [
   { href: "/admin/users", label: "Users & roles" },
   { href: "/admin/meetings", label: "Meetings" },
   { href: "/admin/review", label: "PR review" },
+  { href: "/admin/holidays", label: "Holidays" },
   { href: "/admin/workspace", label: "Workspace" },
 ];
 

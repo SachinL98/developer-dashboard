@@ -5,6 +5,9 @@ import { DONE_STATES } from "./workflow";
 import { accuracy, sumEntries } from "./analytics";
 import { hours, zonedParts } from "./time";
 import { fillFor } from "./report-plan";
+import { capacityDevs, teamAvailability } from "./leave";
+import { localDate } from "./time";
+import { addDays } from "./capacity";
 import { buildSlides, previousPeriod, resolvePeriod, type CarryRow, type DevRow, type DeliveredRow, type Period, type PeriodStats, type ReportFacts, type ReportKind, type SprintLite } from "./report";
 
 const DAY = 86_400_000;
@@ -117,11 +120,15 @@ export async function loadReport(kind: ReportKind, ref?: string, now = new Date(
     .filter((a) => { const k = `${a.text}|${a.owner}`; return seen.has(k) ? false : (seen.add(k), true); });
 
   const plan = await fillFor(cfg, now, tz);
+  const lr = { start: localDate(period.start), end: localDate(new Date(period.end.getTime() - DAY)) };
+  const ta = await teamAvailability(await capacityDevs(), lr.start, lr.end);
+  const leave = { days: ta.leaveDays, holidays: ta.perDev[0]?.av.holidayDays ?? 0 };
+  void addDays;
   const notes = await getReportNotes(period.key);
   const facts: ReportFacts = {
     period, now, tz, stats: cur.stats, prev: prev?.stats ?? null, prevLabel: prevP?.label ?? null, committedPts: cur.committed,
     buckets, bucketUnit: weekly ? "week" : "day", velocity, delivered, devs, carry, estimateAccuracy: acc.length ? { avg: avg(acc)!, n: acc.length } : null,
-    stale, reviewBlocked, decisions, openActions, nextSprint: plan.nextSprint, nextMonth: plan.nextMonth, notes,
+    stale, reviewBlocked, decisions, openActions, nextSprint: plan.nextSprint, nextMonth: plan.nextMonth, leave, notes,
   };
   void zonedParts;
   return { facts, slides: buildSlides(facts) };

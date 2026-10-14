@@ -1,5 +1,7 @@
 import { db } from "./db";
-import { zonedParts } from "./time";
+import { localDate, zonedParts } from "./time";
+import { addDays } from "./capacity";
+import { capacityDevs, sprintDates, teamAvailability } from "./leave";
 import type { WorkspaceConfig } from "./config";
 import type { MonthPlan, PlanRow, SprintPlan } from "./report";
 
@@ -8,27 +10,30 @@ const row = (t: { key: string; title: string; priority: string; storyPoints: num
 
 /** The plan for the next sprint (from the planner) and for the next four weeks (from the prioritised backlog). */
 export async function fillFor(cfg: WorkspaceConfig, now: Date, tz: string): Promise<{ nextSprint: SprintPlan | null; nextMonth: MonthPlan }> {
-  const devs = await db.developer.findMany({ where: { active: true }, select: { capacityHrs: true } });
-  const weekly = devs.reduce((a, d) => a + d.capacityHrs, 0);
-  const usable = (weeks: number) => Math.round(weekly * weeks * (1 - cfg.bufferPct / 100) * 10) / 10;
+  const devs = await capacityDevs();
+  // Capacity is leave- and holiday-aware: approved leave inside the window comes off each developer's hours.
+  const usable = async (start: string, end: string) => { const t = await teamAvailability(devs, start, end); return { hrs: Math.round(t.hours * (1 - cfg.bufferPct / 100) * 10) / 10, lost: t.lostHours }; };
 
   const upcoming = await db.sprint.findFirst({ where: { state: "PLANNING" }, orderBy: { startDate: "asc" } });
   let nextSprint: SprintPlan | null = null;
   if (upcoming) {
     const tickets = await db.ticket.findMany({ where: { sprintId: upcoming.id }, orderBy: { rank: "asc" }, include: { assignee: true } });
-    const weeks = Math.max(1, (upcoming.endDate.getTime() - upcoming.startDate.getTime() + 86_400_000) / (7 * 86_400_000));
-    const capacityHrs = usable(weeks);
+    const r = sprintDates(upcoming);
+    const u = await usable(r.start, r.end);
+    const capacityHrs = u.hrs;
     const committedHrs = tickets.reduce((a, t) => a + (t.estimateHrs ?? 0), 0);
     nextSprint = {
       name: upcoming.name, goal: upcoming.goal, start: upcoming.startDate, end: upcoming.endDate, state: upcoming.state, rows: tickets.map(row),
       committedHrs, capacityHrs, loadPct: capacityHrs ? Math.round((committedHrs / capacityHrs) * 100) : 0,
-      unestimated: tickets.filter((t) => t.estimateHrs == null && t.storyPoints == null).length, unassigned: tickets.filter((t) => !t.assigneeId).length,
+      unestimated: tickets.filter((t) => t.estimateHrs == null && t.storyPoints == null).length, unassigned: tickets.filter((t) => !t.assigneeId).length, leaveHrs: u.lost,
     };
   }
 
   const backlog = await db.ticket.findMany({ where: { sprintId: null, status: { in: ["BACKLOG", "READY_TO_DEV"] } }, orderBy: { rank: "asc" }, include: { assignee: true } });
   const carry = await db.ticket.aggregate({ where: { status: { in: ["IN_PROGRESS", "INITIAL_REVIEW", "REVIEW", "DEPLOYED_STG", "FAILED_STG", "DOCUMENTED"] } }, _sum: { storyPoints: true } });
-  const capacityHrs = usable(4);
+  const today = localDate(now);
+  const month = await usable(today, addDays(today, 27));
+  const capacityHrs = month.hrs;
   const inFlightHrs = (await db.ticket.aggregate({ where: { status: { in: ["IN_PROGRESS", "INITIAL_REVIEW", "REVIEW", "FAILED_STG"] } }, _sum: { estimateHrs: true } }))._sum.estimateHrs ?? 0;
   let room = Math.max(0, capacityHrs - (nextSprint?.committedHrs ?? 0) - inFlightHrs), plannedHrs = 0, plannedPts = 0;
   const candidates: PlanRow[] = [];
@@ -38,5 +43,5 @@ export async function fillFor(cfg: WorkspaceConfig, now: Date, tz: string): Prom
   }
   const z = zonedParts(now, tz);
   const label = new Date(Date.UTC(z.y, z.m, 1)).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
-  return { nextSprint, nextMonth: { label, capacityHrs, candidates, plannedHrs: Math.round(plannedHrs * 10) / 10, plannedPts, backlogCount: backlog.length, carryPts: carry._sum.storyPoints ?? 0 } };
+  return { nextSprint, nextMonth: { label, capacityHrs, candidates, plannedHrs: Math.round(plannedHrs * 10) / 10, plannedPts, backlogCount: backlog.length, leaveHrs: month.lost, carryPts: carry._sum.storyPoints ?? 0 } };
 }

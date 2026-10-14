@@ -55,8 +55,8 @@ export interface DevRow { name: string; points: number; tickets: number; hours: 
 export interface CarryRow { key: string; title: string; status: string; assignee: string | null; points: number }
 export interface PeriodStats { points: number; tickets: number; loggedHrs: number; bugsFixed: number; bugsOpened: number; stgDeploys: number; stgFailures: number; cycleDays: number | null }
 export interface PlanRow { key: string; title: string; priority: string; points: number | null; hours: number | null; assignee: string | null }
-export interface SprintPlan { name: string; goal: string | null; start: Date; end: Date; state: string; rows: PlanRow[]; committedHrs: number; capacityHrs: number; loadPct: number; unestimated: number; unassigned: number }
-export interface MonthPlan { label: string; capacityHrs: number; candidates: PlanRow[]; plannedHrs: number; plannedPts: number; backlogCount: number; carryPts: number }
+export interface SprintPlan { name: string; goal: string | null; start: Date; end: Date; state: string; rows: PlanRow[]; committedHrs: number; capacityHrs: number; loadPct: number; unestimated: number; unassigned: number; leaveHrs?: number }
+export interface MonthPlan { label: string; capacityHrs: number; candidates: PlanRow[]; plannedHrs: number; plannedPts: number; backlogCount: number; carryPts: number; leaveHrs?: number }
 
 export interface ReportFacts {
   period: Period; now: Date; tz?: string;
@@ -70,6 +70,7 @@ export interface ReportFacts {
   reviewBlocked: number;
   decisions: string[]; openActions: { text: string; owner: string | null }[];
   nextSprint: SprintPlan | null; nextMonth: MonthPlan;
+  leave?: { days: number; holidays: number };
   notes: Record<string, string>;
 }
 
@@ -132,6 +133,7 @@ export function buildSlides(f: ReportFacts): Slide[] {
     `${stats.tickets} ticket(s) delivered, ${stats.points} story points${f.committedPts != null ? ` of ${f.committedPts} committed (${done}%)` : ""}.`,
     `${r1(stats.loggedHrs)} hours logged across ${f.devs.filter((d) => d.hours > 0).length} developer(s).`,
   ];
+  if (f.leave && (f.leave.days || f.leave.holidays)) headline.push(`${r1(f.leave.days)} leave day(s) and ${f.leave.holidays} public holiday(s) reduced available time${stats.points && f.leave.days + f.leave.holidays ? "; this explains part of any dip in delivery" : ""}.`);
   if (prev && prevLabel) { const c = pctChange(stats.points, prev.points); if (c != null) headline.push(`Delivery is ${c === 0 ? "level with" : `${Math.abs(c)}% ${c > 0 ? "up on" : "down on"}`} ${prevLabel}.`); }
   if (f.delivered.length) { const top = [...f.devs].sort((a, b) => b.points - a.points)[0]; if (top && top.points > 0) headline.push(`Top contributor by points: ${top.name} (${top.points}).`); }
   add({ id: "headline", layout: "kpis", title: "Headline numbers", bullets: headline, kpis: [
@@ -181,11 +183,11 @@ export function buildSlides(f: ReportFacts): Slide[] {
   const ns = f.nextSprint;
   add({ id: "next-sprint", layout: "table", title: ns ? `Plan: ${ns.name}` : "Plan: next sprint", columns: ["Ticket", "Title", "Priority", "Hrs", "Owner"],
     rows: (ns?.rows ?? []).slice(0, 10).map((r) => [r.key, cap(r.title, 60), label(r.priority), r.hours != null ? String(r.hours) : "?", r.assignee ?? "-"]),
-    caption: ns ? `${fmt(ns.start, tz)} to ${fmt(ns.end, tz)}${ns.goal ? ` · Goal: ${ns.goal}` : ""} · ${r1(ns.committedHrs)}h committed of ${ns.capacityHrs}h usable (${ns.loadPct}%)${ns.rows.length > 10 ? ` · showing 10 of ${ns.rows.length}` : ""}` : "No next sprint exists yet. Create one in the Sprints planner." });
+    caption: ns ? `${fmt(ns.start, tz)} to ${fmt(ns.end, tz)}${ns.goal ? ` · Goal: ${ns.goal}` : ""} · ${r1(ns.committedHrs)}h committed of ${ns.capacityHrs}h usable (${ns.loadPct}%)${ns.leaveHrs ? ` · ${ns.leaveHrs}h lost to leave and holidays` : ""}${ns.rows.length > 10 ? ` · showing 10 of ${ns.rows.length}` : ""}` : "No next sprint exists yet. Create one in the Sprints planner." });
 
   const nm = f.nextMonth;
   add({ id: "next-month", layout: "kpis", title: `Outlook: ${nm.label}`, kpis: [
-    { label: "Usable capacity", value: `${nm.capacityHrs}h`, sub: "team, 4 weeks, after buffer", tone: "neutral" },
+    { label: "Usable capacity", value: `${nm.capacityHrs}h`, sub: nm.leaveHrs ? `4 weeks, after buffer and ${nm.leaveHrs}h of leave` : "team, 4 weeks, after buffer", tone: "neutral" },
     { label: "Planned from backlog", value: `${nm.plannedPts} pts`, sub: `${nm.plannedHrs}h estimated`, tone: "neutral" },
     { label: "Backlog size", value: String(nm.backlogCount), sub: "cards waiting", tone: "neutral" },
     { label: "Carry-in", value: `${nm.carryPts} pts`, sub: "unfinished, in flight", tone: nm.carryPts > 0 ? "bad" : "good" },

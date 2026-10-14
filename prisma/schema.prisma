@@ -78,6 +78,7 @@ model Developer {
   timers      TimeEntry[]
   votes       EstimateVote[]
   transitions Transition[]
+  leaves      Leave[]
 }
 
 model Project {
@@ -292,4 +293,25 @@ model AppSetting {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+// Leave requests. Dates are local calendar dates (YYYY-MM-DD) so they don't shift with the timezone.
+model Leave {
+  id            String    @id @default(cuid())
+  developer     Developer @relation(fields: [developerId], references: [id], onDelete: Cascade)
+  developerId   String
+  type          String    @default("ANNUAL") // ANNUAL | CASUAL | SICK | UNPAID | OTHER
+  startDate     String
+  endDate       String
+  portion       String    @default("FULL") // FULL | HALF (half applies to a single day)
+  reason        String    @default("")
+  status        String    @default("PENDING") // PENDING | APPROVED | REJECTED | CANCELLED
+  decidedById   String?
+  decidedAt     DateTime?
+  decisionNote  String?
+  googleEventId String?
+  createdAt     DateTime  @default(now())
+
+  @@index([developerId])
+  @@index([status, startDate, endDate])
 }

@@ -75,3 +75,11 @@ Only a lead can override a Claude review's items; a developer re-runs it after p
 - **Print view** (`/report-print`) lays one slide per landscape page for the browser's Save as PDF.
 - **Commentary:** leads and admins can add a line per slide; it is stored per period in `AppSetting` (`report.notes:<period>`) and shows in the presenter and both exports.
 - No new migration or environment variable is needed. Numbers come from `doneAt`, time entries, transitions and meetings already in the database, so with Jira connected they reflect the real board.
+
+## Leave and capacity
+
+- **Leave page:** developers request leave (type, date range, optional half day for a single date). Leads and admins approve or reject with an optional note, and can register leave for someone else (approved straight away). A lead cannot decide their own request; an admin can. Dates are local calendar dates, weekends are never counted.
+- **Public holidays:** admins add them under Admin, Holidays. A weekday holiday removes that day for everyone.
+- **What updates automatically:** each developer's capacity is their weekly hours spread over five days, minus approved leave and holidays inside the dates. That feeds the sprint planner's capacity bar and per-developer load, Auto-fill, the "at risk" chip on sprint cards (finish forecast, in priority order per assignee, lands after the sprint end), the forecast finish on each ticket, the next-sprint plan and next-month outlook in Reports, and the leave and holiday line in report headlines. Estimates themselves stay as effort hours; what changes is when the work can finish and how much fits.
+- **Google Calendar (optional):** when the developer has connected Google, approving leave creates an out-of-office event on their own calendar and cancelling removes it. It is best effort and never blocks an approval; it needs the Calendar scope already used for meetings.
+- **Deploy:** run `npm run db:deploy` for migration 0005 (the `Leave` table). Holidays are stored in `AppSetting`.

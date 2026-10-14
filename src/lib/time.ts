@@ -38,3 +38,9 @@ export const fmtTime = (d: Date | string) =>
   new Date(d).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: TZ });
 export const fmtDay = (d: Date | string) =>
   new Date(d).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: TZ });
+
+/** Local calendar date ("YYYY-MM-DD") of an instant in the team timezone. */
+export function localDate(at: Date, tz = TZ): string {
+  const p = zonedParts(at, tz);
+  return `${p.y}-${String(p.m).padStart(2, "0")}-${String(p.d).padStart(2, "0")}`;
+}
