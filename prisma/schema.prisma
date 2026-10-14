@@ -1,0 +1,229 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Status {
+  BACKLOG
+  READY_TO_DEV
+  IN_PROGRESS
+  INITIAL_REVIEW
+  REVIEW
+  DEPLOYED_STG
+  FAILED_STG
+  DOCUMENTED
+  DEPLOYED_PROD
+  DONE
+}
+
+enum TicketType {
+  BUG
+  FEATURE
+  ENHANCEMENT
+  TASK
+}
+
+enum Priority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum SprintState {
+  PLANNING
+  ACTIVE
+  CLOSED
+}
+
+enum MeetingKind {
+  STANDUP
+  GROOMING
+  ESTIMATION
+  SPRINT_PLAN
+  WEEKLY_SUMMARY
+  DEMO
+  OTHER
+}
+
+model Developer {
+  id          String   @id @default(cuid())
+  name        String
+  email       String   @unique
+  githubLogin String?  @unique
+  jiraAccount String?
+  role        String   @default("Developer")
+  avatarHue   Int      @default(200)
+  capacityHrs Float    @default(30) // productive hours per sprint week
+  tickets     Ticket[]       @relation("Assignee")
+  sessions    WorkSession[]
+  timers      TimeEntry[]
+  votes       EstimateVote[]
+  transitions Transition[]
+}
+
+model Project {
+  id      String   @id @default(cuid())
+  key     String   @unique
+  name    String
+  repo    String? // org/repo
+  color   String   @default("#6ee7ff")
+  tickets Ticket[]
+}
+
+model Sprint {
+  id        String      @id @default(cuid())
+  name      String
+  goal      String?
+  state     SprintState @default(PLANNING)
+  startDate DateTime
+  endDate   DateTime
+  jiraId    String?
+  tickets   Ticket[]
+  createdAt DateTime    @default(now())
+}
+
+model Ticket {
+  id           String      @id @default(cuid())
+  key          String      @unique
+  title        String
+  description  String      @default("")
+  type         TicketType  @default(TASK)
+  priority     Priority    @default(MEDIUM)
+  status       Status      @default(BACKLOG)
+  rank         Int         @default(0) // backlog / sprint priority order, lower first
+  storyPoints  Int?
+  estimateHrs  Float? // agreed rough estimate
+  progressPct  Int         @default(0) // implementation progress 0-100
+  labels       String[]    @default([])
+  prUrl        String?
+  prNumber     Int?
+  prState      String? // open | merged | closed
+  jiraKey      String?
+  complicated  Boolean     @default(false) // flagged for grooming
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  startedAt    DateTime?
+  doneAt       DateTime?
+  project      Project     @relation(fields: [projectId], references: [id])
+  projectId    String
+  sprint       Sprint?     @relation(fields: [sprintId], references: [id])
+  sprintId     String?
+  assignee     Developer?  @relation("Assignee", fields: [assigneeId], references: [id])
+  assigneeId   String?
+  transitions  Transition[]
+  timeEntries  TimeEntry[]
+  votes        EstimateVote[]
+  reviews      PrReview[]
+  progressLogs ProgressLog[]
+  actionItems  ActionItem[]
+
+  @@index([status])
+  @@index([sprintId])
+}
+
+model Transition {
+  id        String    @id @default(cuid())
+  ticket    Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticketId  String
+  from      Status
+  to        Status
+  at        DateTime  @default(now())
+  by        Developer? @relation(fields: [byId], references: [id])
+  byId      String?
+
+  @@index([ticketId])
+}
+
+// Developer's working day: clock in / clock out
+model WorkSession {
+  id          String    @id @default(cuid())
+  developer   Developer @relation(fields: [developerId], references: [id])
+  developerId String
+  startedAt   DateTime
+  endedAt     DateTime?
+  note        String?
+
+  @@index([developerId, startedAt])
+}
+
+// Time spent on a ticket (timer)
+model TimeEntry {
+  id          String    @id @default(cuid())
+  ticket      Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticketId    String
+  developer   Developer @relation(fields: [developerId], references: [id])
+  developerId String
+  startedAt   DateTime
+  endedAt     DateTime?
+  note        String?
+
+  @@index([ticketId])
+  @@index([developerId, startedAt])
+}
+
+model ProgressLog {
+  id        String   @id @default(cuid())
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticketId  String
+  pct       Int
+  note      String?
+  at        DateTime @default(now())
+}
+
+model EstimateVote {
+  id          String    @id @default(cuid())
+  ticket      Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticketId    String
+  developer   Developer @relation(fields: [developerId], references: [id])
+  developerId String
+  hours       Float
+  createdAt   DateTime  @default(now())
+
+  @@unique([ticketId, developerId])
+}
+
+// Claude / manual PR review checklist runs
+model PrReview {
+  id        String   @id @default(cuid())
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticketId  String
+  kind      String // INITIAL_CLAUDE | REVIEWER
+  round     Int      @default(1)
+  items     Json // [{id,label,severity,checked,note}]
+  passed    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Meeting {
+  id          String      @id @default(cuid())
+  kind        MeetingKind
+  title       String
+  startsAt    DateTime
+  endsAt      DateTime
+  meetUrl     String?
+  googleEvId  String?
+  attendees   String[]    @default([])
+  transcript  String?
+  summary     String?
+  decisions   String[]    @default([])
+  createdAt   DateTime    @default(now())
+  actionItems ActionItem[]
+
+  @@index([startsAt])
+}
+
+model ActionItem {
+  id        String   @id @default(cuid())
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  meetingId String
+  text      String
+  owner     String?
+  done      Boolean  @default(false)
+  ticket    Ticket?  @relation(fields: [ticketId], references: [id])
+  ticketId  String?
+}
