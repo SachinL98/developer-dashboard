@@ -280,7 +280,7 @@ model Connection {
   id          String    @id @default(cuid())
   user        Developer @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId      String
-  provider    String // GOOGLE | JIRA
+  provider    String // GOOGLE | JIRA | CLAUDE (accessToken holds the user's own Anthropic API key)
   accessToken String
   refreshToken String?
   expiresAt   DateTime?
@@ -320,4 +320,17 @@ model Leave {
 
   @@index([developerId])
   @@index([status, startDate, endDate])
+}
+
+// Saved Claude analyses: developer profiles and estimate reviews
+model AiInsight {
+  id          String   @id @default(cuid())
+  kind        String // DEV_PROFILE | ESTIMATE
+  subjectId   String // developer id or ticket id
+  content     Json
+  model       String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([kind, subjectId, createdAt])
 }

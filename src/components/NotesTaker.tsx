@@ -10,7 +10,7 @@ export interface MeetingView {
   actions: { id: string; text: string; owner: string | null; done: boolean; ticketKey: string | null }[];
 }
 
-export function NotesTaker({ m, projectId, canEdit, hasMeet }: { m: MeetingView; projectId: string; canEdit: boolean; hasMeet: boolean }) {
+export function NotesTaker({ m, projectId, canEdit, hasMeet, aiReady = false }: { m: MeetingView; projectId: string; canEdit: boolean; hasMeet: boolean; aiReady?: boolean }) {
   const [text, setText] = useState(m.transcript ?? "");
   const [listening, setListening] = useState(false);
   const [pending, start] = useTransition();
@@ -37,8 +37,8 @@ export function NotesTaker({ m, projectId, canEdit, hasMeet }: { m: MeetingView;
           <textarea className="input min-h-[140px] font-mono text-[13px]" value={text} onChange={(e) => setText(e.target.value)}
             placeholder={"Amaya: Yesterday finished ATL-101. Today starting audit log. No blockers.\nNuwan: We decided to hold usage tiers for the next sprint.\nDilini: I'll write the tenant migration tomorrow."} />
           <div className="mt-2 flex flex-wrap items-center gap-3">
-            {hasMeet && <button className="btn" disabled={pending} onClick={() => start(async () => { const r = await importTranscriptAction(m.id); if (r.ok) setText(""); setMsg(r.ok ? `Imported the Meet transcript (${r.chars.toLocaleString()} chars) and generated notes: ${r.actions} action item(s)` : r.error); router.refresh(); })}><Download size={14} /> Import Meet transcript</button>}
-            <button className="btn-primary" disabled={pending || !text.trim()} onClick={() => start(async () => { const r = await saveNotesAction(m.id, text); setMsg(r.ok ? `Notes generated: ${r.actions} action item(s)` : r.error); router.refresh(); })}><Wand2 size={14} /> Generate notes</button>
+            {hasMeet && <button className="btn" disabled={pending} onClick={() => start(async () => { const r = await importTranscriptAction(m.id); if (r.ok) setText(""); setMsg(r.ok ? `Imported the Meet transcript (${r.chars.toLocaleString()} chars) and generated notes${r.ai ? " with Claude" : ""}: ${r.actions} action item(s)` : r.error); router.refresh(); })}><Download size={14} /> Import Meet transcript</button>}
+            <button className="btn-primary" disabled={pending || !text.trim()} onClick={() => start(async () => { const r = await saveNotesAction(m.id, text); setMsg(r.ok ? `Notes generated${r.ai ? " with Claude" : ""}: ${r.actions} action item(s).${!r.ai ? (r.aiError ? ` Claude failed (${r.aiError}); used the basic summary.` : " Add your Claude key in Settings for a better AI summary.") : ""}` : r.error); router.refresh(); })}><Wand2 size={14} /> {aiReady ? "Summarise with Claude" : "Generate notes"}</button>
             {msg && <span className="text-xs text-mute">{msg}</span>}
           </div>
         </div>

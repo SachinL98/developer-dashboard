@@ -5,6 +5,7 @@ import { getMeetingDefs, getWorkspace } from "./config";
 import * as jira from "./integrations/jira";
 import * as gh from "./integrations/github";
 import { parseNotes, summariseWithClaude } from "./notes";
+import { aiKeyFor } from "./ai";
 import * as gcal from "./integrations/google";
 import { fetchTranscript, meetCodeFromUrl } from "./integrations/meet";
 import { occurrences } from "./schedule";
@@ -335,9 +336,9 @@ export async function syncGithub() {
 
 // ---------- Meeting notes ----------
 
-export async function generateNotes(meetingId: string, transcript: string) {
+export async function generateNotes(meetingId: string, transcript: string, userId?: string | null) {
   const names = (await db.developer.findMany()).map((d) => d.name);
-  const parsed = await summariseWithClaude(transcript, parseNotes(transcript, names));
+  const parsed = await summariseWithClaude(transcript, parseNotes(transcript, names), await aiKeyFor(userId));
   await db.$transaction([
     db.meeting.update({ where: { id: meetingId }, data: { transcript, summary: parsed.summary, decisions: parsed.decisions } }),
     db.actionItem.deleteMany({ where: { meetingId } }),
@@ -351,14 +352,14 @@ export async function generateNotes(meetingId: string, transcript: string) {
 }
 
 /** Pull the real Meet transcript for an ended meeting and turn it into notes. Returns null if none is available yet. */
-export async function importMeetTranscript(meetingId: string) {
+export async function importMeetTranscript(meetingId: string, userId?: string | null) {
   const m = await db.meeting.findUniqueOrThrow({ where: { id: meetingId } });
   const code = meetCodeFromUrl(m.meetUrl);
   if (!code) throw new Error("This meeting has no Google Meet link.");
   if (m.endsAt > new Date()) throw new Error("The meeting hasn't finished yet.");
   const t = await fetchTranscript(code, m.startsAt, m.endsAt);
   if (!t) return null;
-  const parsed = await generateNotes(meetingId, t.text);
+  const parsed = await generateNotes(meetingId, t.text, userId);
   return { parsed, chars: t.text.length };
 }
 

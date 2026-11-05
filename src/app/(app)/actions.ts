@@ -19,6 +19,8 @@ import { localDate } from "@/lib/time";
 import { STATUS_ORDER, type StatusKey } from "@/lib/workflow";
 import type { ReviewItem } from "@/lib/review-template";
 import { redirect } from "next/navigation";
+import { saveUserKey, removeUserKey, validateKey } from "@/lib/ai";
+import { generateDevProfile, reviewEstimate, type EstimateReview } from "@/lib/insights";
 
 type Result<T = {}> = ({ ok: true } & T) | { ok: false; error: string };
 const fail = (e: unknown): { ok: false; error: string } => ({ ok: false, error: e instanceof z.ZodError ? "Invalid input: " + e.issues[0]?.message : e instanceof Error ? e.message : String(e) });
@@ -237,21 +239,21 @@ export async function closeSprintAction(sprintId: string): Promise<Result<{ carr
 }
 
 // ----- meetings & notes -----
-export async function saveNotesAction(meetingId: string, transcript: string): Promise<Result<{ actions: number }>> {
+export async function saveNotesAction(meetingId: string, transcript: string): Promise<Result<{ actions: number; ai: boolean; aiError?: string }>> {
   try {
-    await me();
-    const parsed = await svc.generateNotes(id.parse(meetingId), z.string().min(1).max(200_000).parse(transcript));
-    revalidatePath("/meetings"); return { ok: true, actions: parsed.actionItems.length };
+    const u = await me();
+    const parsed = await svc.generateNotes(id.parse(meetingId), z.string().min(1).max(200_000).parse(transcript), u.id);
+    revalidatePath("/meetings"); return { ok: true, actions: parsed.actionItems.length, ai: parsed.ai, aiError: parsed.aiError };
   } catch (e) { return fail(e); }
 }
 
 /** Fetch the real Google Meet transcript of an ended meeting and generate notes from it. */
-export async function importTranscriptAction(meetingId: string): Promise<Result<{ actions: number; chars: number }>> {
+export async function importTranscriptAction(meetingId: string): Promise<Result<{ actions: number; chars: number; ai: boolean; aiError?: string }>> {
   try {
-    await me();
-    const r = await svc.importMeetTranscript(id.parse(meetingId));
+    const u = await me();
+    const r = await svc.importMeetTranscript(id.parse(meetingId), u.id);
     if (!r) return { ok: false, error: "No transcript yet. Meet publishes it a few minutes after the call, and only if Transcript was turned on in the meeting." };
-    revalidatePath("/meetings"); return { ok: true, actions: r.parsed.actionItems.length, chars: r.chars };
+    revalidatePath("/meetings"); return { ok: true, actions: r.parsed.actionItems.length, chars: r.chars, ai: r.parsed.ai, aiError: r.parsed.aiError };
   } catch (e) { return fail(e); }
 }
 
@@ -555,3 +557,34 @@ export async function saveHolidaysAction(list: { date: string; name: string }[])
   } catch (e) { return fail(e); }
 }
 void requestDays;
+
+
+// ----- Claude (AI features, billed to the user's own Anthropic key) -----
+export async function saveClaudeKeyAction(key: string): Promise<Result> {
+  try {
+    const u = await me();
+    const k = z.string().trim().min(20, "That doesn't look like an API key").max(300).startsWith("sk-ant-", "Anthropic API keys start with sk-ant-").parse(key);
+    await validateKey(k);
+    await saveUserKey(u.id, k);
+    revalidatePath("/settings"); return { ok: true };
+  } catch (e) { return fail(e); }
+}
+export async function removeClaudeKeyAction(): Promise<Result> { try { const u = await me(); await removeUserKey(u.id); revalidatePath("/settings"); return { ok: true }; } catch (e) { return fail(e); } }
+
+export async function generateProfileAction(devId: string): Promise<Result> {
+  try {
+    const u = await me();
+    const d = id.parse(devId);
+    if (d !== u.id && !atLeast(u.access, "LEAD")) throw new Error("Only leads and admins can analyse other developers.");
+    await generateDevProfile(d, u.id);
+    revalidatePath(`/team/${d}`); return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
+export async function reviewEstimateAction(ticketId: string): Promise<Result<{ review: EstimateReview }>> {
+  try {
+    const u = await me();
+    const review = await reviewEstimate(id.parse(ticketId), u.id);
+    return { ok: true, review };
+  } catch (e) { return fail(e); }
+}

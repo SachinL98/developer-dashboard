@@ -6,6 +6,7 @@ import { SyncButtons } from "@/components/SyncButtons";
 import { fmtDay, fmtTime } from "@/lib/time";
 import { googleReady } from "@/lib/integrations/google";
 import { requireUser } from "@/lib/auth/session";
+import { aiKeyFor } from "@/lib/ai";
 import { atLeast } from "@/lib/permissions";
 import { RecurringButton } from "@/components/RecurringButton";
 import { Video } from "lucide-react";
@@ -15,6 +16,7 @@ const hh = (t: [number, number]) => `${String(t[0]).padStart(2, "0")}:${String(t
 
 export default async function Meetings() {
   const me = await requireUser();
+  const aiReady = !!(await aiKeyFor(me.id));
   const canLead = atLeast(me.access, "LEAD");
   const google = await googleReady();
   const defs = (await getMeetingDefs()).filter((d) => d.enabled);
@@ -69,7 +71,7 @@ export default async function Meetings() {
                 <div><div className="font-medium">{m.title}</div><div className="text-xs text-mute">{fmtDay(m.startsAt)} · {fmtTime(m.startsAt)}</div></div>
                 <span className={`chip ${m.summary ? "border-neon-lime/40 text-neon-lime" : ""}`}>{m.summary ? "notes ready" : "no notes"}</span>
               </summary>
-              <div className="mt-4"><NotesTaker m={view(m)} projectId={projects[0]?.id ?? ""} canEdit hasMeet={!!m.meetUrl} /></div>
+              <div className="mt-4"><NotesTaker m={view(m)} projectId={projects[0]?.id ?? ""} canEdit hasMeet={!!m.meetUrl} aiReady={aiReady} /></div>
             </details>))}
         </div>
       </div>

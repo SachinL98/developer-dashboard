@@ -2,7 +2,7 @@ import { db } from "../db";
 import { decrypt, encrypt } from "../crypto";
 import { IntegrationError, request } from "./http";
 
-export type Provider = "GOOGLE" | "JIRA";
+export type Provider = "GOOGLE" | "JIRA" | "CLAUDE";
 
 export const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 export const ATLASSIAN_TOKEN_URL = "https://auth.atlassian.com/oauth/token";

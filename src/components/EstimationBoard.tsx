@@ -7,18 +7,20 @@ import { Eye, EyeOff, Sparkles, Check, RotateCcw, Flame, CloudUpload, AlertTrian
 import { applyEstimateAction, clearVotesAction, pushSprintEstimatesAction, voteAction } from "@/app/(app)/actions";
 import { POKER_HOURS, pointsForHours } from "@/lib/workflow";
 import { summarisePoker, type Suggestion } from "@/lib/estimation";
+import { EstimateReview } from "@/components/EstimateReview";
+import type { EstimateReview as ReviewData } from "@/lib/insights";
 
 export interface EstTicket {
   id: string; key: string; title: string; description: string; type: string; points: number | null; estimateHrs: number | null; complicated: boolean;
   jira: "synced" | "error" | "pending" | "local"; jiraError: string | null;
-  suggestion: Suggestion; votes: { dev: string; hours: number; mine: boolean }[]; myVote: number | null;
+  suggestion: Suggestion; review: ReviewData | null; votes: { dev: string; hours: number; mine: boolean }[]; myVote: number | null;
 }
 const pointsFor = pointsForHours;
 
 const unitLabel = (m: "points" | "hours") => (m === "points" ? "story points" : "original estimate (hours)");
 
-export function EstimationBoard({ tickets, devCount, canLead, sprintId, sprintName, unit, jiraLive }: {
-  tickets: EstTicket[]; devCount: number; canLead: boolean; sprintId: string | null; sprintName: string; unit: { mode: "points" | "hours"; field: string } | null; jiraLive: boolean;
+export function EstimationBoard({ tickets, devCount, canLead, sprintId, sprintName, unit, jiraLive, aiReady }: {
+  aiReady: boolean; tickets: EstTicket[]; devCount: number; canLead: boolean; sprintId: string | null; sprintName: string; unit: { mode: "points" | "hours"; field: string } | null; jiraLive: boolean;
 }) {
   const [note, setNote] = useState<{ t: string; bad?: boolean } | null>(null);
   const [sel, setSel] = useState(tickets[0]?.id);
@@ -90,6 +92,9 @@ export function EstimationBoard({ tickets, devCount, canLead, sprintId, sprintNa
               <button className="btn" disabled={pending || !canLead} title={canLead ? "" : "Leads apply the agreed estimate"} onClick={() => run(() => applyEstimateAction(t.id, t.suggestion.hours, t.points ?? pointsFor(t.suggestion.hours)))}>Apply {t.suggestion.hours}h</button>
             </div>
           </div>
+
+          <EstimateReview key={t.id} ticketId={t.id} ready={aiReady} initial={t.review} canApply={canLead}
+            onUse={(h) => run(() => applyEstimateAction(t.id, h, t.points ?? pointsFor(h)))} />
 
           <div className="card-pad">
             <div className="mb-3 flex items-center justify-between">

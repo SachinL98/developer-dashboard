@@ -10,6 +10,7 @@ import { ProfileForm } from "@/components/ProfileForm";
 import { headers } from "next/headers";
 import { CheckCircle2, CircleDashed, Link2 } from "lucide-react";
 import { GOOGLE_WORK_SCOPES } from "@/lib/auth/scopes";
+import { ClaudeKeyCard } from "@/components/ClaudeKeyCard";
 import { StatusMapEditor } from "@/components/StatusMapEditor";
 import { cachedBoardInfo, jiraReady, loadStatusMap, statusFromJira } from "@/lib/integrations/jira";
 
@@ -62,6 +63,8 @@ export default async function Settings({ searchParams }: { searchParams: Promise
           </div>
         ))}
       </div>
+
+      <ClaudeKeyCard connected={!!get("CLAUDE")} serverFallback={!!process.env.ANTHROPIC_API_KEY} />
 
       <div className="card-pad">
         <div className="h-section mb-3">My profile</div>

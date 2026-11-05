@@ -7,6 +7,7 @@ import { suggestEstimate } from "@/lib/estimation";
 import { activeSprint, estimateAccuracy, historyForEstimation } from "@/lib/queries";
 import { cachedBoardInfo, jiraReady } from "@/lib/integrations/jira";
 import Link from "next/link";
+import { aiKeyFor } from "@/lib/ai";
 
 export default async function Estimation({ searchParams }: { searchParams: Promise<{ sprint?: string }> }) {
   const sp = await searchParams;
@@ -20,10 +21,14 @@ export default async function Estimation({ searchParams }: { searchParams: Promi
     include: { votes: { include: { developer: true } } }, orderBy: [{ estimateHrs: { sort: "asc", nulls: "first" } }, { complicated: "desc" }, { rank: "asc" }], take: 60,
   });
   const live = await jiraReady();
+  const aiReady = !!(await aiKeyFor(me.id));
+  const reviews = await db.aiInsight.findMany({ where: { kind: "ESTIMATE", subjectId: { in: tickets.map((t) => t.id) } }, orderBy: { createdAt: "desc" } });
+  const reviewOf = (tid: string) => (reviews.find((r) => r.subjectId === tid)?.content as any) ?? null;
   const unit = live ? (await cachedBoardInfo())?.estimation ?? null : null;
   const data: EstTicket[] = tickets.map((t) => ({
     id: t.id, key: t.key, title: t.title, description: t.description, type: t.type, points: t.storyPoints, estimateHrs: t.estimateHrs, complicated: t.complicated,
     jira: !t.jiraKey ? "local" : t.estimateSyncError ? "error" : t.estimateSyncedAt ? "synced" : "pending", jiraError: t.estimateSyncError,
+    review: reviewOf(t.id),
     suggestion: suggestEstimate({ type: t.type, points: t.storyPoints, complicated: t.complicated }, history),
     votes: t.votes.map((v) => ({ dev: v.developer.name, hours: v.hours, mine: v.developerId === me?.id })), myVote: t.votes.find((v) => v.developerId === me?.id)?.hours ?? null,
   }));
@@ -39,7 +44,7 @@ export default async function Estimation({ searchParams }: { searchParams: Promi
         <Kpi label="Within ±25%" value={acc.n ? `${Math.round((acc.within25 / acc.n) * 100)}%` : "—"} sub={`${acc.n} finished tickets`} accent="#a3e635" />
         <Kpi label="Training data" value={history.length} sub="finished tickets with time logs" accent="#a78bfa" />
       </div>
-      <EstimationBoard tickets={data} devCount={devCount} canLead={atLeast(me.access, "LEAD")} sprintId={selected?.id ?? null} sprintName={selected?.name ?? "Backlog"} unit={unit ? { mode: unit.mode, field: unit.field } : null} jiraLive={live} />
+      <EstimationBoard tickets={data} devCount={devCount} canLead={atLeast(me.access, "LEAD")} sprintId={selected?.id ?? null} sprintName={selected?.name ?? "Backlog"} unit={unit ? { mode: unit.mode, field: unit.field } : null} jiraLive={live} aiReady={aiReady} />
     </div>
   );
 }
