@@ -3,6 +3,8 @@
 # Usage: cp .env.example .env.vercel && edit it && npx vercel link && bash scripts/vercel-env.sh
 set -euo pipefail
 FILE="${1:-.env.vercel}"
+[ -f .vercel/project.json ] || { echo "This folder is not linked to a Vercel project yet. Run these first:"; echo "  npx vercel login"; echo "  npx vercel link"; exit 1; }
+npx vercel whoami >/dev/null 2>&1 || { echo "You are not signed in to Vercel. Run: npx vercel login"; exit 1; }
 [ -f "$FILE" ] || { echo "Missing $FILE (copy .env.example to $FILE and fill it in)"; exit 1; }
 while IFS= read -r line || [ -n "$line" ]; do
   case "$line" in ''|\#*) continue ;; esac
