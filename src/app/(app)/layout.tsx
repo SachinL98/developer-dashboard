@@ -18,14 +18,14 @@ export const dynamic = "force-dynamic";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const me = await requireUser();
   if (me.mustChangePassword) redirect("/change-password");
-  const [session, timer, conns, cards] = await Promise.all([
+  const [session, timer, conns, cards, pendingSignups, cfg] = await Promise.all([
     db.workSession.findFirst({ where: { developerId: me.id, endedAt: null } }),
     db.timeEntry.findFirst({ where: { developerId: me.id, endedAt: null }, include: { ticket: true } }),
     db.connection.findMany({ where: { userId: me.id }, select: { provider: true } }),
     db.ticket.findMany({ where: { assigneeId: me.id, status: { in: ["READY_TO_DEV", "IN_PROGRESS", "INITIAL_REVIEW", "REVIEW", "FAILED_STG"] } }, select: { id: true, key: true, title: true }, orderBy: { rank: "asc" } }),
+    atLeast(me.access, "ADMIN") ? db.signupRequest.count() : Promise.resolve(0),
+    getWorkspace(), // also applies the admin-set timezone
   ]);
-  const pendingSignups = atLeast(me.access, "ADMIN") ? await db.signupRequest.count() : 0;
-  const cfg = await getWorkspace(); // also applies the admin-set timezone
   const [sh, sm] = parseHHMM(cfg.workStart), [eh, em] = parseHHMM(cfg.workEnd);
   const targetHrs = Math.round(((eh * 60 + em - (sh * 60 + sm)) / 60) * 10) / 10;
   const has = new Set(conns.map((c) => c.provider));

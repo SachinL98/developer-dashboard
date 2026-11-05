@@ -10,5 +10,8 @@
     "src/app/api/**/route.ts": {
       "maxDuration": 60
     }
-  }
+  },
+  "regions": [
+    "lhr1"
+  ]
 }

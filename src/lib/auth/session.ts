@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "../db";
@@ -24,10 +25,13 @@ export async function destroySession() {
 }
 
 /** The signed-in user, or null. Also binds the user for per-user Jira/Google calls made later in this request. */
+// One lookup per request even though the layout, the page and server actions all ask for the user.
+const sessionFor = cache((token: string) => db.authSession.findUnique({ where: { tokenHash: sha256(token) }, include: { user: true } }));
+
 export async function currentUser() {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
-  const s = await db.authSession.findUnique({ where: { tokenHash: sha256(token) }, include: { user: true } });
+  const s = await sessionFor(token);
   if (!s || s.expiresAt < new Date() || !s.user.active) return null;
   bindUser(s.user.id);
   return s.user;

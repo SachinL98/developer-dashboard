@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { liveSyncAction } from "@/app/(app)/actions";
 
 const ago = (iso: string | null, now: number) => {
   if (!iso) return "not synced yet";
@@ -30,12 +29,12 @@ export function LiveSync({ enabled, lastSync }: { enabled: boolean; lastSync: st
     let stop = false;
     const poll = async () => {
       if (stop || document.visibilityState !== "visible") return;
-      const r = await liveSyncAction().catch(() => null);
+      const r: { ok: boolean; error?: string; changed?: number; lastSync?: string | null } | null = await fetch("/api/live-sync", { cache: "no-store" }).then((x) => x.json()).catch(() => null);
       if (!r || stop) return;
-      if (!r.ok) { setErr(r.error); return; }
+      if (!r.ok) { setErr(r.error ?? "Sync failed"); return; }
       setErr(null);
       if (r.lastSync) setLast(r.lastSync);
-      if (r.changed > 0) router.refresh();
+      if ((r.changed ?? 0) > 0) router.refresh();
     };
     const t = setInterval(poll, 30_000);
     const vis = () => { if (document.visibilityState === "visible") poll(); };

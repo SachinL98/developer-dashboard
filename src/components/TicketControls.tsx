@@ -1,6 +1,5 @@
 "use client";
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Play, Square, ArrowRight, Save } from "lucide-react";
 import { moveTicketAction, setProgressAction, startTimerAction, stopTimerAction, updateTicketAction } from "@/app/(app)/actions";
 import { STATUS_META, allowedNext, STORY_POINTS, type StatusKey } from "@/lib/workflow";
@@ -15,9 +14,8 @@ export function TicketControls(p: {
   const [pr, setPr] = useState(p.prUrl ?? "");
   const [est, setEst] = useState(p.estimateHrs?.toString() ?? "");
   const [pending, start] = useTransition();
-  const router = useRouter();
   const run = (fn: () => Promise<{ ok: boolean; error?: string } & Record<string, any>>, ok?: string) =>
-    start(async () => { const r = await fn(); setMsg(r.ok ? { t: ok ?? "Saved" } : { t: (r as any).error, bad: true }); router.refresh(); });
+    start(async () => { const r = await fn(); setMsg(r.ok ? { t: ok ?? "Saved" } : { t: (r as any).error, bad: true }); });
 
   return (
     <div className="space-y-5">
