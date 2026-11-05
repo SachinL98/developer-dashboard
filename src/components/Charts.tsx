@@ -23,14 +23,22 @@ export function BurndownChart({ data, unit = "pts" }: { data: { day: string; ide
   );
 }
 
+/** Pipeline view: one column per status, left to right in workflow order. */
+function StatusTick({ x, y, payload }: any) {
+  const words: string[] = String(payload.value).split(" ");
+  const lines: string[] = [];
+  for (const w of words) { const last = lines[lines.length - 1]; if (last && (last + " " + w).length <= 11) lines[lines.length - 1] = last + " " + w; else lines.push(w); }
+  return <text x={x} y={y + 14} textAnchor="middle" fill="rgb(var(--mute))" fontSize={11}>{lines.map((l, i) => <tspan key={i} x={x} dy={i ? 13 : 0}>{l}</tspan>)}</text>;
+}
 export function StatusBars({ data }: { data: { name: string; value: number; color: string }[] }) {
   return (
-    <ResponsiveContainer width="100%" height={300}>
-      <BarChart data={data} layout="vertical" margin={{ left: 40, right: 12 }}>
-        <XAxis type="number" {...axis} allowDecimals={false} />
-        <YAxis type="category" dataKey="name" {...axis} width={110} interval={0} />
-        <Tooltip {...tip} />
-        <Bar dataKey="value" radius={[0, 6, 6, 0]}>{data.map((d) => <Cell key={d.name} fill={fg(d.color)} />)}</Bar>
+    <ResponsiveContainer width="100%" height={260}>
+      <BarChart data={data} margin={{ left: -18, right: 8, top: 16, bottom: 18 }}>
+        <CartesianGrid stroke="rgb(var(--line))" strokeDasharray="3 3" vertical={false} />
+        <XAxis dataKey="name" {...axis} interval={0} height={48} tick={<StatusTick />} />
+        <YAxis {...axis} allowDecimals={false} />
+        <Tooltip {...tip} formatter={(v: any) => `${v} ticket${v === 1 ? "" : "s"}`} />
+        <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={56} label={{ position: "top", fill: "rgb(var(--ink))", fontSize: 12 }}>{data.map((d) => <Cell key={d.name} fill={fg(d.color)} />)}</Bar>
       </BarChart>
     </ResponsiveContainer>
   );

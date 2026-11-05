@@ -103,3 +103,6 @@ The server refuses to start in production (`src/instrumentation.ts`) unless thes
 - Run `npm run db:deploy` (applies migrations) then `npm run build` and `npm start`. Health check: `GET /api/health`.
 - Put the app behind a proxy or WAF that adds request rate limiting; the app only rate-limits AI calls itself (per process).
 - Back up the database. Run `npm audit --omit=dev` regularly; remaining advisories are in the Prisma CLI (build time only).
+
+## Who connects Jira and Google
+Only admins see and can use the Jira and Google Calendar & Meet connection cards in Settings (the connect, callback and disconnect endpoints refuse everyone else). An admin connects once for the whole team: when someone without their own connection moves a ticket or creates a meeting link, the app uses the newest active admin connection. Actions in Jira and Google therefore appear under that admin's account. Connections made by other people before this change keep working until an admin replaces them.

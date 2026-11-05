@@ -38,7 +38,7 @@ export default async function Meetings() {
         <Kpi label="Next up" value={upcoming[0] ? fmtTime(upcoming[0].startsAt) : "—"} sub={upcoming[0]?.title} accent="#6ee7ff" />
         <Kpi label="With notes" value={`${past.filter((p) => p.summary).length}/${past.length}`} sub="last 8 meetings" accent="#a78bfa" />
         <Kpi label="Open action items" value={openActions} accent="#fbbf24" />
-        <Kpi label="Google Meet" value={google ? "Connected" : "Not linked"} sub={google ? "Events, links and transcripts" : "Connect Google in Integrations"} accent="#a3e635" />
+        <Kpi label="Google Meet" value={google ? "Connected" : "Not linked"} sub={google ? "Events, links and transcripts" : "An admin connects Google in Settings"} accent="#a3e635" />
       </div>
 
       <div className="card-pad overflow-x-auto">

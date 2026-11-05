@@ -43,7 +43,7 @@ export function LiveSync({ enabled, lastSync }: { enabled: boolean; lastSync: st
     return () => { stop = true; clearInterval(t); document.removeEventListener("visibilitychange", vis); };
   }, [enabled, router]);
 
-  if (!enabled) return <span className="chip" title="Connect Jira in Integrations to see your real board">Demo data · Jira not connected</span>;
+  if (!enabled) return <span className="chip" title="An admin needs to connect Jira in Settings to show the real board">Demo data · Jira not connected</span>;
   return (
     <span className={`chip ${err ? "text-neon-red" : ""}`} title={err ?? "Updates arrive from Jira by webhook, with a 30 s poll as fallback"}>
       <span className={`h-1.5 w-1.5 rounded-full ${err ? "bg-neon-red" : "bg-neon-lime"}`} /> {err ? "Jira sync error" : `Live from Jira · ${now ? ago(last, now) : "…"}`}

@@ -17,6 +17,7 @@ import { cachedBoardInfo, jiraReady, loadStatusMap, statusFromJira } from "@/lib
 export const dynamic = "force-dynamic";
 
 const NOTES: Record<string, string> = {
+  admin_only: "Only an admin can connect Jira and Google.",
   google_not_configured: "Google isn't configured on the server (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET).",
   atlassian_not_configured: "Jira OAuth isn't configured on the server (ATLASSIAN_CLIENT_ID / ATLASSIAN_CLIENT_SECRET).",
 };
@@ -36,19 +37,19 @@ export default async function Settings({ searchParams }: { searchParams: Promise
   const statusMap = board ? await loadStatusMap() : {};
   const origin = process.env.APP_URL || `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host")}`;
 
-  const cards = [
+  const cards = !isAdmin ? [] : [
     { id: "GOOGLE", name: "Google Calendar & Meet", on: googleFull, ready: googleOAuthConfigured(), href: "/api/auth/google/connect", detail: googleFull ? "Create Meet events as you, link calendar events, import Meet transcripts into notes." : "Grants Calendar events and read access to Meet transcripts.", missing: "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET" },
     { id: "JIRA", name: "Jira Cloud", on: !!jira, ready: atlassianConfigured(), href: "/api/auth/atlassian/connect", detail: jira ? `Connected to ${jira.siteUrl}. Tickets, sprints and transitions sync as you.` : "Syncs tickets, sprints, transitions, estimates and worklogs as your Jira user.", missing: "ATLASSIAN_CLIENT_ID / ATLASSIAN_CLIENT_SECRET" },
   ];
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Settings" sub="Connect your Jira and Google accounts and manage your profile."
+      <PageHeader title="Settings" sub={isAdmin ? "Connect Jira and Google for the team, add your Claude key and manage your profile." : "Add your Claude key and manage your profile."}
         actions={atLeast(me.access, "LEAD") ? <SyncButtons what="jira" /> : undefined} />
-      {sp.connected && <div className="rounded-lg border border-neon-lime/40 bg-neon-lime/10 px-4 py-2 text-sm text-neon-lime">{sp.connected === "jira" ? "Jira" : "Google"} connected.</div>}
+      {isAdmin && sp.connected && <div className="rounded-lg border border-neon-lime/40 bg-neon-lime/10 px-4 py-2 text-sm text-neon-lime">{sp.connected === "jira" ? "Jira" : "Google"} connected.</div>}
       {sp.error && <div role="alert" className="rounded-lg border border-neon-red/40 bg-neon-red/10 px-4 py-2 text-sm text-neon-red">{NOTES[sp.error] ?? sp.error}</div>}
 
-      <div className="grid gap-4 md:grid-cols-2">
+      {isAdmin && <div className="grid gap-4 md:grid-cols-2">
         {cards.map((c) => (
           <div key={c.id} className="card-pad">
             <div className="flex items-center justify-between gap-3">
@@ -62,7 +63,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
             {c.id === "GOOGLE" && google && !googleFull && <p className="mt-2 text-xs text-neon-amber">Connected without Calendar/Meet permissions. Reconnect and tick every permission.</p>}
           </div>
         ))}
-      </div>
+      </div>}
 
       <ClaudeKeyCard connected={!!get("CLAUDE")} serverFallback={!!process.env.ANTHROPIC_API_KEY} />
 

@@ -289,7 +289,7 @@ export async function syncMeetingsAction(days = 14): Promise<Result<{ created: n
 export async function createRecurringMeetEventsAction(): Promise<Result<{ created: number }>> {
   try {
     await requireAccess("LEAD");
-    if (!(await gcal.googleReady())) return { ok: false, error: "Connect Google Calendar & Meet first (Integrations)." };
+    if (!(await gcal.googleReady())) return { ok: false, error: "Ask an admin to connect Google Calendar & Meet in Settings first." };
     const devs = await db.developer.findMany({ where: { active: true } });
     let created = 0;
     for (const def of (await getMeetingDefs()).filter((d) => d.enabled && !d.meetUrl)) {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { appUrl, atlassianConfigured, beginTx } from "@/lib/auth/oauth";
 import { currentUser } from "@/lib/auth/session";
+import { atLeast } from "@/lib/permissions";
 import { ATLASSIAN_SCOPES } from "@/lib/auth/scopes";
 
 export const dynamic = "force-dynamic";
@@ -8,6 +9,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   const user = await currentUser();
   if (!user) return NextResponse.redirect(new URL("/login", appUrl(req)));
+  if (!atLeast(user.access, "ADMIN")) return NextResponse.redirect(new URL("/settings?error=admin_only", appUrl(req)));
   if (!atlassianConfigured()) return NextResponse.redirect(new URL("/settings?error=atlassian_not_configured", appUrl(req)));
   const { tx } = await beginTx("atlassian", "connect", "/settings");
   const q = new URLSearchParams({

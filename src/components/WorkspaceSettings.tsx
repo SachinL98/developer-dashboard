@@ -41,7 +41,7 @@ export function WorkspaceSettings({ cfg, timezones, projects }: { cfg: Workspace
 
       <div className="card-pad space-y-4">
         <div className="h-section">Jira</div>
-        <p className="text-xs text-mute">Which Jira project and board the dashboard works with. Each person connects their own Jira account in Integrations; columns and status mapping are in Integrations once Jira is synced.</p>
+        <p className="text-xs text-mute">Which Jira project and board the dashboard works with. Admins connect Jira once in Settings for the whole team; columns and status mapping are also there once Jira is synced.</p>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Field label="Project key" hint="e.g. ATL"><input className="input" value={v.jira.projectKey} onChange={(e) => setV({ ...v, jira: { ...v.jira, projectKey: e.target.value.toUpperCase() } })} /></Field>
           <Field label="Scrum board id" hint="The number in the board URL"><input className="input" inputMode="numeric" value={v.jira.boardId} onChange={(e) => setV({ ...v, jira: { ...v.jira, boardId: e.target.value } })} /></Field>

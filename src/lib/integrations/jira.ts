@@ -5,7 +5,7 @@ import { STATUS_META } from "../workflow";
 import { boundUserId } from "../context";
 import { getSetting, setSetting } from "../settings";
 import { cachedWorkspace, getWorkspace } from "../config";
-import { accessTokenFor, getConnection } from "./connections";
+import { accessTokenFor, getConnection, orgConnection } from "./connections";
 
 const env = () => ({
   base: process.env.JIRA_BASE_URL?.replace(/\/$/, ""), email: process.env.JIRA_EMAIL, token: process.env.JIRA_API_TOKEN,
@@ -22,13 +22,13 @@ interface JiraAuth { base: string; headers: Record<string, string>; siteUrl: str
 /** Credentials for the current request: the signed-in user's OAuth connection, else the service account. */
 async function resolveAuth(): Promise<JiraAuth> {
   const uid = boundUserId();
-  const conn = uid ? await getConnection(uid, "JIRA") : null;
+  const conn = (uid ? await getConnection(uid, "JIRA") : null) ?? (await orgConnection("JIRA"));
   if (conn?.cloudId) {
     return { base: `https://api.atlassian.com/ex/jira/${conn.cloudId}`, headers: { Authorization: `Bearer ${await accessTokenFor(conn)}` }, siteUrl: conn.siteUrl ?? "", via: "oauth" };
   }
   const e = env();
   if (serviceAccount()) return { base: e.base!, headers: { Authorization: "Basic " + Buffer.from(`${e.email}:${e.token}`).toString("base64") }, siteUrl: e.base!, via: "service" };
-  throw new IntegrationError("Jira", "not connected — connect your Jira account in Integrations");
+  throw new IntegrationError("Jira", "not connected — ask an admin to connect Jira in Settings");
 }
 
 /** True when a Jira call can be made now (user connected or service account set) and the team project is configured. */

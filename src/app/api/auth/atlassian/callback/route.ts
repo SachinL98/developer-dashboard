@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { appUrl, finishTx } from "@/lib/auth/oauth";
 import { currentUser } from "@/lib/auth/session";
+import { atLeast } from "@/lib/permissions";
 import { ATLASSIAN_TOKEN_URL, saveConnection, type TokenSet } from "@/lib/integrations/connections";
 import { request } from "@/lib/integrations/http";
 import { db } from "@/lib/db";
@@ -16,6 +17,7 @@ export async function GET(req: Request) {
   const tx = await finishTx("atlassian", u.searchParams.get("state"));
   const me = await currentUser();
   if (!me) return NextResponse.redirect(`${base}/login`);
+  if (!atLeast(me.access, "ADMIN")) return fail("Only an admin can connect Jira.");
   if (!tx) return fail("State check failed. Please try again.");
   if (u.searchParams.get("error")) return fail("Jira connection was cancelled.");
   const code = u.searchParams.get("code");

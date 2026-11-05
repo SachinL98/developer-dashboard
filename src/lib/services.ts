@@ -281,7 +281,7 @@ export async function pushEstimate(ticketId: string): Promise<PushResult> {
   const t = await db.ticket.findUniqueOrThrow({ where: { id: ticketId } });
   if (!t.jiraKey) return { status: "local" };
   const fail = async (message: string): Promise<PushResult> => { await db.ticket.update({ where: { id: t.id }, data: { estimateSyncError: message } }); return { status: "error", message }; };
-  if (!(await jira.jiraReady())) return fail("Jira is not connected — connect it in Integrations");
+  if (!(await jira.jiraReady())) return fail("Jira is not connected — ask an admin to connect it in Settings");
   if (t.estimateHrs == null && t.storyPoints == null) return fail("The ticket has no estimate yet");
   try {
     const points = t.storyPoints ?? pointsForHours(t.estimateHrs!);

@@ -62,8 +62,8 @@ export default async function Overview() {
         <Kpi label="Needs attention" value={waiting.length + failed.length} sub={`${waiting.length} in review · ${failed.length} failed in staging`} accent="#d97706" />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-3">
-        <div className="card-pad xl:col-span-2">
+      <div className="grid gap-4">
+        <div className="card-pad">
           <div className="mb-2 flex items-center justify-between"><span className="h-section">Sprint burndown</span><Link href="/analytics" className="text-sm text-neon">View analytics</Link></div>
           <BurndownChart data={burn} />
         </div>

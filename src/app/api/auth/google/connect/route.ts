@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { appUrl, beginTx, googleLoginConfigured } from "@/lib/auth/oauth";
 import { currentUser } from "@/lib/auth/session";
+import { atLeast } from "@/lib/permissions";
 import { allowedDomain } from "@/lib/permissions";
 import { GOOGLE_LOGIN_SCOPES, GOOGLE_WORK_SCOPES } from "@/lib/auth/scopes";
 
@@ -10,6 +11,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   const user = await currentUser();
   if (!user) return NextResponse.redirect(new URL("/login", appUrl(req)));
+  if (!atLeast(user.access, "ADMIN")) return NextResponse.redirect(new URL("/settings?error=admin_only", appUrl(req)));
   if (!googleLoginConfigured()) return NextResponse.redirect(new URL("/settings?error=google_not_configured", appUrl(req)));
   const { tx, challenge } = await beginTx("google", "connect", "/settings");
   const q = new URLSearchParams({

@@ -26,7 +26,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const [sh, sm] = parseHHMM(cfg.workStart), [eh, em] = parseHHMM(cfg.workEnd);
   const targetHrs = Math.round(((eh * 60 + em - (sh * 60 + sm)) / 60) * 10) / 10;
   const has = new Set(conns.map((c) => c.provider));
-  const missing = [!has.has("JIRA") && "Jira", !has.has("GOOGLE") && "Google Calendar & Meet"].filter(Boolean) as string[];
+  const missing = !atLeast(me.access, "ADMIN") ? [] : [!has.has("JIRA") && "Jira", !has.has("GOOGLE") && "Google Calendar & Meet"].filter(Boolean) as string[];
   const footer = (
     <>
           <WorkClock cards={cards} planned={session?.planTicketIds ?? []} targetHrs={targetHrs} sessionStart={session?.startedAt.toISOString() ?? null} timer={timer ? { key: timer.ticket.key, title: timer.ticket.title, startedAt: timer.startedAt.toISOString() } : null} />
