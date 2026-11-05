@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { appUrl, finishTx } from "@/lib/auth/oauth";
 import { LoginError, decodeJwtPayload, provisionUser, validateClaims } from "@/lib/auth/identity";
 import { createSession, currentUser } from "@/lib/auth/session";
+import { atLeast } from "@/lib/permissions";
 import { GOOGLE_TOKEN_URL, saveConnection, type TokenSet } from "@/lib/integrations/connections";
 import { GOOGLE_WORK_SCOPES } from "@/lib/auth/scopes";
 import { request } from "@/lib/integrations/http";
@@ -33,6 +34,7 @@ export async function GET(req: Request) {
     if (tx.mode === "connect") {
       const me = await currentUser();
       if (!me) return fail("/login", "Sign in first.");
+      if (!atLeast(me.access, "ADMIN")) return fail("/settings", "Only an admin can connect Google Calendar & Meet.");
       if (me.email !== who.email) throw new LoginError(`Connect the Google account ${me.email}, not ${who.email}.`);
       const granted = (t.scope ?? "").split(" ");
       if (!GOOGLE_WORK_SCOPES.every((s) => granted.includes(s))) throw new LoginError("Calendar and Meet access were not all granted. Tick every permission on the consent screen.");

@@ -5,6 +5,7 @@ import { getMeetingDefs, getWorkspace } from "./config";
 import * as jira from "./integrations/jira";
 import * as gh from "./integrations/github";
 import { parseNotes, summariseWithClaude } from "./notes";
+import { aiKeyFor } from "./ai";
 import * as gcal from "./integrations/google";
 import { fetchTranscript, meetCodeFromUrl } from "./integrations/meet";
 import { occurrences } from "./schedule";
@@ -109,13 +110,20 @@ export async function stopTimer(developerId: string) {
   }
 }
 
-export async function clockIn(developerId: string) {
+export type DayCheck = { ticketIds: string[]; note?: string };
+const clean = (c?: DayCheck) => ({ ids: [...new Set(c?.ticketIds ?? [])].slice(0, 50), note: c?.note?.trim().slice(0, 2000) || null });
+
+/** Start of day: opens a work session and saves the cards planned for today plus an optional message. */
+export async function clockIn(developerId: string, check?: DayCheck) {
+  const { ids, note } = clean(check);
   const open = await db.workSession.findFirst({ where: { developerId, endedAt: null } });
-  return open ?? db.workSession.create({ data: { developerId, startedAt: new Date() } });
+  return open ?? db.workSession.create({ data: { developerId, startedAt: new Date(), planTicketIds: ids, planNote: note } });
 }
-export async function clockOut(developerId: string) {
+/** End of day: stops timers, closes the session and saves the cards worked on plus an optional message. */
+export async function clockOut(developerId: string, check?: DayCheck) {
   await stopTimer(developerId);
-  await db.workSession.updateMany({ where: { developerId, endedAt: null }, data: { endedAt: new Date() } });
+  const { ids, note } = clean(check);
+  await db.workSession.updateMany({ where: { developerId, endedAt: null }, data: { endedAt: new Date(), doneTicketIds: ids, doneNote: note } });
 }
 
 // ---------- Progress ----------
@@ -273,7 +281,7 @@ export async function pushEstimate(ticketId: string): Promise<PushResult> {
   const t = await db.ticket.findUniqueOrThrow({ where: { id: ticketId } });
   if (!t.jiraKey) return { status: "local" };
   const fail = async (message: string): Promise<PushResult> => { await db.ticket.update({ where: { id: t.id }, data: { estimateSyncError: message } }); return { status: "error", message }; };
-  if (!(await jira.jiraReady())) return fail("Jira is not connected — connect it in Integrations");
+  if (!(await jira.jiraReady())) return fail("Jira is not connected — ask an admin to connect it in Settings");
   if (t.estimateHrs == null && t.storyPoints == null) return fail("The ticket has no estimate yet");
   try {
     const points = t.storyPoints ?? pointsForHours(t.estimateHrs!);
@@ -328,9 +336,9 @@ export async function syncGithub() {
 
 // ---------- Meeting notes ----------
 
-export async function generateNotes(meetingId: string, transcript: string) {
+export async function generateNotes(meetingId: string, transcript: string, userId?: string | null) {
   const names = (await db.developer.findMany()).map((d) => d.name);
-  const parsed = await summariseWithClaude(transcript, parseNotes(transcript, names));
+  const parsed = await summariseWithClaude(transcript, parseNotes(transcript, names), await aiKeyFor(userId));
   await db.$transaction([
     db.meeting.update({ where: { id: meetingId }, data: { transcript, summary: parsed.summary, decisions: parsed.decisions } }),
     db.actionItem.deleteMany({ where: { meetingId } }),
@@ -344,14 +352,14 @@ export async function generateNotes(meetingId: string, transcript: string) {
 }
 
 /** Pull the real Meet transcript for an ended meeting and turn it into notes. Returns null if none is available yet. */
-export async function importMeetTranscript(meetingId: string) {
+export async function importMeetTranscript(meetingId: string, userId?: string | null) {
   const m = await db.meeting.findUniqueOrThrow({ where: { id: meetingId } });
   const code = meetCodeFromUrl(m.meetUrl);
   if (!code) throw new Error("This meeting has no Google Meet link.");
   if (m.endsAt > new Date()) throw new Error("The meeting hasn't finished yet.");
   const t = await fetchTranscript(code, m.startsAt, m.endsAt);
   if (!t) return null;
-  const parsed = await generateNotes(meetingId, t.text);
+  const parsed = await generateNotes(meetingId, t.text, userId);
   return { parsed, chars: t.text.length };
 }
 

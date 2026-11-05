@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { atLeast, canMoveTicket, canPatchTicket, emailAllowed } from "../src/lib/permissions";
+import { atLeast, canMoveTicket, canPatchTicket, canViewDeveloper, emailAllowed } from "../src/lib/permissions";
 import { decrypt, encrypt, safeEqual, sha256 } from "../src/lib/crypto";
 import { LoginError, decodeJwtPayload, validateClaims } from "../src/lib/auth/identity";
 import { safeNext } from "../src/lib/auth/oauth";
@@ -124,5 +124,16 @@ describe("Meet transcripts", () => {
       { participant: "zz", text: "Who is this?", startTime: "2026-10-14T03:18:00Z" },
     ], names);
     expect(text).toBe("Amaya Perera: Yesterday I finished ATL-101. Today the audit log.\nNuwan Silva: Blocked on staging credentials.\nSpeaker: Who is this?");
+  });
+});
+
+describe("canViewDeveloper", () => {
+  it("lets a developer see only themself", () => {
+    expect(canViewDeveloper(dev, "d1")).toBe(true);
+    expect(canViewDeveloper(dev, "d2")).toBe(false);
+  });
+  it("lets leads and admins see anyone", () => {
+    expect(canViewDeveloper(lead, "d2")).toBe(true);
+    expect(canViewDeveloper(admin, "d2")).toBe(true);
   });
 });

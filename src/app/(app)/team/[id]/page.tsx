@@ -6,9 +6,17 @@ import { developerStats, DAY } from "@/lib/queries";
 import { LineSeries } from "@/components/Charts";
 import { hoursPerDay } from "@/lib/analytics";
 import { fmtDay, fmtTime } from "@/lib/time";
+import { requireUser } from "@/lib/auth/session";
+import { atLeast, canViewDeveloper } from "@/lib/permissions";
+import { aiKeyFor, latestInsight } from "@/lib/ai";
+import { loadDoneTickets, type DevProfile } from "@/lib/insights";
+import { profileStats } from "@/lib/insights-calc";
+import { DevInsights } from "@/components/DevInsights";
 
 export default async function Dev({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const viewer = await requireUser();
+  if (!canViewDeveloper(viewer, id)) notFound();
   const [s] = await developerStats(id);
   if (!s) notFound();
   const now = new Date();
@@ -17,6 +25,8 @@ export default async function Dev({ params }: { params: Promise<{ id: string }> 
   const series = Object.entries(per).map(([name, v]) => ({ name: name.slice(5), hours: Math.round(v * 10) / 10 }));
   const avgStart = sessions.length ? sessions.reduce((a, x) => a + ((x.startedAt.getUTCHours() * 60 + x.startedAt.getUTCMinutes())), 0) / sessions.length : 0;
   const tickets = await db.ticket.findMany({ where: { assigneeId: id }, orderBy: { updatedAt: "desc" }, take: 12 });
+  const [stats, saved, ai] = await Promise.all([loadDoneTickets().then((d) => profileStats(id, d)), latestInsight("DEV_PROFILE", id), aiKeyFor(viewer.id)]);
+  const profile = saved ? ({ ...(saved.content as any), stats } as DevProfile) : null;
   return (
     <div className="space-y-6">
       <PageHeader title={s.d.name} sub={`${s.d.role} · ${s.d.email}`} actions={<Avatar name={s.d.name} hue={s.d.avatarHue} size={44} />} />
@@ -26,6 +36,8 @@ export default async function Dev({ params }: { params: Promise<{ id: string }> 
         <Kpi label="Estimate accuracy" value={s.accuracy ? `${Math.round(s.accuracy * 100)}%` : "—"} sub="actual ÷ estimate" accent="#fbbf24" />
         <Kpi label="Avg day start" value={sessions.length ? `${String(Math.floor(((avgStart + 330) % 1440) / 60)).padStart(2, "0")}:${String(Math.round((avgStart + 330) % 60)).padStart(2, "0")}` : "—"} sub="local time (UTC+5:30)" accent="#f472b6" />
       </div>
+      <DevInsights devId={id} name={s.d.name} stats={stats} profile={profile} ready={!!ai} canGenerate={viewer.id === id || atLeast(viewer.access, "LEAD")} />
+
       <div className="card-pad"><div className="h-section mb-2">Hours per day</div><LineSeries data={series} lines={[{ key: "hours", color: "#6ee7ff", name: "Hours" }]} unit="h" /></div>
       <div className="card-pad">
         <div className="h-section mb-3">Recent tickets</div>

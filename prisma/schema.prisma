@@ -1,5 +1,7 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // "native" for local work and CI; rhel-openssl-3.0.x is the Vercel (AWS Lambda) runtime.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
@@ -165,6 +167,12 @@ model WorkSession {
   startedAt   DateTime
   endedAt     DateTime?
   note        String?
+  // Start-of-day check-in: tickets planned for today and a free message
+  planTicketIds String[] @default([])
+  planNote      String?
+  // End-of-day check-out: tickets actually worked on and a free message
+  doneTicketIds String[] @default([])
+  doneNote      String?
 
   @@index([developerId, startedAt])
 }
@@ -274,7 +282,7 @@ model Connection {
   id          String    @id @default(cuid())
   user        Developer @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId      String
-  provider    String // GOOGLE | JIRA
+  provider    String // GOOGLE | JIRA | CLAUDE (accessToken holds the user's own Anthropic API key)
   accessToken String
   refreshToken String?
   expiresAt   DateTime?
@@ -314,4 +322,17 @@ model Leave {
 
   @@index([developerId])
   @@index([status, startDate, endDate])
+}
+
+// Saved Claude analyses: developer profiles and estimate reviews
+model AiInsight {
+  id          String   @id @default(cuid())
+  kind        String // DEV_PROFILE | ESTIMATE
+  subjectId   String // developer id or ticket id
+  content     Json
+  model       String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([kind, subjectId, createdAt])
 }

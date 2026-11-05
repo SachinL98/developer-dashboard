@@ -38,3 +38,6 @@ export function emailAllowed(email: string | undefined | null): boolean {
 
 /** Review fault patterns are personal: the developer themself and leads/admins may see them, other developers may not. */
 export const canViewPatterns = (actor: Actor, developerId: string | "team") => (developerId === "team" ? atLeast(actor.access, "LEAD") : developerId === actor.id || atLeast(actor.access, "LEAD"));
+
+/** A developer's personal page (delivery stats, hours, AI skills insights) is visible to the developer themself and to leads/admins only. */
+export const canViewDeveloper = (actor: Actor, developerId: string) => developerId === actor.id || atLeast(actor.access, "LEAD");

@@ -2,7 +2,7 @@ import { db } from "../db";
 import { decrypt, encrypt } from "../crypto";
 import { IntegrationError, request } from "./http";
 
-export type Provider = "GOOGLE" | "JIRA";
+export type Provider = "GOOGLE" | "JIRA" | "CLAUDE";
 
 export const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 export const ATLASSIAN_TOKEN_URL = "https://auth.atlassian.com/oauth/token";
@@ -40,7 +40,7 @@ export function accessTokenFor(conn: NonNullable<Awaited<ReturnType<typeof getCo
 
 async function refresh(conn: NonNullable<Awaited<ReturnType<typeof getConnection>>>): Promise<string> {
   const service = conn.provider === "JIRA" ? "Jira" : "Google";
-  if (!conn.refreshToken) throw new IntegrationError(service, "session expired — reconnect your account in Integrations");
+  if (!conn.refreshToken) throw new IntegrationError(service, "session expired — an admin needs to reconnect it in Settings");
   try {
     const rt = decrypt(conn.refreshToken);
     const t = conn.provider === "JIRA"
@@ -57,11 +57,18 @@ async function refresh(conn: NonNullable<Awaited<ReturnType<typeof getConnection
   } catch (e) {
     if (e instanceof IntegrationError && (e.status === 400 || e.status === 401 || e.status === 403)) {
       await dropConnection(conn.userId, conn.provider as Provider); // revoked or rotated away: user must reconnect
-      throw new IntegrationError(service, "connection was revoked or expired — reconnect your account in Integrations", e.status);
+      throw new IntegrationError(service, "connection was revoked or expired — an admin needs to reconnect it in Settings", e.status);
     }
     throw e;
   }
 }
+
+/**
+ * The workspace connection: the one an admin set up. Jira and Google are connected by admins only, so everyone else's requests
+ * (moving a ticket, creating a meeting link) go through this connection.
+ */
+export const orgConnection = (provider: Provider) =>
+  db.connection.findFirst({ where: { provider, user: { active: true, access: "ADMIN" } }, orderBy: { updatedAt: "desc" } });
 
 /** A user who has connected the provider, preferring leads/admins: used for scheduled (cron) syncs. */
 export async function serviceUserId(provider: Provider): Promise<string | undefined> {

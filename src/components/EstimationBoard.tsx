@@ -7,18 +7,20 @@ import { Eye, EyeOff, Sparkles, Check, RotateCcw, Flame, CloudUpload, AlertTrian
 import { applyEstimateAction, clearVotesAction, pushSprintEstimatesAction, voteAction } from "@/app/(app)/actions";
 import { POKER_HOURS, pointsForHours } from "@/lib/workflow";
 import { summarisePoker, type Suggestion } from "@/lib/estimation";
+import { EstimateReview } from "@/components/EstimateReview";
+import type { EstimateReview as ReviewData } from "@/lib/insights";
 
 export interface EstTicket {
   id: string; key: string; title: string; description: string; type: string; points: number | null; estimateHrs: number | null; complicated: boolean;
   jira: "synced" | "error" | "pending" | "local"; jiraError: string | null;
-  suggestion: Suggestion; votes: { dev: string; hours: number; mine: boolean }[]; myVote: number | null;
+  suggestion: Suggestion; review: ReviewData | null; votes: { dev: string; hours: number; mine: boolean }[]; myVote: number | null;
 }
 const pointsFor = pointsForHours;
 
 const unitLabel = (m: "points" | "hours") => (m === "points" ? "story points" : "original estimate (hours)");
 
-export function EstimationBoard({ tickets, devCount, canLead, sprintId, sprintName, unit, jiraLive }: {
-  tickets: EstTicket[]; devCount: number; canLead: boolean; sprintId: string | null; sprintName: string; unit: { mode: "points" | "hours"; field: string } | null; jiraLive: boolean;
+export function EstimationBoard({ tickets, devCount, canLead, sprintId, sprintName, unit, jiraLive, aiReady }: {
+  aiReady: boolean; tickets: EstTicket[]; devCount: number; canLead: boolean; sprintId: string | null; sprintName: string; unit: { mode: "points" | "hours"; field: string } | null; jiraLive: boolean;
 }) {
   const [note, setNote] = useState<{ t: string; bad?: boolean } | null>(null);
   const [sel, setSel] = useState(tickets[0]?.id);
@@ -85,11 +87,14 @@ export function EstimationBoard({ tickets, devCount, canLead, sprintId, sprintNa
           <div className="card-pad">
             <div className="h-section mb-3 flex items-center gap-2"><Sparkles size={14} className="text-neon-violet" /> History-based suggestion</div>
             <div className="flex flex-wrap items-center gap-6">
-              <div><div className="font-mono text-3xl">{t.suggestion.hours}<span className="text-base text-mute">h</span></div><div className="text-xs text-mute">range {t.suggestion.low}–{t.suggestion.high}h · {t.suggestion.confidence} confidence</div></div>
+              <div><div className="font-semibold tabular-nums text-3xl">{t.suggestion.hours}<span className="text-base text-mute">h</span></div><div className="text-xs text-mute">range {t.suggestion.low}–{t.suggestion.high}h · {t.suggestion.confidence} confidence</div></div>
               <p className="min-w-[200px] flex-1 text-xs text-mute">{t.suggestion.basis}</p>
               <button className="btn" disabled={pending || !canLead} title={canLead ? "" : "Leads apply the agreed estimate"} onClick={() => run(() => applyEstimateAction(t.id, t.suggestion.hours, t.points ?? pointsFor(t.suggestion.hours)))}>Apply {t.suggestion.hours}h</button>
             </div>
           </div>
+
+          <EstimateReview key={t.id} ticketId={t.id} ready={aiReady} initial={t.review} canApply={canLead}
+            onUse={(h) => run(() => applyEstimateAction(t.id, h, t.points ?? pointsFor(h)))} />
 
           <div className="card-pad">
             <div className="mb-3 flex items-center justify-between">
@@ -108,14 +113,14 @@ export function EstimationBoard({ tickets, devCount, canLead, sprintId, sprintNa
             <div className="mt-5 flex flex-wrap gap-3">
               {t.votes.map((v) => (
                 <div key={v.dev} className="w-20 rounded-xl border border-line bg-panel2 p-2 text-center">
-                  <div className="font-mono text-xl">{shown || v.mine ? v.hours : "?"}</div><div className="truncate text-[10px] text-mute">{v.dev.split(" ")[0]}</div>
+                  <div className="font-semibold tabular-nums text-xl">{shown || v.mine ? v.hours : "?"}</div><div className="truncate text-[10px] text-mute">{v.dev.split(" ")[0]}</div>
                 </div>))}
               {!t.votes.length && <span className="text-sm text-mute">No votes yet. Vote above, then reveal when everyone is in.</span>}
             </div>
             {shown && t.votes.length > 0 && (
               <div className="mt-5 flex flex-wrap items-center gap-6 rounded-xl border border-line p-4">
-                <div><div className="text-xs text-mute">Median</div><div className="font-mono text-2xl">{summary.median}h</div></div>
-                <div><div className="text-xs text-mute">Range</div><div className="font-mono text-2xl">{summary.min}–{summary.max}h</div></div>
+                <div><div className="text-xs text-mute">Median</div><div className="font-semibold tabular-nums text-2xl">{summary.median}h</div></div>
+                <div><div className="text-xs text-mute">Range</div><div className="font-semibold tabular-nums text-2xl">{summary.min}–{summary.max}h</div></div>
                 <div className={clsx("rounded-full px-3 py-1 text-xs", summary.consensus ? "bg-neon-lime/15 text-neon-lime" : "bg-neon-amber/15 text-neon-amber")}>{summary.consensus ? "Consensus" : "Wide spread — discuss, then re-vote"}</div>
                 <button className="btn-primary ml-auto" disabled={pending || !canLead} title={canLead ? "" : "Leads apply the agreed estimate"} onClick={() => run(() => applyEstimateAction(t.id, summary.median, pointsFor(summary.median)))}>Apply {summary.median}h ({pointsFor(summary.median)} pts)</button>
               </div>

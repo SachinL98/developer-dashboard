@@ -25,7 +25,8 @@ export function columnDwell(transitions: TransitionRow[], createdAt: Record<stri
 
 export interface BurnTicket { points: number; hours: number; doneAt: Date | null }
 /** Burndown in points and hours: ideal vs actual remaining, one row per day. */
-export function burndown(start: Date, end: Date, tickets: BurnTicket[], now = new Date()) {
+/** `idealRemaining`: optional leave-aware shape (fraction of work left at the end of each row's date); linear when omitted. */
+export function burndown(start: Date, end: Date, tickets: BurnTicket[], now = new Date(), idealRemaining?: number[]) {
   const s = startOfDay(start), e = startOfDay(end);
   const days = Math.max(1, Math.round((e.getTime() - s.getTime()) / DAY));
   const totalPts = tickets.reduce((a, t) => a + t.points, 0);
@@ -39,8 +40,8 @@ export function burndown(start: Date, end: Date, tickets: BurnTicket[], now = ne
     const doneHrs = tickets.filter((t) => t.doneAt && t.doneAt.getTime() < endOfDay).reduce((a, t) => a + t.hours, 0);
     rows.push({
       day: day.toISOString().slice(0, 10),
-      idealPts: Math.round((totalPts * (1 - i / days)) * 10) / 10,
-      idealHrs: Math.round((totalHrs * (1 - i / days)) * 10) / 10,
+      idealPts: Math.round((totalPts * (idealRemaining ? idealRemaining[i] ?? 0 : 1 - i / days)) * 10) / 10,
+      idealHrs: Math.round((totalHrs * (idealRemaining ? idealRemaining[i] ?? 0 : 1 - i / days)) * 10) / 10,
       actualPts: future ? null : totalPts - donePts,
       actualHrs: future ? null : totalHrs - doneHrs,
     });

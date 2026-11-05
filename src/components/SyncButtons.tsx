@@ -12,7 +12,7 @@ export function SyncButtons({ what, disabled }: { what: "jira" | "github" | "mee
   return (
     <div className="flex items-center gap-2">
       {msg && <span className={`max-w-[260px] truncate text-xs ${msg.bad ? "text-neon-red" : "text-neon-lime"}`} title={msg.t}>{msg.t}</span>}
-      <button className="btn" disabled={disabled || pending} title={disabled ? "Not configured — see Integrations" : undefined}
+      <button className="btn" disabled={disabled || pending} title={disabled ? "Not configured — an admin sets this up in Settings" : undefined}
         onClick={() => start(async () => {
           const r: any = what === "jira" ? await syncJiraAction() : what === "github" ? await syncGithubAction() : await syncMeetingsAction();
           setMsg(r.ok ? { t: r.summary ?? `${r.created} meeting(s) added${r.google ? " with Meet links" : ""}` } : { t: r.error, bad: true });

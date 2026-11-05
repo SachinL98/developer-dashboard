@@ -7,6 +7,7 @@ import { suggestEstimate } from "@/lib/estimation";
 import { activeSprint, estimateAccuracy, historyForEstimation } from "@/lib/queries";
 import { cachedBoardInfo, jiraReady } from "@/lib/integrations/jira";
 import Link from "next/link";
+import { aiKeyFor } from "@/lib/ai";
 
 export default async function Estimation({ searchParams }: { searchParams: Promise<{ sprint?: string }> }) {
   const sp = await searchParams;
@@ -20,16 +21,20 @@ export default async function Estimation({ searchParams }: { searchParams: Promi
     include: { votes: { include: { developer: true } } }, orderBy: [{ estimateHrs: { sort: "asc", nulls: "first" } }, { complicated: "desc" }, { rank: "asc" }], take: 60,
   });
   const live = await jiraReady();
+  const aiReady = !!(await aiKeyFor(me.id));
+  const reviews = await db.aiInsight.findMany({ where: { kind: "ESTIMATE", subjectId: { in: tickets.map((t) => t.id) } }, orderBy: { createdAt: "desc" } });
+  const reviewOf = (tid: string) => (reviews.find((r) => r.subjectId === tid)?.content as any) ?? null;
   const unit = live ? (await cachedBoardInfo())?.estimation ?? null : null;
   const data: EstTicket[] = tickets.map((t) => ({
     id: t.id, key: t.key, title: t.title, description: t.description, type: t.type, points: t.storyPoints, estimateHrs: t.estimateHrs, complicated: t.complicated,
     jira: !t.jiraKey ? "local" : t.estimateSyncError ? "error" : t.estimateSyncedAt ? "synced" : "pending", jiraError: t.estimateSyncError,
+    review: reviewOf(t.id),
     suggestion: suggestEstimate({ type: t.type, points: t.storyPoints, complicated: t.complicated }, history),
     votes: t.votes.map((v) => ({ dev: v.developer.name, hours: v.hours, mine: v.developerId === me?.id })), myVote: t.votes.find((v) => v.developerId === me?.id)?.hours ?? null,
   }));
   return (
     <div className="space-y-6">
-      <PageHeader title="Time estimation" sub="Monday 09:15–09:45 session: poker votes + suggestions learned from your finished tickets. Agreed estimates are written to the real Jira tickets."
+      <PageHeader title="Estimates" sub="Vote on estimates as a team. Agreed estimates are saved to Jira."
         actions={<div className="flex flex-wrap items-center gap-1 rounded-lg border border-line bg-panel p-1">{sprints.map((x) => (
           <Link key={x.id} href={`/estimation?sprint=${x.id}`} className={`rounded-md px-2.5 py-1 text-xs ${x.id === selected?.id ? "bg-line text-ink" : "text-mute hover:text-ink"}`}>{x.name}</Link>))}
           <Link href="/estimation?sprint=backlog" className={`rounded-md px-2.5 py-1 text-xs ${!selected ? "bg-line text-ink" : "text-mute hover:text-ink"}`}>Backlog</Link></div>} />
@@ -39,7 +44,7 @@ export default async function Estimation({ searchParams }: { searchParams: Promi
         <Kpi label="Within ±25%" value={acc.n ? `${Math.round((acc.within25 / acc.n) * 100)}%` : "—"} sub={`${acc.n} finished tickets`} accent="#a3e635" />
         <Kpi label="Training data" value={history.length} sub="finished tickets with time logs" accent="#a78bfa" />
       </div>
-      <EstimationBoard tickets={data} devCount={devCount} canLead={atLeast(me.access, "LEAD")} sprintId={selected?.id ?? null} sprintName={selected?.name ?? "Backlog"} unit={unit ? { mode: unit.mode, field: unit.field } : null} jiraLive={live} />
+      <EstimationBoard tickets={data} devCount={devCount} canLead={atLeast(me.access, "LEAD")} sprintId={selected?.id ?? null} sprintName={selected?.name ?? "Backlog"} unit={unit ? { mode: unit.mode, field: unit.field } : null} jiraLive={live} aiReady={aiReady} />
     </div>
   );
 }

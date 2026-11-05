@@ -1,7 +1,7 @@
 import { request, IntegrationError } from "./http";
 import { TZ } from "../time";
 import { boundUserId } from "../context";
-import { accessTokenFor, getConnection, GOOGLE_TOKEN_URL } from "./connections";
+import { accessTokenFor, getConnection, GOOGLE_TOKEN_URL, orgConnection } from "./connections";
 import { GOOGLE_WORK_SCOPES } from "../auth/scopes";
 
 /** OAuth client for sign-in + per-user connections. */
@@ -23,14 +23,14 @@ async function fallbackToken() {
 /** The signed-in user's connection if they have granted Calendar + Meet access, else the shared fallback. */
 async function token(): Promise<string> {
   const uid = boundUserId();
-  const conn = uid ? await getConnection(uid, "GOOGLE") : null;
+  const conn = (uid ? await getConnection(uid, "GOOGLE") : null) ?? (await orgConnection("GOOGLE"));
   if (conn) {
     const scopes = (conn.scope ?? "").split(" ");
-    if (!GOOGLE_WORK_SCOPES.every((s) => scopes.includes(s))) throw new IntegrationError("Google", "Calendar/Meet access not granted — reconnect Google in Integrations");
+    if (!GOOGLE_WORK_SCOPES.every((s) => scopes.includes(s))) throw new IntegrationError("Google", "Calendar/Meet access not granted — an admin needs to reconnect Google in Settings");
     return accessTokenFor(conn);
   }
   if (fallbackConfigured()) return fallbackToken();
-  throw new IntegrationError("Google", "not connected — connect Google Calendar & Meet in Integrations");
+  throw new IntegrationError("Google", "not connected — ask an admin to connect Google Calendar & Meet in Settings");
 }
 
 /** True when the current request can call Google (user connected or shared fallback). */

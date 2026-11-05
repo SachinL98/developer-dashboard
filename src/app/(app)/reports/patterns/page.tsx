@@ -92,7 +92,7 @@ export default async function Patterns({ searchParams }: { searchParams: Promise
         </div>)}
       {dev === "team" && a.byProject.length > 1 && (
         <div className="card-pad"><div className="h-section mb-2">By project</div>
-          <div className="overflow-x-auto"><table className="w-full min-w-[420px] text-sm"><thead className="text-left text-xs uppercase tracking-wider text-mute"><tr><th className="py-1">Project</th><th>PRs</th><th>Passed first try</th><th>Most common</th></tr></thead>
+          <div className="overflow-x-auto"><table className="w-full min-w-[420px] text-sm"><thead className="text-left text-xs text-mute"><tr><th className="py-1">Project</th><th>PRs</th><th>Passed first try</th><th>Most common</th></tr></thead>
             <tbody>{a.byProject.map((p) => <tr key={p.project} className="border-t border-line/60"><td className="py-2 font-mono">{p.project}</td><td className="font-mono">{p.tickets}</td><td className="font-mono">{pct(p.firstTryPassRate)}</td><td>{p.top[0]?.label ?? "-"}</td></tr>)}</tbody></table></div></div>)}
       <Body s={s} subject={dev === "team" ? "team" : "developer"} />
     </div>

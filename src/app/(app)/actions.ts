@@ -19,9 +19,13 @@ import { localDate } from "@/lib/time";
 import { STATUS_ORDER, type StatusKey } from "@/lib/workflow";
 import type { ReviewItem } from "@/lib/review-template";
 import { redirect } from "next/navigation";
+import { userMessage } from "@/lib/safe-error";
+import { rateLimit } from "@/lib/rate-limit";
+import { saveUserKey, removeUserKey, validateKey } from "@/lib/ai";
+import { generateDevProfile, reviewEstimate, type EstimateReview } from "@/lib/insights";
 
 type Result<T = {}> = ({ ok: true } & T) | { ok: false; error: string };
-const fail = (e: unknown): { ok: false; error: string } => ({ ok: false, error: e instanceof z.ZodError ? "Invalid input: " + e.issues[0]?.message : e instanceof Error ? e.message : String(e) });
+const fail = (e: unknown): { ok: false; error: string } => ({ ok: false, error: e instanceof z.ZodError ? "Invalid input: " + e.issues[0]?.message : userMessage(e) });
 const touch = () => { for (const p of ["/", "/board", "/sprints", "/time", "/estimation", "/meetings", "/analytics", "/tickets", "/team"]) revalidatePath(p); };
 const me = () => requireAccess("DEVELOPER");
 
@@ -101,16 +105,20 @@ export async function setProgressAction(ticketId: string, pct: number, note?: st
 }
 
 // ----- time (always the signed-in user's own) -----
-export async function clockInAction(): Promise<Result> { try { await svc.clockIn((await me()).id); touch(); return { ok: true }; } catch (e) { return fail(e); } }
-export async function clockOutAction(): Promise<Result> { try { await svc.clockOut((await me()).id); touch(); return { ok: true }; } catch (e) { return fail(e); } }
+const dayCheck = z.object({ ticketIds: z.array(z.string()).max(50), note: z.string().max(2000).optional() }).optional();
+export async function clockInAction(check?: { ticketIds: string[]; note?: string }): Promise<Result> { try { await svc.clockIn((await me()).id, dayCheck.parse(check)); touch(); return { ok: true }; } catch (e) { return fail(e); } }
+export async function clockOutAction(check?: { ticketIds: string[]; note?: string }): Promise<Result> { try { await svc.clockOut((await me()).id, dayCheck.parse(check)); touch(); return { ok: true }; } catch (e) { return fail(e); } }
 export async function startTimerAction(ticketId: string): Promise<Result> { try { await svc.startTimer(id.parse(ticketId), (await me()).id); touch(); revalidatePath(`/tickets/${ticketId}`); return { ok: true }; } catch (e) { return fail(e); } }
 export async function stopTimerAction(): Promise<Result> { try { await svc.stopTimer((await me()).id); touch(); return { ok: true }; } catch (e) { return fail(e); } }
 
 // ----- reviews -----
 export async function runReviewAction(ticketId: string): Promise<Result> {
   try {
-    await me();
+    const u = await me();
     const tid = id.parse(ticketId);
+    const tk = await db.ticket.findUniqueOrThrow({ where: { id: tid }, select: { assigneeId: true } });
+    if (!atLeast(u.access, "LEAD") && tk.assigneeId !== u.id) return { ok: false, error: "Only the assignee or a lead can run the review." };
+    rateLimit(`review:${u.id}`, 20, 3_600_000);
     after(async () => { await svc.runInitialReview(tid, "manual").catch(() => {}); revalidatePath(`/tickets/${tid}`); });
     return { ok: true };
   } catch (e) { return fail(e); }
@@ -236,21 +244,23 @@ export async function closeSprintAction(sprintId: string): Promise<Result<{ carr
 }
 
 // ----- meetings & notes -----
-export async function saveNotesAction(meetingId: string, transcript: string): Promise<Result<{ actions: number }>> {
+export async function saveNotesAction(meetingId: string, transcript: string): Promise<Result<{ actions: number; ai: boolean; aiError?: string }>> {
   try {
-    await me();
-    const parsed = await svc.generateNotes(id.parse(meetingId), z.string().min(1).max(200_000).parse(transcript));
-    revalidatePath("/meetings"); return { ok: true, actions: parsed.actionItems.length };
+    const u = await me();
+    rateLimit(`ai:${u.id}`, 30, 3_600_000);
+    const parsed = await svc.generateNotes(id.parse(meetingId), z.string().min(1).max(200_000).parse(transcript), u.id);
+    revalidatePath("/meetings"); return { ok: true, actions: parsed.actionItems.length, ai: parsed.ai, aiError: parsed.aiError };
   } catch (e) { return fail(e); }
 }
 
 /** Fetch the real Google Meet transcript of an ended meeting and generate notes from it. */
-export async function importTranscriptAction(meetingId: string): Promise<Result<{ actions: number; chars: number }>> {
+export async function importTranscriptAction(meetingId: string): Promise<Result<{ actions: number; chars: number; ai: boolean; aiError?: string }>> {
   try {
-    await me();
-    const r = await svc.importMeetTranscript(id.parse(meetingId));
+    const u = await me();
+    rateLimit(`ai:${u.id}`, 30, 3_600_000);
+    const r = await svc.importMeetTranscript(id.parse(meetingId), u.id);
     if (!r) return { ok: false, error: "No transcript yet. Meet publishes it a few minutes after the call, and only if Transcript was turned on in the meeting." };
-    revalidatePath("/meetings"); return { ok: true, actions: r.parsed.actionItems.length, chars: r.chars };
+    revalidatePath("/meetings"); return { ok: true, actions: r.parsed.actionItems.length, chars: r.chars, ai: r.parsed.ai, aiError: r.parsed.aiError };
   } catch (e) { return fail(e); }
 }
 
@@ -279,7 +289,7 @@ export async function syncMeetingsAction(days = 14): Promise<Result<{ created: n
 export async function createRecurringMeetEventsAction(): Promise<Result<{ created: number }>> {
   try {
     await requireAccess("LEAD");
-    if (!(await gcal.googleReady())) return { ok: false, error: "Connect Google Calendar & Meet first (Integrations)." };
+    if (!(await gcal.googleReady())) return { ok: false, error: "Ask an admin to connect Google Calendar & Meet in Settings first." };
     const devs = await db.developer.findMany({ where: { active: true } });
     let created = 0;
     for (const def of (await getMeetingDefs()).filter((d) => d.enabled && !d.meetUrl)) {
@@ -554,3 +564,37 @@ export async function saveHolidaysAction(list: { date: string; name: string }[])
   } catch (e) { return fail(e); }
 }
 void requestDays;
+
+
+// ----- Claude (AI features, billed to the user's own Anthropic key) -----
+export async function saveClaudeKeyAction(key: string): Promise<Result> {
+  try {
+    const u = await me();
+    const k = z.string().trim().min(20, "That doesn't look like an API key").max(300).startsWith("sk-ant-", "Anthropic API keys start with sk-ant-").parse(key);
+    rateLimit(`key:${u.id}`, 10, 600_000);
+    await validateKey(k);
+    await saveUserKey(u.id, k);
+    revalidatePath("/settings"); return { ok: true };
+  } catch (e) { return fail(e); }
+}
+export async function removeClaudeKeyAction(): Promise<Result> { try { const u = await me(); await removeUserKey(u.id); revalidatePath("/settings"); return { ok: true }; } catch (e) { return fail(e); } }
+
+export async function generateProfileAction(devId: string): Promise<Result> {
+  try {
+    const u = await me();
+    const d = id.parse(devId);
+    if (d !== u.id && !atLeast(u.access, "LEAD")) throw new Error("Only leads and admins can analyse other developers.");
+    rateLimit(`ai:${u.id}`, 30, 3_600_000);
+    await generateDevProfile(d, u.id);
+    revalidatePath(`/team/${d}`); return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
+export async function reviewEstimateAction(ticketId: string): Promise<Result<{ review: EstimateReview }>> {
+  try {
+    const u = await me();
+    rateLimit(`ai:${u.id}`, 30, 3_600_000);
+    const review = await reviewEstimate(id.parse(ticketId), u.id);
+    return { ok: true, review };
+  } catch (e) { return fail(e); }
+}

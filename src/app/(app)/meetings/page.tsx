@@ -6,6 +6,7 @@ import { SyncButtons } from "@/components/SyncButtons";
 import { fmtDay, fmtTime } from "@/lib/time";
 import { googleReady } from "@/lib/integrations/google";
 import { requireUser } from "@/lib/auth/session";
+import { aiKeyFor } from "@/lib/ai";
 import { atLeast } from "@/lib/permissions";
 import { RecurringButton } from "@/components/RecurringButton";
 import { Video } from "lucide-react";
@@ -15,6 +16,7 @@ const hh = (t: [number, number]) => `${String(t[0]).padStart(2, "0")}:${String(t
 
 export default async function Meetings() {
   const me = await requireUser();
+  const aiReady = !!(await aiKeyFor(me.id));
   const canLead = atLeast(me.access, "LEAD");
   const google = await googleReady();
   const defs = (await getMeetingDefs()).filter((d) => d.enabled);
@@ -29,14 +31,14 @@ export default async function Meetings() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Meetings" sub="Google Meet cadence, automated notes, decisions and action items."
+      <PageHeader title="Meetings" sub="Schedule, notes and action items."
         actions={canLead ? <><SyncButtons what="meetings" /><RecurringButton disabled={!google} /></> : undefined} />
 
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <Kpi label="Next up" value={upcoming[0] ? fmtTime(upcoming[0].startsAt) : "—"} sub={upcoming[0]?.title} accent="#6ee7ff" />
         <Kpi label="With notes" value={`${past.filter((p) => p.summary).length}/${past.length}`} sub="last 8 meetings" accent="#a78bfa" />
         <Kpi label="Open action items" value={openActions} accent="#fbbf24" />
-        <Kpi label="Google Meet" value={google ? "Connected" : "Not linked"} sub={google ? "Events, links and transcripts" : "Connect Google in Integrations"} accent="#a3e635" />
+        <Kpi label="Google Meet" value={google ? "Connected" : "Not linked"} sub={google ? "Events, links and transcripts" : "An admin connects Google in Settings"} accent="#a3e635" />
       </div>
 
       <div className="card-pad overflow-x-auto">
@@ -69,7 +71,7 @@ export default async function Meetings() {
                 <div><div className="font-medium">{m.title}</div><div className="text-xs text-mute">{fmtDay(m.startsAt)} · {fmtTime(m.startsAt)}</div></div>
                 <span className={`chip ${m.summary ? "border-neon-lime/40 text-neon-lime" : ""}`}>{m.summary ? "notes ready" : "no notes"}</span>
               </summary>
-              <div className="mt-4"><NotesTaker m={view(m)} projectId={projects[0]?.id ?? ""} canEdit hasMeet={!!m.meetUrl} /></div>
+              <div className="mt-4"><NotesTaker m={view(m)} projectId={projects[0]?.id ?? ""} canEdit hasMeet={!!m.meetUrl} aiReady={aiReady} /></div>
             </details>))}
         </div>
       </div>

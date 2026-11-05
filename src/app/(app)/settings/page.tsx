@@ -3,19 +3,22 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
 import { atLeast } from "@/lib/permissions";
 import { PageHeader } from "@/components/ui";
-import { setupChecklist, atlassianConfigured } from "@/lib/integrations/status";
+import { setupGuide, atlassianConfigured } from "@/lib/integrations/status";
+import { CopyText } from "@/components/CopyText";
 import { googleOAuthConfigured } from "@/lib/integrations/google";
 import { SyncButtons } from "@/components/SyncButtons";
 import { ProfileForm } from "@/components/ProfileForm";
 import { headers } from "next/headers";
 import { CheckCircle2, CircleDashed, Link2 } from "lucide-react";
 import { GOOGLE_WORK_SCOPES } from "@/lib/auth/scopes";
+import { ClaudeKeyCard } from "@/components/ClaudeKeyCard";
 import { StatusMapEditor } from "@/components/StatusMapEditor";
 import { cachedBoardInfo, jiraReady, loadStatusMap, statusFromJira } from "@/lib/integrations/jira";
 
 export const dynamic = "force-dynamic";
 
 const NOTES: Record<string, string> = {
+  admin_only: "Only an admin can connect Jira and Google.",
   google_not_configured: "Google isn't configured on the server (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET).",
   atlassian_not_configured: "Jira OAuth isn't configured on the server (ATLASSIAN_CLIENT_ID / ATLASSIAN_CLIENT_SECRET).",
 };
@@ -35,33 +38,35 @@ export default async function Settings({ searchParams }: { searchParams: Promise
   const statusMap = board ? await loadStatusMap() : {};
   const origin = process.env.APP_URL || `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host")}`;
 
-  const cards = [
+  const cards = !isAdmin ? [] : [
     { id: "GOOGLE", name: "Google Calendar & Meet", on: googleFull, ready: googleOAuthConfigured(), href: "/api/auth/google/connect", detail: googleFull ? "Create Meet events as you, link calendar events, import Meet transcripts into notes." : "Grants Calendar events and read access to Meet transcripts.", missing: "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET" },
     { id: "JIRA", name: "Jira Cloud", on: !!jira, ready: atlassianConfigured(), href: "/api/auth/atlassian/connect", detail: jira ? `Connected to ${jira.siteUrl}. Tickets, sprints and transitions sync as you.` : "Syncs tickets, sprints, transitions, estimates and worklogs as your Jira user.", missing: "ATLASSIAN_CLIENT_ID / ATLASSIAN_CLIENT_SECRET" },
   ];
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Integrations" sub="Connect your own accounts. Actions in Jira and Google are done as you, with your permissions."
+      <PageHeader title="Settings" sub={isAdmin ? "Connect Jira and Google for the team, add your Claude key and manage your profile." : "Add your Claude key and manage your profile."}
         actions={atLeast(me.access, "LEAD") ? <SyncButtons what="jira" /> : undefined} />
-      {sp.connected && <div className="rounded-lg border border-neon-lime/40 bg-neon-lime/10 px-4 py-2 text-sm text-neon-lime">{sp.connected === "jira" ? "Jira" : "Google"} connected.</div>}
+      {isAdmin && sp.connected && <div className="rounded-lg border border-neon-lime/40 bg-neon-lime/10 px-4 py-2 text-sm text-neon-lime">{sp.connected === "jira" ? "Jira" : "Google"} connected.</div>}
       {sp.error && <div role="alert" className="rounded-lg border border-neon-red/40 bg-neon-red/10 px-4 py-2 text-sm text-neon-red">{NOTES[sp.error] ?? sp.error}</div>}
 
-      <div className="grid gap-4 md:grid-cols-2">
+      {isAdmin && <div className="grid gap-4 md:grid-cols-2">
         {cards.map((c) => (
           <div key={c.id} className="card-pad">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 font-medium">{c.on ? <CheckCircle2 size={18} className="text-neon-lime" /> : <CircleDashed size={18} className="text-mute" />}{c.name}</div>
               {c.on ? (
                 <form action="/api/auth/disconnect" method="post"><input type="hidden" name="provider" value={c.id} /><button className="btn">Disconnect</button></form>
-              ) : c.ready ? <a className="btn-primary" href={c.href}><Link2 size={14} /> Connect</a> : <span className="chip">server not set up</span>}
+              ) : c.ready ? <a className="btn-primary" href={c.href}><Link2 size={14} /> Connect</a> : <span className="chip">Not available</span>}
             </div>
             <p className="mt-2 text-sm text-mute">{c.detail}</p>
-            {!c.ready && <p className="mt-2 text-xs text-neon-amber">An admin must set {c.missing} first (see the checklist below).</p>}
+            {!c.ready && <p className="mt-2 text-xs text-neon-amber">Ask an admin to finish setup ({c.missing}).</p>}
             {c.id === "GOOGLE" && google && !googleFull && <p className="mt-2 text-xs text-neon-amber">Connected without Calendar/Meet permissions. Reconnect and tick every permission.</p>}
           </div>
         ))}
-      </div>
+      </div>}
+
+      <ClaudeKeyCard connected={!!get("CLAUDE")} serverFallback={!!process.env.ANTHROPIC_API_KEY} />
 
       <div className="card-pad">
         <div className="h-section mb-3">My profile</div>
@@ -79,28 +84,37 @@ export default async function Settings({ searchParams }: { searchParams: Promise
         </div>
       )}
 
-      {isAdmin && (
-        <div className="card-pad space-y-5">
-          <div className="h-section">Server setup checklist (admins)</div>
-          <div className="grid gap-4 md:grid-cols-2">
-            {setupChecklist().map((g) => (
-              <div key={g.group}><div className="mb-2 text-sm font-medium">{g.group}</div>
-                <ul className="space-y-1.5">{g.items.map((i) => (
-                  <li key={i.name} className="flex items-start gap-2 text-xs">{i.ok ? <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-neon-lime" /> : <CircleDashed size={14} className="mt-0.5 shrink-0 text-neon-amber" />}
-                    <span><code className="text-ink">{i.name}</code> <span className="text-mute">{i.hint}</span></span></li>))}</ul></div>
-            ))}
+      {isAdmin && (() => {
+        const steps = setupGuide(origin);
+        const doneCount = steps.filter((x) => x.done).length;
+        const next = steps.findIndex((x) => !x.done && !x.optional);
+        return (
+          <div className="card-pad space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div><div className="h-section">Setup guide</div><p className="mt-1 text-sm text-mute">Follow the steps in order. {doneCount} of {steps.length} done.</p></div>
+              <div className="flex flex-wrap gap-2"><Link href="/admin/users" className="btn">Users</Link><Link href="/admin/meetings" className="btn">Meetings</Link><Link href="/admin/workspace" className="btn">Workspace</Link><Link href="/admin/review" className="btn">Code review</Link></div>
+            </div>
+            <ol className="space-y-2">
+              {steps.map((st, i) => (
+                <li key={st.id}>
+                  <details open={i === next} className="group rounded-lg border border-line">
+                    <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3">
+                      <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-semibold ${st.done ? "bg-neon-lime/15 text-neon-lime" : i === next ? "bg-neon text-on-accent" : "bg-panel2 text-mute"}`}>{st.done ? <CheckCircle2 size={16} /> : i + 1}</span>
+                      <span className="min-w-0 flex-1"><span className="block text-sm font-medium">{st.title}{st.optional && <span className="ml-2 text-xs font-normal text-mute">Optional</span>}</span><span className="block text-xs text-mute">{st.summary}</span></span>
+                      <span className="text-xs text-mute">{st.done ? "Done" : i === next ? "Do this next" : ""}</span>
+                    </summary>
+                    <div className="space-y-3 border-t border-line px-4 py-4">
+                      <ol className="list-decimal space-y-1.5 pl-5 text-sm">{st.steps.map((x, k) => <li key={k}>{x}</li>)}</ol>
+                      {st.copy && <div className="space-y-2">{st.copy.map((c) => <CopyText key={c.label} label={c.label} value={c.value} />)}</div>}
+                      <div className="flex flex-wrap gap-1.5">{st.vars.map((x) => <span key={x.name} className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs ${x.ok ? "bg-neon-lime/10 text-neon-lime" : "bg-panel2 text-mute"}`}>{x.ok ? "✓" : "○"} <code>{x.name}</code></span>)}</div>
+                    </div>
+                  </details>
+                </li>
+              ))}
+            </ol>
           </div>
-          <div className="space-y-1 rounded-xl border border-line bg-panel2 p-4 text-xs text-mute">
-            <div className="h-section mb-1">URLs to register</div>
-            <div>Google OAuth redirect URI: <code className="text-ink">{origin}/api/auth/google/callback</code></div>
-            <div>Atlassian callback URL: <code className="text-ink">{origin}/api/auth/atlassian/callback</code></div>
-            <div>Jira webhook (realtime; events: issue created/updated/deleted, sprint created/started/closed/updated, board configuration changed): <code className="text-ink">{origin}/api/webhooks/jira?secret=&lt;JIRA_WEBHOOK_SECRET&gt;</code></div>
-            <div>GitHub webhook (pull_request): <code className="text-ink">{origin}/api/webhooks/github</code></div>
-            <div>Cron (every 10 min): <code className="text-ink">GET {origin}/api/cron/sync</code> and <code className="text-ink">/api/cron/transcripts</code> with <code>Authorization: Bearer &lt;CRON_SECRET&gt;</code></div>
-          </div>
-          <div className="flex flex-wrap gap-2"><Link href="/admin/users" className="btn">Users and roles</Link><Link href="/admin/meetings" className="btn">Meeting links</Link><Link href="/admin/workspace" className="btn">Workspace settings</Link></div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

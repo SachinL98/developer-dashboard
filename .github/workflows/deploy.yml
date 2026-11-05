@@ -1,0 +1,89 @@
+name: Deploy to Vercel
+
+# main  -> production (runs database migrations first)
+# pull requests -> preview deployment (no database changes)
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      AUTH_SECRET: ci-only-secret-ci-only-secret-ci-only-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run lint
+      - run: npm test
+
+  preview:
+    # Opt in: set the repository variable ENABLE_PREVIEWS=true (Preview needs its own environment variables and database in Vercel).
+    if: vars.ENABLE_PREVIEWS == 'true' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions: { contents: read, pull-requests: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+      - run: npx vercel build --token=${{ secrets.VERCEL_TOKEN }}
+      - id: deploy
+        run: echo "url=$(npx vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})" >> "$GITHUB_OUTPUT"
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({ issue_number: context.issue.number, owner: context.repo.owner, repo: context.repo.repo, body: `Preview: ${{ steps.deploy.outputs.url }}` })
+
+  production:
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+
+      - name: Apply database migrations
+        run: npx prisma migrate deploy
+        env:
+          # Use the DIRECT (non-pooled) connection string here; migrations do not work through a pooler.
+          DATABASE_URL: ${{ secrets.DATABASE_URL_DIRECT }}
+
+      - run: npx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+      - run: npx vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+      - id: deploy
+        run: echo "url=$(npx vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})" >> "$GITHUB_OUTPUT"
+
+      - name: Health check
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+        run: |
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "$APP_URL/api/health" || true)
+            echo "attempt $i: HTTP $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 10
+          done
+          echo "Health check failed" && exit 1

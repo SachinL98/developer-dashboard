@@ -11,13 +11,13 @@ export default async function Tickets({ searchParams }: { searchParams: Promise<
   });
   return (
     <div>
-      <PageHeader title="All tickets" sub={`${tickets.length} shown`} actions={<Link className="btn-primary" href="/tickets/new">New ticket</Link>} />
+      <PageHeader title="Tickets" sub={`${tickets.length} tickets`} actions={<Link className="btn-primary" href="/tickets/new">New ticket</Link>} />
       <form className="mb-4 flex gap-2"><input name="q" defaultValue={sp.q} className="input max-w-xs" placeholder="Search…" />
         <select name="status" defaultValue={sp.status ?? ""} className="input max-w-[200px]"><option value="">All columns</option>{STATUS_ORDER.map((s) => <option key={s} value={s}>{s.replaceAll("_", " ").toLowerCase()}</option>)}</select>
         <button className="btn">Filter</button></form>
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-panel2 text-left text-xs uppercase tracking-wider text-mute"><tr><th className="p-3">Key</th><th>Title</th><th>Type</th><th>Priority</th><th>Status</th><th>Sprint</th><th>Pts</th><th className="pr-3">Owner</th></tr></thead>
+          <thead className="bg-panel2 text-left text-xs text-mute"><tr><th className="p-3">Key</th><th>Title</th><th>Type</th><th>Priority</th><th>Status</th><th>Sprint</th><th>Pts</th><th className="pr-3">Owner</th></tr></thead>
           <tbody>{tickets.map((t) => (
             <tr key={t.id} className="border-t border-line/60 hover:bg-panel2/60">
               <td className="p-3 font-mono text-xs text-mute">{t.key}</td><td className="max-w-md truncate"><Link className="hover:text-neon" href={`/tickets/${t.id}`}>{t.title}</Link></td>

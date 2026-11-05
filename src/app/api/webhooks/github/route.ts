@@ -21,7 +21,10 @@ export async function POST(req: Request) {
   const raw = await req.text();
   if (!verify(raw, req.headers.get("x-hub-signature-256"))) return NextResponse.json({ error: "bad signature" }, { status: 401 });
   if (req.headers.get("x-github-event") !== "pull_request") return NextResponse.json({ ok: true, ignored: true });
-  const { pull_request: pr, action } = JSON.parse(raw);
+  let payload: any;
+  try { payload = JSON.parse(raw); } catch { return NextResponse.json({ error: "invalid JSON" }, { status: 400 }); }
+  const { pull_request: pr, action } = payload ?? {};
+  if (!pr || typeof pr.title !== "string" || typeof pr.html_url !== "string" || !/^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+/.test(pr.html_url) || !Number.isInteger(pr.number)) return NextResponse.json({ error: "unexpected payload" }, { status: 400 });
   const key = ticketKeyFrom(`${pr.title} ${pr.head?.ref ?? ""}`);
   if (!key) return NextResponse.json({ ok: true, linked: false });
   const t = await db.ticket.findUnique({ where: { key } });

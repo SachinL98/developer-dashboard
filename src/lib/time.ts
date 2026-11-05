@@ -44,3 +44,10 @@ export function localDate(at: Date, tz = TZ): string {
   const p = zonedParts(at, tz);
   return `${p.y}-${String(p.m).padStart(2, "0")}-${String(p.d).padStart(2, "0")}`;
 }
+
+/** How far through the calendar day `at` is in the team timezone (0 to 1). */
+export function dayFraction(at: Date, tz = TZ): number {
+  const f = new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", hour: "numeric", minute: "numeric" });
+  const p = Object.fromEntries(f.formatToParts(at).map((x) => [x.type, x.value]));
+  return Math.min(1, Math.max(0, (+p.hour * 60 + +p.minute) / 1440));
+}

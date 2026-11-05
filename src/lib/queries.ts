@@ -1,7 +1,9 @@
 import { db } from "./db";
 import { STATUS_ORDER, DONE_STATES, type StatusKey } from "./workflow";
 import { burndown, sumEntries, avgCycleDays, accuracy } from "./analytics";
-import { hours } from "./time";
+import { dayFraction, hours, localDate } from "./time";
+import { paceModel } from "./pace";
+import { approvedLeave, capacityDevs, getHolidays, sprintDates } from "./leave";
 
 export const DAY = 86_400_000;
 
@@ -20,11 +22,17 @@ export async function sprintSnapshot(sprintId: string) {
   const estHrs = tickets.reduce((a, t) => a + (t.estimateHrs ?? 0), 0);
   const loggedHrs = hours(tickets.reduce((a, t) => a + sumEntries(t.timeEntries, now), 0));
   const byStatus = Object.fromEntries(STATUS_ORDER.map((s) => [s, tickets.filter((t) => t.status === s).length])) as Record<StatusKey, number>;
-  const burn = burndown(sprint.startDate, sprint.endDate, tickets.map((t) => ({ points: t.storyPoints ?? 0, hours: t.estimateHrs ?? 0, doneAt: isDone(t.status) ? t.doneAt ?? now : null })), now);
-  const daysLeft = Math.max(0, Math.ceil((sprint.endDate.getTime() - now.getTime()) / DAY));
+  // Pace is based on available working time: weekends, public holidays and approved leave do not count.
+  const { start, end } = sprintDates(sprint);
+  const [devs, leaves, holidays] = await Promise.all([capacityDevs(), approvedLeave(start, end), getHolidays()]);
+  const today = localDate(now);
+  const dayFrac = dayFraction(now);
+  const pace = paceModel({ start, end, today, dayFrac, devs: devs.map((d) => ({ id: d.id, capacityHrs: d.capacityHrs })), leaves, holidays });
+  const burn = burndown(sprint.startDate, sprint.endDate, tickets.map((t) => ({ points: t.storyPoints ?? 0, hours: t.estimateHrs ?? 0, doneAt: isDone(t.status) ? t.doneAt ?? now : null })), now, pace.idealRemaining);
+  const daysLeft = pace.workdaysLeft;
   const totalDays = Math.max(1, Math.round((sprint.endDate.getTime() - sprint.startDate.getTime()) / DAY));
-  const elapsedPct = Math.min(100, Math.max(0, ((now.getTime() - sprint.startDate.getTime()) / (sprint.endDate.getTime() - sprint.startDate.getTime())) * 100));
-  return { sprint, tickets, points, donePts, estHrs, loggedHrs, byStatus, burn, daysLeft, totalDays, elapsedPct, now };
+  const elapsedPct = pace.elapsedPct;
+  return { sprint, tickets, points, donePts, estHrs, loggedHrs, byStatus, burn, daysLeft, totalDays, elapsedPct, pace, leaves, holidays, now };
 }
 
 /** Closed-sprint velocity per developer & team. */

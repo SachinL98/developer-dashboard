@@ -92,3 +92,17 @@ Only a lead can override a Claude review's items; a developer re-runs it after p
 - Only full Claude reviews are counted. Heuristic scans and manual checklists are ignored.
 - **Visibility:** a developer sees only their own report; leads and admins see the team rollup (with project breakdown) and any developer. Enforced on the page and on the export endpoint (`/api/reports/patterns?dev=<id>|team&format=pdf|pptx`).
 - No migration is needed; it is computed from existing review rows.
+
+
+## Production checklist
+The server refuses to start in production (`src/instrumentation.ts`) unless these are right:
+- `AUTH_SECRET`: 32+ random characters (`openssl rand -base64 48`). It encrypts every stored Jira, Google and Claude key. Changing it signs everyone out of those connections.
+- `APP_URL`: the public `https://` address. `DATABASE_URL` set. Google sign-in configured (`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`) with `AUTH_ALLOWED_DOMAIN`. `DEMO_MODE` must not be used.
+- `CRON_SECRET`, `JIRA_WEBHOOK_SECRET` and `GITHUB_WEBHOOK_SECRET`: each endpoint is switched off until its secret exists. Jira can send the secret as `?secret=`; other callers should use the `x-webhook-secret` header.
+- Serve over HTTPS only (the app sends HSTS, a strict Content-Security-Policy, `X-Frame-Options: DENY`, and `no-store` caching on pages and API responses).
+- Run `npm run db:deploy` (applies migrations) then `npm run build` and `npm start`. Health check: `GET /api/health`.
+- Put the app behind a proxy or WAF that adds request rate limiting; the app only rate-limits AI calls itself (per process).
+- Back up the database. Run `npm audit --omit=dev` regularly; remaining advisories are in the Prisma CLI (build time only).
+
+## Who connects Jira and Google
+Only admins see and can use the Jira and Google Calendar & Meet connection cards in Settings (the connect, callback and disconnect endpoints refuse everyone else). An admin connects once for the whole team: when someone without their own connection moves a ticket or creates a meeting link, the app uses the newest active admin connection. Actions in Jira and Google therefore appear under that admin's account. Connections made by other people before this change keep working until an admin replaces them.
