@@ -20,7 +20,7 @@ export default async function Analytics() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Analytics" sub="Sprint health, developer velocity, flow and estimate accuracy." />
+      <PageHeader title="Analytics" sub="Delivery speed, flow and estimate accuracy." />
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
         <Kpi label="Avg velocity" value={Math.round(avgVel * 10) / 10} sub="points / closed sprint" accent="#6ee7ff" spark={closed.map((v) => v.completed)} />
         <Kpi label="Avg cycle time" value={`${(closed.reduce((a, v) => a + v.cycleDays, 0) / Math.max(1, closed.length)).toFixed(1)}d`} sub="In Progress → Done" accent="#a78bfa" spark={closed.map((v) => v.cycleDays)} />
@@ -39,7 +39,7 @@ export default async function Analytics() {
 
       <div className="card overflow-x-auto">
         <table className="w-full min-w-[760px] text-sm">
-          <thead className="bg-panel2 text-left text-xs uppercase tracking-wider text-mute"><tr><th className="p-3">Developer</th><th>Points done</th><th>Tickets</th><th>Cycle</th><th>Accuracy</th><th>14d hours</th><th>Tracked</th><th>Bugs fixed</th><th>Failed stg</th></tr></thead>
+          <thead className="bg-panel2 text-left text-xs text-mute"><tr><th className="p-3">Developer</th><th>Points done</th><th>Tickets</th><th>Cycle</th><th>Accuracy</th><th>14d hours</th><th>Tracked</th><th>Bugs fixed</th><th>Failed stg</th></tr></thead>
           <tbody>{devStats.map((s) => (
             <tr key={s.d.id} className="border-t border-line/60">
               <td className="p-3"><a href={`/team/${s.d.id}`} className="hover:text-neon">{s.d.name}</a></td>

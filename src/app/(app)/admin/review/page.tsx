@@ -11,7 +11,7 @@ export default async function AdminReview() {
   const [cfg, projects] = await Promise.all([getReviewConfig(), db.project.findMany({ orderBy: { key: "asc" }, select: { key: true, name: true } })]);
   return (
     <div className="space-y-6">
-      <PageHeader title="PR review" sub="The checklist Claude uses for the initial review of each ticket's pull request, and when it runs." />
+      <PageHeader title="Code review" sub="The checklist used to review each pull request." />
       <ReviewTemplateEditor initial={cfg} projects={projects} status={{ claude: anthropicConfigured(), github: githubConfigured(), model: reviewModel() }} />
     </div>
   );

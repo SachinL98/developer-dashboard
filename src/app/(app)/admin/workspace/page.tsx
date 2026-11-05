@@ -12,7 +12,7 @@ export default async function AdminWorkspace() {
   const timezones = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [cfg.timezone];
   return (
     <div className="space-y-6">
-      <PageHeader title="Workspace settings" sub="Team hours, sprint cadence, capacity defaults and where Jira and GitHub point." />
+      <PageHeader title="Workspace settings" sub="Working hours, sprint length and connected systems." />
       <WorkspaceSettings cfg={cfg} timezones={timezones} projects={projects.map((p) => ({ id: p.id, key: p.key, name: p.name, repo: p.repo ?? "" }))} />
       <div className="card-pad space-y-4">
         <div className="h-section">Secrets and server setup (read-only)</div>

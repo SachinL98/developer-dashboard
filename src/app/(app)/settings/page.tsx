@@ -42,7 +42,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Integrations" sub="Connect your own accounts. Actions in Jira and Google are done as you, with your permissions."
+      <PageHeader title="Settings" sub="Connect your Jira and Google accounts and manage your profile."
         actions={atLeast(me.access, "LEAD") ? <SyncButtons what="jira" /> : undefined} />
       {sp.connected && <div className="rounded-lg border border-neon-lime/40 bg-neon-lime/10 px-4 py-2 text-sm text-neon-lime">{sp.connected === "jira" ? "Jira" : "Google"} connected.</div>}
       {sp.error && <div role="alert" className="rounded-lg border border-neon-red/40 bg-neon-red/10 px-4 py-2 text-sm text-neon-red">{NOTES[sp.error] ?? sp.error}</div>}
@@ -54,10 +54,10 @@ export default async function Settings({ searchParams }: { searchParams: Promise
               <div className="flex items-center gap-2 font-medium">{c.on ? <CheckCircle2 size={18} className="text-neon-lime" /> : <CircleDashed size={18} className="text-mute" />}{c.name}</div>
               {c.on ? (
                 <form action="/api/auth/disconnect" method="post"><input type="hidden" name="provider" value={c.id} /><button className="btn">Disconnect</button></form>
-              ) : c.ready ? <a className="btn-primary" href={c.href}><Link2 size={14} /> Connect</a> : <span className="chip">server not set up</span>}
+              ) : c.ready ? <a className="btn-primary" href={c.href}><Link2 size={14} /> Connect</a> : <span className="chip">Not available</span>}
             </div>
             <p className="mt-2 text-sm text-mute">{c.detail}</p>
-            {!c.ready && <p className="mt-2 text-xs text-neon-amber">An admin must set {c.missing} first (see the checklist below).</p>}
+            {!c.ready && <p className="mt-2 text-xs text-neon-amber">Ask an admin to finish setup ({c.missing}).</p>}
             {c.id === "GOOGLE" && google && !googleFull && <p className="mt-2 text-xs text-neon-amber">Connected without Calendar/Meet permissions. Reconnect and tick every permission.</p>}
           </div>
         ))}
@@ -81,7 +81,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
 
       {isAdmin && (
         <div className="card-pad space-y-5">
-          <div className="h-section">Server setup checklist (admins)</div>
+          <div className="h-section">Setup checklist for admins</div>
           <div className="grid gap-4 md:grid-cols-2">
             {setupChecklist().map((g) => (
               <div key={g.group}><div className="mb-2 text-sm font-medium">{g.group}</div>

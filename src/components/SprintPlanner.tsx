@@ -39,7 +39,7 @@ export function SprintPlanner({ sprints, selected, backlog, inSprint, fit, perDe
         <div className="flex flex-wrap items-center gap-2">
           {sprints.map((s) => (
             <Link key={s.id} href={`/sprints?sprint=${s.id}`} className={clsx("rounded-lg border px-3 py-1.5 text-sm", s.id === selected?.id ? "border-neon/60 bg-neon/10 text-ink" : "border-line text-mute hover:text-ink")}>
-              {s.name} <span className="ml-1 text-[10px] uppercase tracking-wider opacity-70">{s.state.toLowerCase()}</span>
+              {s.name} <span className="ml-1 text-[10px] opacity-70">{s.state.toLowerCase()}</span>
             </Link>
           ))}
           {canManage && <button className="btn ml-auto" onClick={() => setShowNew((v) => !v)}><Plus size={14} /> New sprint</button>}
@@ -59,8 +59,8 @@ export function SprintPlanner({ sprints, selected, backlog, inSprint, fit, perDe
 
       <div className="grid gap-6 xl:grid-cols-2">
         <div className="card-pad">
-          <div className="mb-1 flex items-center justify-between"><span className="h-section">Backlog · priority order</span><span className="text-xs text-mute">{list.length} tickets</span></div>
-          <p className="mb-3 text-xs text-mute">{canManage ? "Drag to prioritise (saved immediately). Drop onto the sprint to commit, or use +." : "Read-only: leads and admins plan the sprint."}</p>
+          <div className="mb-1 flex items-center justify-between"><span className="h-section">Backlog</span><span className="text-xs text-mute">{list.length} tickets</span></div>
+          <p className="mb-3 text-xs text-mute">{canManage ? "Drag to reorder. Drag onto the sprint, or use +, to add a ticket." : "Only leads and admins can plan sprints."}</p>
           <ul className="space-y-1.5">
             {list.map((t) => (
               <li key={t.id} draggable={canManage} onDragStart={() => setDragId(t.id)} onDragEnd={() => { setDragId(null); setOver(null); }} onDragOver={(e) => { e.preventDefault(); setOver(t.id); }} onDrop={() => { reorder(t.id); setOver(null); }}
@@ -84,14 +84,14 @@ export function SprintPlanner({ sprints, selected, backlog, inSprint, fit, perDe
               <div><div className="text-lg font-semibold">{selected.name}</div><div className="text-xs text-mute">{selected.goal} · {new Date(selected.start).toLocaleDateString("en-GB")} → {new Date(selected.end).toLocaleDateString("en-GB")}</div></div>
               <div className="flex gap-2">
                 {canManage && selected.state === "PLANNING" && <>
-                  <button className="btn" disabled={pending} onClick={() => run(() => autoFillSprintAction(selected.id), (r) => `Added ${r.added} by priority; ${r.skipped} didn't fit`)}><Wand2 size={14} /> Auto-fill</button>
-                  <button className="btn-primary" disabled={pending} onClick={() => run(() => startSprintAction(selected.id), (r) => `Sprint started. ${r.moved} cards moved to Ready to Dev`)}><Rocket size={14} /> Start sprint</button></>}
+                  <button className="btn" disabled={pending} onClick={() => run(() => autoFillSprintAction(selected.id), (r) => `Added ${r.added} tickets; ${r.skipped} didn't fit`)}><Wand2 size={14} /> Auto-fill</button>
+                  <button className="btn-primary" disabled={pending} onClick={() => run(() => startSprintAction(selected.id), (r) => `Sprint started. ${r.moved} tickets are ready to start.`)}><Rocket size={14} /> Start sprint</button></>}
                 {canManage && selected.state === "ACTIVE" && <button className="btn" disabled={pending} onClick={() => confirm("Close sprint? Unfinished cards roll into the next planning sprint in their current column.") && run(() => closeSprintAction(selected.id), (r) => `Sprint closed. ${r.carried} cards carried over`)}><Flag size={14} /> Close sprint</button>}
               </div>
             </div>
             {fit && (
               <div className="mt-4">
-                <div className="mb-1 flex justify-between text-xs"><span className="text-mute">Committed {fit.committedHrs}h of {fit.capacityHrs}h usable capacity</span><span className={fit.fits ? "text-neon-lime" : "text-neon-red"}>{fit.loadPct}%{fit.fits ? "" : ` · over by ${fit.overBy}h`}</span></div>
+                <div className="mb-1 flex justify-between text-xs"><span className="text-mute">Planned {fit.committedHrs}h of {fit.capacityHrs}h capacity</span><span className={fit.fits ? "text-neon-lime" : "text-neon-red"}>{fit.loadPct}%{fit.fits ? "" : ` · over by ${fit.overBy}h`}</span></div>
                 <Progress pct={fit.loadPct} color={fit.loadPct > 100 ? "#fb7185" : fit.loadPct > 85 ? "#fbbf24" : "#a3e635"} />
                 {leave && (leave.lostHrs > 0) && <p className="mt-2 flex items-start gap-1.5 text-xs text-neon-amber"><CalendarOff size={13} className="mt-0.5 shrink-0" /><span>Leave and holidays take {leave.lostHrs}h out of {leave.fullHrs}h ({leave.leaveDays} leave day{leave.leaveDays === 1 ? "" : "s"}{leave.holidayDays ? `, ${leave.holidayDays} public holiday${leave.holidayDays === 1 ? "" : "s"} per person` : ""}). <Link href="/leave" className="underline">See the team calendar</Link></span></p>}
               </div>
@@ -106,7 +106,7 @@ export function SprintPlanner({ sprints, selected, backlog, inSprint, fit, perDe
                   {t.complicated && <Flame size={13} className="text-neon-amber" />}
                   {forecast[t.id]?.late && <span className="chip border-neon-red/40 text-neon-red" title="At the assignee's pace, with their leave and public holidays, this finishes after the sprint ends">At risk{forecast[t.id].finish ? ` · ~${forecast[t.id].finish!.slice(5)}` : ""}</span>}
                   {t.points != null && <span className="rounded bg-line px-1.5 font-mono text-xs">{t.points}</span>}
-                  <span className={clsx("w-14 whitespace-nowrap text-right font-mono text-xs", t.estimateHrs == null ? "text-neon-red" : "text-mute")}>{t.estimateHrs != null ? `${t.estimateHrs}h` : "no est."}</span>
+                  <span className={clsx("w-20 whitespace-nowrap text-right text-xs", t.estimateHrs == null ? "text-neon-red" : "text-mute")}>{t.estimateHrs != null ? `${t.estimateHrs}h` : "No estimate"}</span>
                   {canManage && selected.state === "PLANNING" && <button className="rounded p-1 text-mute hover:text-neon-red [@media(hover:none)]:p-2.5" aria-label="Remove from sprint" onClick={() => run(() => assignToSprintAction(t.id, null), () => `${t.key} returned to backlog`)}><X size={14} /></button>}
                 </li>
               ))}

@@ -37,7 +37,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
   }));
   return (
     <div>
-      <PageHeader title="Sprint board" sub={current ? `${current.name} · ${current.goal ?? ""}` : "All tickets"}
+      <PageHeader title="Board" sub={current ? `${current.name} · ${current.goal ?? ""}` : "All tickets"}
         actions={<><div className="flex gap-1 rounded-lg border border-line bg-panel p-1">{sprints.slice(0, 4).map((s) => (
           <Link key={s.id} href={`/board?sprint=${s.id}`} className={`rounded-md px-2.5 py-1 text-xs ${s.id === current?.id ? "bg-line text-ink" : "text-mute hover:text-ink"}`}>{s.name}</Link>))}</div>
           <LiveSync enabled={live} lastSync={lastSync} /><Link href="/tickets/new" className="btn-primary">New ticket</Link></>} />

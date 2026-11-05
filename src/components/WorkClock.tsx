@@ -18,7 +18,7 @@ export function WorkClock({ sessionStart, timer, targetHrs }: { targetHrs?: numb
       </div>
       {sessionStart ? (
         <>
-          <div className="font-mono text-xl">{secs(nowMs - new Date(sessionStart).getTime())}{targetHrs ? <span className="ml-1 text-xs text-mute">/ {targetHrs}h</span> : null}</div>
+          <div className="font-semibold tabular-nums text-xl">{secs(nowMs - new Date(sessionStart).getTime())}{targetHrs ? <span className="ml-1 text-xs text-mute">/ {targetHrs}h</span> : null}</div>
           {targetHrs ? <div className="h-1 overflow-hidden rounded-full bg-line"><div className="h-full rounded-full bg-neon" style={{ width: `${Math.min(100, ((nowMs - new Date(sessionStart).getTime()) / 3_600_000 / targetHrs) * 100)}%` }} /></div> : null}
           <button className="btn w-full" disabled={pending} onClick={() => start(async () => { await clockOutAction(); })}><LogOut size={14} /> End day</button>
         </>

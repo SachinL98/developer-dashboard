@@ -87,7 +87,7 @@ export function TicketForm({ projects, devs, sprints, jira }: { projects: Opt[];
         <div className="card-pad">
           <div className="h-section mb-3 flex items-center gap-2"><Sparkles size={14} className="text-neon-violet" /> Estimate assistant</div>
           {sug ? (<>
-            <div className="font-mono text-3xl">{sug.hours}<span className="text-lg text-mute">h</span></div>
+            <div className="font-semibold tabular-nums text-3xl">{sug.hours}<span className="text-lg text-mute">h</span></div>
             <div className="mt-1 text-xs text-mute">range {sug.low}–{sug.high}h · <span className={sug.confidence === "high" ? "text-neon-lime" : sug.confidence === "medium" ? "text-neon-amber" : "text-neon-red"}>{sug.confidence} confidence</span></div>
             <p className="mt-2 text-xs text-mute">{sug.basis}</p>
             <button className="btn mt-3 w-full" onClick={() => set("estimate", String(sug.hours))}>Use {sug.hours}h</button>

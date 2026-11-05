@@ -14,10 +14,10 @@ export default async function Users() {
   const users = await db.developer.findMany({ orderBy: [{ active: "desc" }, { name: "asc" }], include: { connections: { select: { provider: true } } } });
   return (
     <div className="space-y-6">
-      <PageHeader title="Users & roles" sub={`Anyone with an @${allowedDomain()} Google account can sign in as a developer. Promote leads and admins here.`} />
+      <PageHeader title="Users & roles" sub="Manage who has access and their role." />
       <div className="card overflow-x-auto">
         <table className="w-full min-w-[820px] text-sm">
-          <thead className="bg-panel2 text-left text-xs uppercase tracking-wider text-mute"><tr><th className="p-3">User</th><th>Access</th><th>Jira</th><th>Google</th><th>Last sign-in</th><th className="pr-3 text-right">Status</th></tr></thead>
+          <thead className="bg-panel2 text-left text-xs text-mute"><tr><th className="p-3">User</th><th>Access</th><th>Jira</th><th>Google</th><th>Last sign-in</th><th className="pr-3 text-right">Status</th></tr></thead>
           <tbody>
             {users.map((u) => (
               <UserRow key={u.id} self={u.id === me.id} user={{ id: u.id, name: u.name, email: u.email, access: u.access, active: u.active, hue: u.avatarHue }}

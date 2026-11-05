@@ -85,7 +85,7 @@ export function EstimationBoard({ tickets, devCount, canLead, sprintId, sprintNa
           <div className="card-pad">
             <div className="h-section mb-3 flex items-center gap-2"><Sparkles size={14} className="text-neon-violet" /> History-based suggestion</div>
             <div className="flex flex-wrap items-center gap-6">
-              <div><div className="font-mono text-3xl">{t.suggestion.hours}<span className="text-base text-mute">h</span></div><div className="text-xs text-mute">range {t.suggestion.low}–{t.suggestion.high}h · {t.suggestion.confidence} confidence</div></div>
+              <div><div className="font-semibold tabular-nums text-3xl">{t.suggestion.hours}<span className="text-base text-mute">h</span></div><div className="text-xs text-mute">range {t.suggestion.low}–{t.suggestion.high}h · {t.suggestion.confidence} confidence</div></div>
               <p className="min-w-[200px] flex-1 text-xs text-mute">{t.suggestion.basis}</p>
               <button className="btn" disabled={pending || !canLead} title={canLead ? "" : "Leads apply the agreed estimate"} onClick={() => run(() => applyEstimateAction(t.id, t.suggestion.hours, t.points ?? pointsFor(t.suggestion.hours)))}>Apply {t.suggestion.hours}h</button>
             </div>
@@ -108,14 +108,14 @@ export function EstimationBoard({ tickets, devCount, canLead, sprintId, sprintNa
             <div className="mt-5 flex flex-wrap gap-3">
               {t.votes.map((v) => (
                 <div key={v.dev} className="w-20 rounded-xl border border-line bg-panel2 p-2 text-center">
-                  <div className="font-mono text-xl">{shown || v.mine ? v.hours : "?"}</div><div className="truncate text-[10px] text-mute">{v.dev.split(" ")[0]}</div>
+                  <div className="font-semibold tabular-nums text-xl">{shown || v.mine ? v.hours : "?"}</div><div className="truncate text-[10px] text-mute">{v.dev.split(" ")[0]}</div>
                 </div>))}
               {!t.votes.length && <span className="text-sm text-mute">No votes yet. Vote above, then reveal when everyone is in.</span>}
             </div>
             {shown && t.votes.length > 0 && (
               <div className="mt-5 flex flex-wrap items-center gap-6 rounded-xl border border-line p-4">
-                <div><div className="text-xs text-mute">Median</div><div className="font-mono text-2xl">{summary.median}h</div></div>
-                <div><div className="text-xs text-mute">Range</div><div className="font-mono text-2xl">{summary.min}–{summary.max}h</div></div>
+                <div><div className="text-xs text-mute">Median</div><div className="font-semibold tabular-nums text-2xl">{summary.median}h</div></div>
+                <div><div className="text-xs text-mute">Range</div><div className="font-semibold tabular-nums text-2xl">{summary.min}–{summary.max}h</div></div>
                 <div className={clsx("rounded-full px-3 py-1 text-xs", summary.consensus ? "bg-neon-lime/15 text-neon-lime" : "bg-neon-amber/15 text-neon-amber")}>{summary.consensus ? "Consensus" : "Wide spread — discuss, then re-vote"}</div>
                 <button className="btn-primary ml-auto" disabled={pending || !canLead} title={canLead ? "" : "Leads apply the agreed estimate"} onClick={() => run(() => applyEstimateAction(t.id, summary.median, pointsFor(summary.median)))}>Apply {summary.median}h ({pointsFor(summary.median)} pts)</button>
               </div>

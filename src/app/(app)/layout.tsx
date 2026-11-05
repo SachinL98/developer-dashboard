@@ -30,28 +30,29 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <>
           <WorkClock targetHrs={targetHrs} sessionStart={session?.startedAt.toISOString() ?? null} timer={timer ? { key: timer.ticket.key, title: timer.ticket.title, startedAt: timer.startedAt.toISOString() } : null} />
           <ThemeToggle saved={me.theme as ThemeChoice} />
-          <div className="flex items-center gap-2 rounded-xl border border-line bg-panel/60 p-2">
+          <div className="flex items-center gap-2 rounded-lg border border-line p-2">
             <Avatar name={me.name} hue={me.avatarHue} />
-            <div className="min-w-0 flex-1"><div className="truncate text-sm">{me.name}</div><div className="text-[10px] uppercase tracking-wider text-mute">{me.access.toLowerCase()}</div></div>
+            <div className="min-w-0 flex-1"><div className="truncate text-sm">{me.name}</div><div className="text-[10px] text-mute">{me.access.toLowerCase()}</div></div>
             <form action={logoutAction}><button className="btn-ghost p-1.5" title="Sign out" aria-label="Sign out"><LogOut size={15} /></button></form>
           </div>
     </>
   );
   return (
-    <div className="mx-auto flex max-w-[1600px] flex-col lg:flex-row">
+    <div className="flex min-h-screen w-full flex-col lg:flex-row">
       <MobileNav isAdmin={atLeast(me.access, "ADMIN")}>{footer}</MobileNav>
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col gap-5 overflow-y-auto border-r border-line bg-bg/60 p-4 backdrop-blur lg:flex">
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col gap-5 overflow-y-auto border-r border-line bg-panel p-4 lg:flex">
         <div className="flex items-center gap-3 px-1 pt-1">
-          <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-neon to-neon-violet font-bold text-bg shadow-glow">S</div>
-          <div><div className="text-sm font-semibold leading-tight">SpaceIT Labs</div><div className="font-mono text-[11px] text-mute">dev.dashboard</div></div>
+          <div className="grid h-9 w-9 place-items-center rounded-lg bg-neon font-bold text-on-accent">S</div>
+          <div><div className="text-sm font-semibold leading-tight">SpaceIT Labs</div><div className="text-xs text-mute">Delivery dashboard</div></div>
         </div>
+        <Link href="/tickets/new" className="btn-primary w-full">+ New ticket</Link>
         <Nav isAdmin={atLeast(me.access, "ADMIN")} />
         <div className="mt-auto space-y-3">{footer}</div>
       </aside>
-      <main className="min-w-0 flex-1 p-4 pb-24 sm:p-6 sm:pb-24 lg:p-8">
+      <main className="min-w-0 flex-1 p-4 pb-24 sm:p-6 sm:pb-24 lg:p-8 2xl:px-12">
         {missing.length > 0 && (
-          <Link href="/settings" className="mb-6 flex items-center gap-3 rounded-xl border border-neon/30 bg-neon/10 px-4 py-2.5 text-sm hover:border-neon/60">
-            <Plug size={16} className="text-neon" /> Connect {missing.join(" and ")} to sync tickets, sprints and meetings as you. <span className="ml-auto text-neon">Set up →</span>
+          <Link href="/settings" className="mb-6 flex items-center gap-3 rounded-lg border border-neon/25 bg-neon/5 px-4 py-2.5 text-sm hover:border-neon/50">
+            <Plug size={16} className="text-neon" /> Connect {missing.join(" and ")} to keep tickets and meetings in sync. <span className="ml-auto text-neon">Connect →</span>
           </Link>
         )}
         {children}

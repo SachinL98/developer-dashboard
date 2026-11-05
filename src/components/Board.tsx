@@ -46,11 +46,11 @@ export function Board({ tickets: initial, columns, readOnlyHint, actor }: { tick
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <input className="input sm:max-w-xs" placeholder="Filter cards…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="input sm:max-w-xs" placeholder="Search tickets" value={q} onChange={(e) => setQ(e.target.value)} />
         <select className="input sm:max-w-[200px]" value={who} onChange={(e) => setWho(e.target.value)}>
-          <option value="all">Everyone</option>{people.map((p) => <option key={p}>{p}</option>)}
+          <option value="all">All developers</option>{people.map((p) => <option key={p}>{p}</option>)}
         </select>
-        <span className="text-xs text-mute">{readOnlyHint ?? "Drag a card forward, or use the → button. Backward moves are disabled; you can move your own cards, leads move any."}</span>
+        <span className="text-xs text-mute">{readOnlyHint ?? "Drag a card to the next stage. Cards only move forward."}</span>
       </div>
       <div className="-mx-4 snap-x snap-mandatory scroll-px-4 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:px-6 sm:scroll-px-6 lg:-mx-8 lg:px-8 lg:snap-none">
         <div className="flex gap-3" style={{ minWidth: columns.length * 268 }}>
@@ -61,7 +61,7 @@ export function Board({ tickets: initial, columns, readOnlyHint, actor }: { tick
             const blocked = !!drag && drag.columnId !== c.id && !droppable;
             return (
               <div key={c.id} onDragOver={(e) => droppable && e.preventDefault()} onDrop={() => { if (drag && target) move(drag, target); setDrag(null); }}
-                className={clsx("w-[82vw] max-w-[320px] shrink-0 snap-start rounded-2xl sm:w-[256px] border bg-panel/60 p-2 transition", droppable ? "border-neon shadow-glow" : "border-line", blocked && "opacity-40")}>
+                className={clsx("w-[82vw] max-w-[320px] shrink-0 snap-start rounded-xl sm:w-[256px] sm:max-w-none sm:flex-1 sm:basis-[256px] border bg-panel2/60 p-2 transition", droppable ? "border-neon shadow-glow" : "border-line", blocked && "opacity-40")}>
                 <div className="mb-2 flex items-center justify-between px-2 pt-1" title={c.hint}>
                   <span className="flex items-center gap-2 text-sm font-semibold"><span className="h-2 w-2 rounded-full" style={{ background: c.color }} />{c.label}</span>
                   <span className="rounded-md bg-panel2 px-1.5 font-mono text-xs text-mute">{col.length}</span>
@@ -86,7 +86,7 @@ function Card({ t, actor, onDragStart, onDragEnd, onMove }: { t: BoardTicket; ac
   const over = t.estimateHrs ? t.loggedHrs > t.estimateHrs : false;
   return (
     <div draggable={next.length > 0} onDragStart={onDragStart} onDragEnd={onDragEnd}
-      className="group cursor-grab rounded-xl border border-line bg-panel2 p-3 transition hover:border-neon/40 active:cursor-grabbing" style={{ borderLeft: `3px solid ${t.project.color}` }}>
+      className="group cursor-grab rounded-lg border border-line bg-panel p-3 shadow-sm transition hover:border-neon/50 hover:shadow active:cursor-grabbing" style={{ borderLeft: `3px solid ${t.project.color}` }}>
       <div className="flex items-center justify-between text-[11px]">
         <span className="font-mono text-mute">{t.key}</span>
         <span className="flex items-center gap-1.5">

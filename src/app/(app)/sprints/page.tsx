@@ -15,7 +15,6 @@ import { sumEntries } from "@/lib/analytics";
 import { hours as toHours } from "@/lib/time";
 import { DONE_STATES } from "@/lib/workflow";
 
-const FLOW = ["Collect bugs / features", "Create Jira tickets", "Prioritise in sprint plan", "Create sprint", "Groom complicated cards", "Rough estimates", "Finalise scope", "Start sprint"];
 
 export default async function Sprints({ searchParams }: { searchParams: Promise<{ sprint?: string }> }) {
   const sp = await searchParams;
@@ -45,10 +44,7 @@ export default async function Sprints({ searchParams }: { searchParams: Promise<
   const leaveInfo = team ? { lostHrs: team.lostHours, leaveDays: team.leaveDays, holidayDays: team.perDev[0]?.av.holidayDays ?? 0, fullHrs: team.fullHours } : null;
   return (
     <div>
-      <PageHeader title="Sprint planner" sub="Prioritise the backlog, fit it to capacity, then start the sprint." actions={<SyncButtons what="jira" disabled={!canManage || !(await jiraReady())} />} />
-      <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
-        {FLOW.map((f, i) => <div key={f} className="flex shrink-0 items-center gap-2 rounded-full border border-line bg-panel px-3 py-1 text-xs text-mute"><span className="grid h-4 w-4 place-items-center rounded-full bg-line font-mono text-[10px] text-ink">{i + 1}</span>{f}</div>)}
-      </div>
+      <PageHeader title="Sprints" sub="Plan the backlog against team capacity, then start the sprint." actions={<SyncButtons what="jira" disabled={!canManage || !(await jiraReady())} />} />
       <SprintPlanner
         newSprint={nextSprintDefaults(sprints.at(-1)?.name ?? null, sprints.reduce<Date | null>((m, x) => (!m || x.endDate > m ? x.endDate : m), null), cfg)}
         sprints={sprints.slice().reverse().slice(0, 6).map((s) => ({ id: s.id, name: s.name, goal: s.goal, state: s.state, start: s.startDate.toISOString(), end: s.endDate.toISOString() }))}

@@ -97,7 +97,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
 
           <div className="card-pad">
             <div className="h-section mb-2">Time</div>
-            <div className="flex items-end justify-between"><span className="font-mono text-2xl">{fmtDur(logged)}</span><span className="text-xs text-mute">{t.estimateHrs ? `of ${t.estimateHrs}h estimate` : "no estimate"}</span></div>
+            <div className="flex items-end justify-between"><span className="font-semibold tabular-nums text-2xl">{fmtDur(logged)}</span><span className="text-xs text-mute">{t.estimateHrs ? `of ${t.estimateHrs}h estimate` : "no estimate"}</span></div>
             {forecast && <p className="mt-2 text-xs text-mute">Forecast finish <b className="text-ink">{new Date(forecast.date + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })}</b> at {t.assignee!.name.split(" ")[0]}&apos;s pace{forecast.leaveDays > 0 ? `, ${forecast.leaveDays} day(s) later because of leave or holidays` : ""}.</p>}
             {t.estimateHrs ? <Progress className="mt-2" pct={(logged / 3_600_000 / t.estimateHrs) * 100} color={logged / 3_600_000 > t.estimateHrs ? "#fb7185" : "#6ee7ff"} /> : null}
             <ul className="mt-4 space-y-2 text-xs">

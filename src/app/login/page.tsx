@@ -21,10 +21,10 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
   return (
     <main className="grid min-h-screen place-items-center p-4">
       <div className="fixed right-4 top-4"><ThemeToggle signedIn={false} compact /></div>
-      <div className="card-pad w-full max-w-md space-y-6 shadow-glow">
+      <div className="card-pad w-full max-w-md space-y-6">
         <div className="flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-neon to-neon-violet text-lg font-bold text-bg">S</div>
-          <div><h1 className="text-xl font-semibold leading-tight">SpaceIT Dev Dashboard</h1><p className="text-sm text-mute">Sign in with your office account</p></div>
+          <div className="grid h-11 w-11 place-items-center rounded-xl bg-neon text-lg font-bold text-on-accent">S</div>
+          <div><h1 className="text-xl font-semibold leading-tight">SpaceIT Delivery</h1><p className="text-sm text-mute">Sign in to continue</p></div>
         </div>
         {error && <div role="alert" className="rounded-lg border border-neon-red/40 bg-neon-red/10 px-3 py-2 text-sm text-neon-red">{error}</div>}
 
@@ -38,19 +38,19 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
 
         {mode === "demo" && (
           <div className="space-y-3">
-            <div className="rounded-lg border border-neon-amber/40 bg-neon-amber/10 px-3 py-2 text-xs text-neon-amber">Demo mode: Google sign-in isn&apos;t configured, so you can pick a seeded user. This is disabled in production unless DEMO_MODE=true.</div>
+            <div className="rounded-lg border border-neon-amber/40 bg-neon-amber/10 px-3 py-2 text-xs text-neon-amber">Demo mode: choose a user to continue.</div>
             <div className="space-y-1.5">
               {demoUsers.map((u) => (
                 <form key={u.id} action={demoLoginAction.bind(null, u.id, safeNext(sp.next))}>
                   <button className="flex w-full items-center gap-3 rounded-lg border border-line bg-panel2 px-3 py-2 text-left text-sm transition hover:border-neon/50">
-                    <Avatar name={u.name} hue={u.avatarHue} size={28} /><span className="flex-1">{u.name}</span><span className="text-[10px] uppercase tracking-wider text-mute">{u.access.toLowerCase()}</span>
+                    <Avatar name={u.name} hue={u.avatarHue} size={28} /><span className="flex-1">{u.name}</span><span className="text-[10px] text-mute">{u.access.toLowerCase()}</span>
                   </button>
                 </form>
               ))}
             </div>
           </div>
         )}
-        <p className="text-center text-xs text-mute">Only @{allowedDomain()} accounts can sign in.</p>
+        <p className="text-center text-xs text-mute">Access is limited to @{allowedDomain()} accounts.</p>
       </div>
     </main>
   );

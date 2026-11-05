@@ -15,7 +15,7 @@ export default async function AdminMeetings() {
   ]);
   return (
     <div className="space-y-6">
-      <PageHeader title="Meeting setup" sub="The weekly cadence, and the Google Meet link people join each meeting with." />
+      <PageHeader title="Meeting setup" sub="Weekly schedule and meeting links." />
       <MeetingSettings initial={settings} google={google}
         upcoming={upcoming.map((m) => ({ id: m.id, title: m.title, when: `${fmtDay(m.startsAt)} · ${fmtTime(m.startsAt)}–${fmtTime(m.endsAt)}`, meetUrl: m.meetUrl ?? "" }))} />
     </div>

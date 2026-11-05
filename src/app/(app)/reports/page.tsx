@@ -21,7 +21,7 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Reports and presentations" sub="Live slides for the weekly summary, sprint demo and monthly review, with the plan for what comes next."
+      <PageHeader title="Reports" sub="Weekly, sprint and monthly summaries, ready to present."
         actions={report ? <>
           <Link href={`/present?${here}`} className="btn-primary"><Presentation size={14} /> Present</Link>
           <a href={`/api/reports/export?${here}&format=pptx`} className="btn"><Download size={14} /> PowerPoint</a>

@@ -34,7 +34,7 @@ export default async function TimePage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Time & progress" sub="Work-day start/end, per-card timers and implementation progress." />
+      <PageHeader title="Time" sub="Your work day, ticket timers and progress." />
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <Kpi label="Clocked in now" value={clockedIn.length} sub={`of ${devs.length} developers`} accent="#a3e635" />
         <Kpi label="Team hours today" value={Math.round(grid.reduce((a, g) => a + g.perDay[todayKey], 0) * 10) / 10} accent="#6ee7ff" />

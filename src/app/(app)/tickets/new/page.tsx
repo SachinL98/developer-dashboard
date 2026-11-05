@@ -9,7 +9,7 @@ export default async function NewTicket() {
   ]);
   return (
     <div>
-      <PageHeader title="Create tickets" sub="Capture bugs, features and enhancements straight into the Jira backlog." />
+      <PageHeader title="New ticket" sub="Add one ticket, or paste several to add them in bulk." />
       <TicketForm projects={projects.map((p) => ({ id: p.id, name: p.name }))} devs={devs.map((d) => ({ id: d.id, name: d.name }))} sprints={sprints.map((s) => ({ id: s.id, name: s.name }))} jira={await jiraReady()} />
     </div>
   );

@@ -50,7 +50,7 @@ export default async function LeavePage({ searchParams }: { searchParams: Promis
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Leave" sub="Register leave and see who is away. Approved leave and public holidays lower capacity in the sprint planner, auto-fill, forecasts and reports." />
+      <PageHeader title="Leave" sub="Request leave and see who is away. Approved leave reduces sprint capacity." />
       <LeaveForm today={today} people={people} />
 
       {lead && (
@@ -70,7 +70,7 @@ export default async function LeavePage({ searchParams }: { searchParams: Promis
         </div>
         <div className="overflow-x-auto">
           <div className="grid min-w-[680px] grid-cols-7 gap-px overflow-hidden rounded-lg border border-line bg-line text-xs" role="grid" aria-label={`Team leave in ${monthName}`}>
-            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => <div key={d} className="bg-panel2 px-2 py-1.5 font-semibold uppercase tracking-wider text-mute" role="columnheader">{d}</div>)}
+            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => <div key={d} className="bg-panel2 px-2 py-1.5 font-semibold text-mute" role="columnheader">{d}</div>)}
             {days.map((d) => {
               const away = inGrid.filter((l) => l.startDate <= d && l.endDate >= d);
               const off = weekday(d) === 0 || weekday(d) === 6;

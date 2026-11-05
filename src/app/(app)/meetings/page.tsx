@@ -29,7 +29,7 @@ export default async function Meetings() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Meetings" sub="Google Meet cadence, automated notes, decisions and action items."
+      <PageHeader title="Meetings" sub="Schedule, notes and action items."
         actions={canLead ? <><SyncButtons what="meetings" /><RecurringButton disabled={!google} /></> : undefined} />
 
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
