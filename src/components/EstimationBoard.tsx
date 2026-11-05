@@ -6,7 +6,7 @@ import clsx from "clsx";
 import { Eye, EyeOff, Sparkles, Check, RotateCcw, Flame, CloudUpload, AlertTriangle } from "lucide-react";
 import { applyEstimateAction, clearVotesAction, pushSprintEstimatesAction, voteAction } from "@/app/(app)/actions";
 import { POKER_HOURS, pointsForHours } from "@/lib/workflow";
-import { summarisePoker, type Suggestion } from "@/lib/estimation";
+import { summarisePoker, voteIsFar, type Suggestion } from "@/lib/estimation";
 import { EstimateReview } from "@/components/EstimateReview";
 import type { EstimateReview as ReviewData } from "@/lib/insights";
 
@@ -19,8 +19,8 @@ const pointsFor = pointsForHours;
 
 const unitLabel = (m: "points" | "hours") => (m === "points" ? "story points" : "original estimate (hours)");
 
-export function EstimationBoard({ tickets, devCount, canLead, sprintId, sprintName, unit, jiraLive, aiReady }: {
-  aiReady: boolean; tickets: EstTicket[]; devCount: number; canLead: boolean; sprintId: string | null; sprintName: string; unit: { mode: "points" | "hours"; field: string } | null; jiraLive: boolean;
+export function EstimationBoard({ tickets, devCount, canLead, isAdmin, sprintId, sprintName, unit, jiraLive, aiReady }: {
+  aiReady: boolean; tickets: EstTicket[]; devCount: number; canLead: boolean; isAdmin: boolean; sprintId: string | null; sprintName: string; unit: { mode: "points" | "hours"; field: string } | null; jiraLive: boolean;
 }) {
   const [note, setNote] = useState<{ t: string; bad?: boolean } | null>(null);
   const [sel, setSel] = useState(tickets[0]?.id);
@@ -43,6 +43,9 @@ export function EstimationBoard({ tickets, devCount, canLead, sprintId, sprintNa
   const unsynced = tickets.filter((x) => x.jira !== "local" && x.jira !== "synced" && (x.estimateHrs != null || x.points != null)).length;
   const summary = t ? summarisePoker(t.votes.map((v) => v.hours)) : null;
   const shown = t ? reveal[t.id] : false;
+  // Admins can always ask for a review. Everyone else gets it only once the votes are revealed and their own vote is far from the others'.
+  const farVote = !!t && voteIsFar(t.myVote, t.votes.filter((v) => !v.mine).map((v) => v.hours));
+  const canReview = isAdmin || (!!shown && farVote);
 
   return (
     <>
@@ -93,8 +96,8 @@ export function EstimationBoard({ tickets, devCount, canLead, sprintId, sprintNa
             </div>
           </div>
 
-          <EstimateReview key={t.id} ticketId={t.id} ready={aiReady} initial={t.review} canApply={canLead}
-            onUse={(h) => run(() => applyEstimateAction(t.id, h, t.points ?? pointsFor(h)))} />
+          {canReview && <EstimateReview key={t.id} ticketId={t.id} ready={aiReady} initial={t.review} canApply={canLead}
+            onUse={(h) => run(() => applyEstimateAction(t.id, h, t.points ?? pointsFor(h)))} />}
 
           <div className="card-pad">
             <div className="mb-3 flex items-center justify-between">
@@ -117,6 +120,7 @@ export function EstimationBoard({ tickets, devCount, canLead, sprintId, sprintNa
                 </div>))}
               {!t.votes.length && <span className="text-sm text-mute">No votes yet. Vote above, then reveal when everyone is in.</span>}
             </div>
+            {shown && farVote && !isAdmin && <p className="mt-4 rounded-lg bg-neon-amber/10 px-3 py-2 text-xs text-neon-amber">Your vote is far from the others. An AI estimate review is available above to help you compare.</p>}
             {shown && t.votes.length > 0 && (
               <div className="mt-5 flex flex-wrap items-center gap-6 rounded-xl border border-line p-4">
                 <div><div className="text-xs text-mute">Median</div><div className="font-semibold tabular-nums text-2xl">{summary.median}h</div></div>

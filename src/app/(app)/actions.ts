@@ -12,7 +12,7 @@ import { occurrences } from "@/lib/schedule";
 import { getMeetingDefs, getMeetingSettings, getWorkspace, parseHHMM, saveMeetingSettings, saveWorkspace, type MeetingSetting, type WorkspaceConfig } from "@/lib/config";
 import { currentUser, requireAccess, destroySession } from "@/lib/auth/session";
 import { canMoveTicket, canPatchTicket, atLeast } from "@/lib/permissions";
-import { fillSprint, sprintFit } from "@/lib/estimation";
+import { fillSprint, sprintFit, voteIsFar } from "@/lib/estimation";
 import { capacityDevs, getHolidays, removeLeaveEvent, saveHolidays, sprintDates, syncLeaveEvent, teamAvailability } from "@/lib/leave";
 import { checkRequest, isDateStr, requestDays } from "@/lib/capacity";
 import { localDate } from "@/lib/time";
@@ -633,8 +633,14 @@ export async function generateProfileAction(devId: string): Promise<Result> {
 export async function reviewEstimateAction(ticketId: string): Promise<Result<{ review: EstimateReview }>> {
   try {
     const u = await me();
+    const tid = id.parse(ticketId);
+    if (!atLeast(u.access, "ADMIN")) {
+      const votes = await db.estimateVote.findMany({ where: { ticketId: tid }, select: { developerId: true, hours: true } });
+      const mine = votes.find((v) => v.developerId === u.id)?.hours ?? null;
+      if (!voteIsFar(mine, votes.filter((v) => v.developerId !== u.id).map((v) => v.hours))) throw new Error("The AI review is available when your vote is far from the others' votes.");
+    }
     rateLimit(`ai:${u.id}`, 30, 3_600_000);
-    const review = await reviewEstimate(id.parse(ticketId), u.id);
+    const review = await reviewEstimate(tid, u.id);
     return { ok: true, review };
   } catch (e) { return fail(e); }
 }

@@ -47,6 +47,15 @@ export function summarisePoker(votes: number[]): PokerSummary {
   return { count: votes.length, median: m, min, max, spread: max / Math.max(min, 0.5), consensus: max / Math.max(min, 0.5) <= 2 };
 }
 
+/** A vote is "far" from the rest when it is at least 2x higher or lower than the median of everyone else's votes. */
+export const FAR_RATIO = 2;
+export function voteIsFar(myVote: number | null, othersVotes: number[]): boolean {
+  if (myVote == null || !othersVotes.length) return false;
+  const m = median(othersVotes);
+  const lo = Math.max(Math.min(myVote, m), 0.5), hi = Math.max(myVote, m);
+  return hi / lo >= FAR_RATIO;
+}
+
 export interface FitResult { capacityHrs: number; committedHrs: number; loadPct: number; fits: boolean; overBy: number }
 export function sprintFit(capacityHrs: number, estimates: (number | null)[], bufferPct = 15): FitResult {
   const committed = estimates.reduce<number>((a, b) => a + (b ?? 0), 0);

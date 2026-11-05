@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fillSprint, sprintFit, suggestEstimate, summarisePoker } from "../src/lib/estimation";
+import { fillSprint, sprintFit, suggestEstimate, summarisePoker, voteIsFar } from "../src/lib/estimation";
 
 const hist = (n: number, hrs: number, type = "BUG", points = 3) => Array.from({ length: n }, () => ({ type, points, estimateHrs: hrs, actualHrs: hrs }));
 
@@ -32,5 +32,17 @@ describe("estimation", () => {
     const r = fillSprint([{ id: "a", estimateHrs: 30 }, { id: "b", estimateHrs: 60 }, { id: "c", estimateHrs: 20 }], 100);
     expect(r.take.map((t) => t.id)).toEqual(["a", "c"]);
     expect(r.leave.map((t) => t.id)).toEqual(["b"]);
+  });
+});
+
+describe("voteIsFar", () => {
+  it("flags a vote 2x or more away from the others' median", () => {
+    expect(voteIsFar(8, [3, 4, 4])).toBe(true);
+    expect(voteIsFar(1, [4, 4, 5])).toBe(true);
+  });
+  it("is quiet when close, alone or not voted", () => {
+    expect(voteIsFar(4, [3, 4, 5])).toBe(false);
+    expect(voteIsFar(4, [])).toBe(false);
+    expect(voteIsFar(null, [4, 4])).toBe(false);
   });
 });

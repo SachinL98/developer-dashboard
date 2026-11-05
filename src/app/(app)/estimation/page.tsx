@@ -44,7 +44,7 @@ export default async function Estimation({ searchParams }: { searchParams: Promi
         <Kpi label="Within ±25%" value={acc.n ? `${Math.round((acc.within25 / acc.n) * 100)}%` : "—"} sub={`${acc.n} finished tickets`} accent="#a3e635" />
         <Kpi label="Training data" value={history.length} sub="finished tickets with time logs" accent="#a78bfa" />
       </div>
-      <EstimationBoard tickets={data} devCount={devCount} canLead={atLeast(me.access, "LEAD")} sprintId={selected?.id ?? null} sprintName={selected?.name ?? "Backlog"} unit={unit ? { mode: unit.mode, field: unit.field } : null} jiraLive={live} aiReady={aiReady} />
+      <EstimationBoard tickets={data} devCount={devCount} canLead={atLeast(me.access, "LEAD")} isAdmin={atLeast(me.access, "ADMIN")} sprintId={selected?.id ?? null} sprintName={selected?.name ?? "Backlog"} unit={unit ? { mode: unit.mode, field: unit.field } : null} jiraLive={live} aiReady={aiReady} />
     </div>
   );
 }
