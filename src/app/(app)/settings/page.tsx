@@ -3,7 +3,8 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
 import { atLeast } from "@/lib/permissions";
 import { PageHeader } from "@/components/ui";
-import { setupChecklist, atlassianConfigured } from "@/lib/integrations/status";
+import { setupGuide, atlassianConfigured } from "@/lib/integrations/status";
+import { CopyText } from "@/components/CopyText";
 import { googleOAuthConfigured } from "@/lib/integrations/google";
 import { SyncButtons } from "@/components/SyncButtons";
 import { ProfileForm } from "@/components/ProfileForm";
@@ -83,28 +84,37 @@ export default async function Settings({ searchParams }: { searchParams: Promise
         </div>
       )}
 
-      {isAdmin && (
-        <div className="card-pad space-y-5">
-          <div className="h-section">Setup checklist for admins</div>
-          <div className="grid gap-4 md:grid-cols-2">
-            {setupChecklist().map((g) => (
-              <div key={g.group}><div className="mb-2 text-sm font-medium">{g.group}</div>
-                <ul className="space-y-1.5">{g.items.map((i) => (
-                  <li key={i.name} className="flex items-start gap-2 text-xs">{i.ok ? <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-neon-lime" /> : <CircleDashed size={14} className="mt-0.5 shrink-0 text-neon-amber" />}
-                    <span><code className="text-ink">{i.name}</code> <span className="text-mute">{i.hint}</span></span></li>))}</ul></div>
-            ))}
+      {isAdmin && (() => {
+        const steps = setupGuide(origin);
+        const doneCount = steps.filter((x) => x.done).length;
+        const next = steps.findIndex((x) => !x.done && !x.optional);
+        return (
+          <div className="card-pad space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div><div className="h-section">Setup guide</div><p className="mt-1 text-sm text-mute">Follow the steps in order. {doneCount} of {steps.length} done.</p></div>
+              <div className="flex flex-wrap gap-2"><Link href="/admin/users" className="btn">Users</Link><Link href="/admin/meetings" className="btn">Meetings</Link><Link href="/admin/workspace" className="btn">Workspace</Link><Link href="/admin/review" className="btn">Code review</Link></div>
+            </div>
+            <ol className="space-y-2">
+              {steps.map((st, i) => (
+                <li key={st.id}>
+                  <details open={i === next} className="group rounded-lg border border-line">
+                    <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3">
+                      <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-semibold ${st.done ? "bg-neon-lime/15 text-neon-lime" : i === next ? "bg-neon text-on-accent" : "bg-panel2 text-mute"}`}>{st.done ? <CheckCircle2 size={16} /> : i + 1}</span>
+                      <span className="min-w-0 flex-1"><span className="block text-sm font-medium">{st.title}{st.optional && <span className="ml-2 text-xs font-normal text-mute">Optional</span>}</span><span className="block text-xs text-mute">{st.summary}</span></span>
+                      <span className="text-xs text-mute">{st.done ? "Done" : i === next ? "Do this next" : ""}</span>
+                    </summary>
+                    <div className="space-y-3 border-t border-line px-4 py-4">
+                      <ol className="list-decimal space-y-1.5 pl-5 text-sm">{st.steps.map((x, k) => <li key={k}>{x}</li>)}</ol>
+                      {st.copy && <div className="space-y-2">{st.copy.map((c) => <CopyText key={c.label} label={c.label} value={c.value} />)}</div>}
+                      <div className="flex flex-wrap gap-1.5">{st.vars.map((x) => <span key={x.name} className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs ${x.ok ? "bg-neon-lime/10 text-neon-lime" : "bg-panel2 text-mute"}`}>{x.ok ? "✓" : "○"} <code>{x.name}</code></span>)}</div>
+                    </div>
+                  </details>
+                </li>
+              ))}
+            </ol>
           </div>
-          <div className="space-y-1 rounded-xl border border-line bg-panel2 p-4 text-xs text-mute">
-            <div className="h-section mb-1">URLs to register</div>
-            <div>Google OAuth redirect URI: <code className="text-ink">{origin}/api/auth/google/callback</code></div>
-            <div>Atlassian callback URL: <code className="text-ink">{origin}/api/auth/atlassian/callback</code></div>
-            <div>Jira webhook (realtime; events: issue created/updated/deleted, sprint created/started/closed/updated, board configuration changed): <code className="text-ink">{origin}/api/webhooks/jira?secret=&lt;JIRA_WEBHOOK_SECRET&gt;</code></div>
-            <div>GitHub webhook (pull_request): <code className="text-ink">{origin}/api/webhooks/github</code></div>
-            <div>Cron (every 10 min): <code className="text-ink">GET {origin}/api/cron/sync</code> and <code className="text-ink">/api/cron/transcripts</code> with <code>Authorization: Bearer &lt;CRON_SECRET&gt;</code></div>
-          </div>
-          <div className="flex flex-wrap gap-2"><Link href="/admin/users" className="btn">Users and roles</Link><Link href="/admin/meetings" className="btn">Meeting links</Link><Link href="/admin/workspace" className="btn">Workspace settings</Link></div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

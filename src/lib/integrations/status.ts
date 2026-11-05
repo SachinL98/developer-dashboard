@@ -39,3 +39,58 @@ export function setupChecklist(): { group: string; items: EnvCheck[] }[] {
 
 export const authMode = () => (googleOAuthConfigured() ? "google" : demoMode() ? "demo" : "unconfigured") as "google" | "demo" | "unconfigured";
 export { atlassianConfigured };
+
+export interface SetupStep {
+  id: string; title: string; summary: string; optional?: boolean; done: boolean;
+  steps: string[]; // plain numbered instructions
+  copy?: { label: string; value: string }[]; // values to paste into the other system
+  vars: { name: string; ok: boolean }[]; // settings to add on the server
+}
+
+/** The whole admin setup as a short ordered guide. Names and yes/no only: values are never exposed. */
+export function setupGuide(origin: string): SetupStep[] {
+  const has = (k: string) => !!process.env[k];
+  const v = (name: string, ok = has(name)) => ({ name, ok });
+  const all = (xs: { ok: boolean }[]) => xs.every((x) => x.ok);
+  const basics = [v("APP_URL"), v("AUTH_SECRET", (process.env.AUTH_SECRET?.length ?? 0) >= 32), v("ADMIN_EMAILS")];
+  const google = [v("GOOGLE_CLIENT_ID"), v("GOOGLE_CLIENT_SECRET")];
+  const jira = [v("ATLASSIAN_CLIENT_ID"), v("ATLASSIAN_CLIENT_SECRET"), v("JIRA_PROJECT_KEY", jiraProjectConfigured()), v("JIRA_BOARD_ID")];
+  const github = [v("GITHUB_TOKEN", githubConfigured()), v("GITHUB_ORG"), v("GITHUB_WEBHOOK_SECRET")];
+  const auto = [v("CRON_SECRET"), v("JIRA_WEBHOOK_SECRET")];
+  return [
+    { id: "basics", title: "Basic settings", summary: "Tell the server its address and a secret.", done: all(basics), vars: basics, steps: [
+      "Set APP_URL to the address people use, for example https://dev.spaceitlabs.com.",
+      "Set AUTH_SECRET to a long random text. Run: openssl rand -base64 48",
+      "Set ADMIN_EMAILS to your email so you become the admin when you sign in.",
+    ] },
+    { id: "google", title: "Google sign-in, Calendar and Meet", summary: "Lets the team sign in and creates meeting links.", done: all(google), vars: google,
+      copy: [{ label: "Redirect URI", value: `${origin}/api/auth/google/callback` }], steps: [
+      "Open console.cloud.google.com, go to APIs & Services, then Credentials, and create an OAuth client of type Web application.",
+      "Paste the Redirect URI below into Authorised redirect URIs.",
+      "Copy the Client ID and Client secret into GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.",
+      "Restart the app. Then press Connect on the Google card above.",
+    ] },
+    { id: "jira", title: "Jira", summary: "Syncs tickets, sprints and estimates.", done: all(jira), vars: jira,
+      copy: [{ label: "Callback URL", value: `${origin}/api/auth/atlassian/callback` }], steps: [
+      "Open developer.atlassian.com, create an OAuth 2.0 (3LO) app and paste the Callback URL below.",
+      "Copy its Client ID and Secret into ATLASSIAN_CLIENT_ID and ATLASSIAN_CLIENT_SECRET.",
+      "Set JIRA_PROJECT_KEY (for example ATL) and JIRA_BOARD_ID (the number in your Scrum board's address).",
+      "Restart the app. Then press Connect on the Jira card above.",
+    ] },
+    { id: "github", title: "GitHub pull requests", summary: "Links pull requests to tickets for code review.", done: all(github), vars: github,
+      copy: [{ label: "Webhook URL", value: `${origin}/api/webhooks/github` }], steps: [
+      "In GitHub, create a fine-grained token with read access to Pull requests and Contents. Put it in GITHUB_TOKEN, and your organisation name in GITHUB_ORG.",
+      "In the organisation settings, add a webhook with the Webhook URL below, the event Pull requests, and a secret you choose.",
+      "Put the same secret in GITHUB_WEBHOOK_SECRET.",
+    ] },
+    { id: "auto", title: "Automatic updates", summary: "Keeps Jira and meeting transcripts up to date by themselves.", done: all(auto), vars: auto,
+      copy: [{ label: "Run every 10 minutes", value: `GET ${origin}/api/cron/sync` }, { label: "Also every 10 minutes", value: `GET ${origin}/api/cron/transcripts` }, { label: "Jira webhook URL", value: `${origin}/api/webhooks/jira?secret=YOUR_JIRA_WEBHOOK_SECRET` }], steps: [
+      "Set CRON_SECRET and JIRA_WEBHOOK_SECRET to long random texts.",
+      "In your scheduler, call the two addresses below every 10 minutes with the header Authorization: Bearer <CRON_SECRET>.",
+      "In Jira, add a webhook with the Jira webhook URL below (replace the end with your secret).",
+    ] },
+    { id: "claude", title: "Claude for the whole team", summary: "Optional. People can also add their own key.", optional: true, done: has("ANTHROPIC_API_KEY"), vars: [v("ANTHROPIC_API_KEY")], steps: [
+      "Create a key at console.anthropic.com and set ANTHROPIC_API_KEY. It runs pull request reviews and is used for AI features by anyone who has not added their own key.",
+    ] },
+  ];
+}
