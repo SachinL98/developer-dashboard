@@ -109,13 +109,20 @@ export async function stopTimer(developerId: string) {
   }
 }
 
-export async function clockIn(developerId: string) {
+export type DayCheck = { ticketIds: string[]; note?: string };
+const clean = (c?: DayCheck) => ({ ids: [...new Set(c?.ticketIds ?? [])].slice(0, 50), note: c?.note?.trim().slice(0, 2000) || null });
+
+/** Start of day: opens a work session and saves the cards planned for today plus an optional message. */
+export async function clockIn(developerId: string, check?: DayCheck) {
+  const { ids, note } = clean(check);
   const open = await db.workSession.findFirst({ where: { developerId, endedAt: null } });
-  return open ?? db.workSession.create({ data: { developerId, startedAt: new Date() } });
+  return open ?? db.workSession.create({ data: { developerId, startedAt: new Date(), planTicketIds: ids, planNote: note } });
 }
-export async function clockOut(developerId: string) {
+/** End of day: stops timers, closes the session and saves the cards worked on plus an optional message. */
+export async function clockOut(developerId: string, check?: DayCheck) {
   await stopTimer(developerId);
-  await db.workSession.updateMany({ where: { developerId, endedAt: null }, data: { endedAt: new Date() } });
+  const { ids, note } = clean(check);
+  await db.workSession.updateMany({ where: { developerId, endedAt: null }, data: { endedAt: new Date(), doneTicketIds: ids, doneNote: note } });
 }
 
 // ---------- Progress ----------

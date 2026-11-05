@@ -101,8 +101,9 @@ export async function setProgressAction(ticketId: string, pct: number, note?: st
 }
 
 // ----- time (always the signed-in user's own) -----
-export async function clockInAction(): Promise<Result> { try { await svc.clockIn((await me()).id); touch(); return { ok: true }; } catch (e) { return fail(e); } }
-export async function clockOutAction(): Promise<Result> { try { await svc.clockOut((await me()).id); touch(); return { ok: true }; } catch (e) { return fail(e); } }
+const dayCheck = z.object({ ticketIds: z.array(z.string()).max(50), note: z.string().max(2000).optional() }).optional();
+export async function clockInAction(check?: { ticketIds: string[]; note?: string }): Promise<Result> { try { await svc.clockIn((await me()).id, dayCheck.parse(check)); touch(); return { ok: true }; } catch (e) { return fail(e); } }
+export async function clockOutAction(check?: { ticketIds: string[]; note?: string }): Promise<Result> { try { await svc.clockOut((await me()).id, dayCheck.parse(check)); touch(); return { ok: true }; } catch (e) { return fail(e); } }
 export async function startTimerAction(ticketId: string): Promise<Result> { try { await svc.startTimer(id.parse(ticketId), (await me()).id); touch(); revalidatePath(`/tickets/${ticketId}`); return { ok: true }; } catch (e) { return fail(e); } }
 export async function stopTimerAction(): Promise<Result> { try { await svc.stopTimer((await me()).id); touch(); return { ok: true }; } catch (e) { return fail(e); } }
 

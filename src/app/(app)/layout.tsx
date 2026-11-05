@@ -16,10 +16,11 @@ export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const me = await requireUser();
-  const [session, timer, conns] = await Promise.all([
+  const [session, timer, conns, cards] = await Promise.all([
     db.workSession.findFirst({ where: { developerId: me.id, endedAt: null } }),
     db.timeEntry.findFirst({ where: { developerId: me.id, endedAt: null }, include: { ticket: true } }),
     db.connection.findMany({ where: { userId: me.id }, select: { provider: true } }),
+    db.ticket.findMany({ where: { assigneeId: me.id, status: { in: ["READY_TO_DEV", "IN_PROGRESS", "INITIAL_REVIEW", "REVIEW", "FAILED_STG"] } }, select: { id: true, key: true, title: true }, orderBy: { rank: "asc" } }),
   ]);
   const cfg = await getWorkspace(); // also applies the admin-set timezone
   const [sh, sm] = parseHHMM(cfg.workStart), [eh, em] = parseHHMM(cfg.workEnd);
@@ -28,7 +29,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const missing = [!has.has("JIRA") && "Jira", !has.has("GOOGLE") && "Google Calendar & Meet"].filter(Boolean) as string[];
   const footer = (
     <>
-          <WorkClock targetHrs={targetHrs} sessionStart={session?.startedAt.toISOString() ?? null} timer={timer ? { key: timer.ticket.key, title: timer.ticket.title, startedAt: timer.startedAt.toISOString() } : null} />
+          <WorkClock cards={cards} planned={session?.planTicketIds ?? []} targetHrs={targetHrs} sessionStart={session?.startedAt.toISOString() ?? null} timer={timer ? { key: timer.ticket.key, title: timer.ticket.title, startedAt: timer.startedAt.toISOString() } : null} />
           <ThemeToggle saved={me.theme as ThemeChoice} />
           <div className="flex items-center gap-2 rounded-lg border border-line p-2">
             <Avatar name={me.name} hue={me.avatarHue} />

@@ -27,6 +27,13 @@ export default async function TimePage() {
     const worked = Object.values(perDay).reduce((a, b) => a + b, 0);
     return { d, perDay, worked, tracked };
   });
+  const recent = sessions.filter((x) => x.startedAt.getTime() > now.getTime() - 7 * DAY).slice(0, 30);
+  const ids = [...new Set(recent.flatMap((x) => [...x.planTicketIds, ...x.doneTicketIds]))];
+  const tix = ids.length ? await db.ticket.findMany({ where: { id: { in: ids } }, select: { id: true, key: true, title: true } }) : [];
+  const tk = new Map(tix.map((t) => [t.id, t]));
+  const devName = new Map(devs.map((d) => [d.id, d]));
+  const keys = (list: string[]) => list.map((i) => tk.get(i)).filter(Boolean).map((t) => (
+    <Link key={t!.id} href={`/tickets/${t!.id}`} title={t!.title} className="chip hover:text-ink">{t!.key}</Link>));
   const todayKey = dayKey(now);
   const clockedIn = sessions.filter((s) => !s.endedAt);
   const mySessions = sessions.filter((s) => s.developerId === me?.id).slice(0, 8);
@@ -53,6 +60,32 @@ export default async function TimePage() {
               <td className="pl-2 text-right font-mono">{worked.toFixed(0)}h</td>
             </tr>))}</tbody>
         </table>
+      </div>
+
+      <div className="card-pad">
+        <div className="h-section mb-1">Daily summaries</div>
+        <p className="mb-3 text-sm text-mute">What each developer planned at the start of the day and reported at the end. Last 7 days.</p>
+        <div className="divide-y divide-line">
+          {recent.map((x) => {
+            const d = devName.get(x.developerId);
+            return (
+              <div key={x.id} className="grid gap-3 py-3 md:grid-cols-[200px_1fr_1fr]">
+                <div className="flex items-start gap-2">
+                  {d && <Avatar name={d.name} hue={d.avatarHue} size={28} />}
+                  <div className="min-w-0"><div className="truncate text-sm font-medium">{d?.name}</div>
+                    <div className="text-xs text-mute">{fmtDay(x.startedAt)} · {fmtTime(x.startedAt)} – {x.endedAt ? fmtTime(x.endedAt) : "now"} · {fmtDur((x.endedAt ?? now).getTime() - x.startedAt.getTime())}</div></div>
+                </div>
+                <div className="min-w-0 text-sm"><div className="mb-1 text-xs font-medium text-mute">Plan for the day</div>
+                  <div className="flex flex-wrap gap-1">{keys(x.planTicketIds)}</div>
+                  {x.planNote ? <p className="mt-1 whitespace-pre-wrap">{x.planNote}</p> : !x.planTicketIds.length && <span className="text-mute">No plan recorded</span>}</div>
+                <div className="min-w-0 text-sm"><div className="mb-1 text-xs font-medium text-mute">End of day</div>
+                  {x.endedAt ? (<><div className="flex flex-wrap gap-1">{keys(x.doneTicketIds)}</div>
+                    {x.doneNote ? <p className="mt-1 whitespace-pre-wrap">{x.doneNote}</p> : !x.doneTicketIds.length && <span className="text-mute">No summary recorded</span>}</>) : <span className="text-mute">Still working</span>}</div>
+              </div>
+            );
+          })}
+          {!recent.length && <p className="py-6 text-center text-sm text-mute">No work days recorded yet.</p>}
+        </div>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-3">

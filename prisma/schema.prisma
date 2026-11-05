@@ -165,6 +165,12 @@ model WorkSession {
   startedAt   DateTime
   endedAt     DateTime?
   note        String?
+  // Start-of-day check-in: tickets planned for today and a free message
+  planTicketIds String[] @default([])
+  planNote      String?
+  // End-of-day check-out: tickets actually worked on and a free message
+  doneTicketIds String[] @default([])
+  doneNote      String?
 
   @@index([developerId, startedAt])
 }
