@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error plain ES module script
-import { parseLine } from "../scripts/vercel-env.mjs";
+import { parseLine } from "../scripts/env-parse.mjs";
 
 describe("vercel-env parseLine", () => {
   it("treats an empty quoted value followed by a comment as empty", () => {
