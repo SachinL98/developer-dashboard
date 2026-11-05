@@ -7,7 +7,7 @@ import { STATUS_META, TYPE_META, PRIORITY_META, type StatusKey } from "@/lib/wor
 
 export function PageHeader({ title, sub, actions, back }: { title: string; sub?: ReactNode; actions?: ReactNode; back?: { href: string; label: string } }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-line/70 pb-5">
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
       <div className="min-w-0">
         {back && <Link href={back.href} className="mb-1.5 inline-flex items-center gap-0.5 text-xs font-medium text-mute hover:text-ink"><ChevronLeft size={14} />{back.label}</Link>}
         <h1 className="text-xl font-semibold tracking-tight text-ink sm:text-[26px] sm:leading-8">{title}</h1>
@@ -22,9 +22,9 @@ export function Kpi({ label, value, sub, accent = "#2563eb", spark }: { label: s
   const max = Math.max(1, ...(spark ?? [1]));
   return (
     <div className="card-pad">
-      <div className="text-sm text-mute">{label}</div>
-      <div className="mt-1.5 text-3xl font-semibold tabular-nums tracking-tight">{value}</div>
-      {sub && <div className="mt-1 text-xs text-mute">{sub}</div>}
+      <div className="text-xs font-medium text-mute">{label}</div>
+      <div className="mt-2 text-[28px] font-semibold leading-none tabular-nums tracking-tight">{value}</div>
+      {sub && <div className="mt-2 text-xs text-mute">{sub}</div>}
       {spark && (
         <div className="mt-3 flex h-8 items-end gap-[3px]">
           {spark.map((v, i) => <div key={i} className="w-full rounded-sm" style={{ height: `${Math.max(8, (v / max) * 100)}%`, background: fg(accent), opacity: 0.35 + (i / spark.length) * 0.65 }} />)}

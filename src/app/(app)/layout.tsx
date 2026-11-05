@@ -8,6 +8,7 @@ import type { ThemeChoice } from "@/lib/theme";
 import { MobileNav } from "@/components/MobileNav";
 import { WorkClock } from "@/components/WorkClock";
 import { Avatar } from "@/components/ui";
+import { UserMenu } from "@/components/UserMenu";
 import { CommandPalette, PaletteButton, type PaletteItem } from "@/components/CommandPalette";
 import { logoutAction } from "./actions";
 import { LogOut, Plug } from "lucide-react";
@@ -54,29 +55,36 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <a href="#main" className="skip-link">Skip to content</a>
       <CommandPalette items={jump} />
       <MobileNav isAdmin={atLeast(me.access, "ADMIN")}>{footer}</MobileNav>
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col gap-5 overflow-y-auto border-r border-line bg-panel p-4 lg:flex">
-        <div className="flex items-center gap-3 px-1 pt-1">
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-neon font-bold text-on-accent">S</div>
-          <div><div className="text-sm font-semibold leading-tight">SpaceIT Labs</div><div className="text-xs text-mute">Delivery dashboard</div></div>
-        </div>
-        <Link href="/tickets/new" className="btn-primary w-full">+ New ticket</Link>
-        <PaletteButton />
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col gap-6 overflow-y-auto border-r border-line/70 bg-bg px-3 py-4 lg:flex">
+        <Link href="/" className="flex items-center gap-2.5 px-2">
+          <div className="grid h-8 w-8 place-items-center rounded-lg bg-neon text-sm font-bold text-on-accent">S</div>
+          <div className="text-sm font-semibold tracking-tight">SpaceIT Delivery</div>
+        </Link>
         <Nav isAdmin={atLeast(me.access, "ADMIN")} />
-        <div className="mt-auto space-y-3">{footer}</div>
+        <div className="mt-auto"><WorkClock cards={cards} planned={session?.planTicketIds ?? []} targetHrs={targetHrs} sessionStart={session?.startedAt.toISOString() ?? null} timer={timer ? { key: timer.ticket.key, title: timer.ticket.title, startedAt: timer.startedAt.toISOString() } : null} /></div>
       </aside>
-      <main id="main" tabIndex={-1} className="min-w-0 flex-1 p-4 pb-24 sm:p-6 sm:pb-24 lg:p-8 2xl:px-12">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-20 hidden h-14 items-center gap-3 border-b border-line/70 bg-bg/85 px-8 backdrop-blur lg:flex 2xl:px-12">
+          <div className="max-w-md flex-1"><PaletteButton className="h-9 bg-panel" /></div>
+          <div className="ml-auto flex items-center gap-3">
+            <Link href="/tickets/new" className="btn-primary">+ New ticket</Link>
+            <UserMenu name={me.name} role={me.access.toLowerCase()} hue={me.avatarHue} theme={me.theme as ThemeChoice} logout={logoutAction} />
+          </div>
+        </header>
+      <main id="main" tabIndex={-1} className="min-w-0 flex-1 p-4 pb-24 sm:p-6 sm:pb-24 lg:px-8 lg:py-8 2xl:px-12">
         {pendingSignups > 0 && (
           <Link href="/admin/users" className="mb-4 flex items-center gap-3 rounded-lg border border-neon-amber/40 bg-neon-amber/10 px-4 py-2.5 text-sm hover:border-neon-amber">
             {pendingSignups} {pendingSignups === 1 ? "person is" : "people are"} waiting for account approval. <span className="ml-auto text-neon-amber">Review →</span>
           </Link>
         )}
         {missing.length > 0 && (
-          <Link href="/settings" className="mb-6 flex items-center gap-3 rounded-lg border border-neon/25 bg-neon/5 px-4 py-2.5 text-sm hover:border-neon/50">
-            <Plug size={16} className="text-neon" /> Connect {missing.join(" and ")} to keep tickets and meetings in sync. <span className="ml-auto text-neon">Connect →</span>
+          <Link href="/settings" className="mb-5 flex items-center gap-2 text-xs text-mute hover:text-ink">
+            <Plug size={13} className="text-neon" /> Connect {missing.join(" and ")} to keep tickets and meetings in sync. <span className="font-medium text-neon">Connect →</span>
           </Link>
         )}
         {children}
       </main>
+      </div>
     </div>
   );
 }

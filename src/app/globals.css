@@ -14,11 +14,11 @@
   color-scheme: dark;
 }
 html.light, .force-light {
-  --bg: 246 247 249; --panel: 255 255 255; --panel2: 243 244 246; --line: 226 229 235; --ink: 17 24 39; --mute: 99 108 125; --on-accent: 255 255 255;
-  --neon: 37 99 235; --neon-violet: 79 70 229; --neon-lime: 21 128 61; --neon-pink: 190 24 93; --neon-amber: 180 83 9; --neon-red: 220 38 38;
+  --bg: 250 250 252; --panel: 255 255 255; --panel2: 244 245 248; --line: 232 234 240; --ink: 17 24 39; --mute: 99 108 125; --on-accent: 255 255 255;
+  --neon: 79 70 229; --neon-violet: 124 58 237; --neon-lime: 21 128 61; --neon-pink: 190 24 93; --neon-amber: 180 83 9; --neon-red: 220 38 38;
   --accent-darken: 35%;
-  --glow: 0 0 0 3px rgba(37,99,235,.18);
-  --shadow: 0 1px 2px rgba(16,24,40,.05);
+  --glow: 0 0 0 4px rgba(79,70,229,.14);
+  --shadow: 0 1px 2px rgba(16,24,40,.04), 0 1px 1px rgba(16,24,40,.02);
   --scroll: #cbd2de;
   color-scheme: light;
 }
@@ -28,14 +28,18 @@ body { font-feature-settings: "cv11", "ss01"; -webkit-font-smoothing: antialiase
 * { scrollbar-width: thin; scrollbar-color: var(--scroll) transparent; }
 
 @layer components {
-  .card { @apply rounded-xl border border-line bg-panel; box-shadow: var(--shadow); }
-  .card-pad { @apply card p-5; }
-  .btn { @apply inline-flex items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3.5 py-2 text-sm font-medium text-ink transition hover:bg-panel2 disabled:cursor-not-allowed disabled:opacity-40; box-shadow: var(--shadow); }
-  .btn-primary { @apply inline-flex items-center justify-center gap-2 rounded-lg border border-transparent bg-neon px-3.5 py-2 text-sm font-medium text-on-accent transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40; }
-  .btn-ghost { @apply inline-flex items-center justify-center gap-2 rounded-lg border border-transparent bg-transparent px-3 py-1.5 text-sm font-medium text-mute transition hover:bg-panel2 hover:text-ink disabled:cursor-not-allowed disabled:opacity-40; }
-  .input { @apply w-full rounded-lg border border-line bg-panel px-3 py-2 text-sm text-ink placeholder:text-mute/70 outline-none transition focus:border-neon; }
+  .card { @apply rounded-2xl border border-line/80 bg-panel; box-shadow: var(--shadow); }
+  .card-pad { @apply card p-5 sm:p-6; }
+  .btn { @apply inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3.5 text-sm font-medium text-ink transition hover:bg-panel2 disabled:cursor-not-allowed disabled:opacity-40; box-shadow: var(--shadow); }
+  .btn-primary { @apply inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-transparent bg-neon px-4 text-sm font-medium text-on-accent transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40; }
+  .btn-ghost { @apply inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-transparent bg-transparent px-3 text-sm font-medium text-mute transition hover:bg-panel2 hover:text-ink disabled:cursor-not-allowed disabled:opacity-40; }
+  .input { @apply h-10 w-full rounded-lg border border-line bg-panel px-3 text-sm text-ink placeholder:text-mute/70 outline-none transition focus:border-neon; }
   .input:focus { box-shadow: var(--glow); }
-  .label { @apply mb-1.5 block text-xs font-medium text-mute; }
+  .label { @apply mb-1.5 block text-xs font-medium text-ink/70; }
+  textarea.input { @apply h-auto py-2.5; }
+  .eyebrow { @apply text-[11px] font-semibold uppercase tracking-wider text-mute; }
+  .pill { @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium; }
+  .rail-title { @apply mb-3 flex items-center justify-between text-sm font-semibold text-ink; }
   .chip { @apply inline-flex items-center gap-1 rounded-md bg-panel2 px-2 py-0.5 text-xs font-medium text-mute; }
   .h-section { @apply text-sm font-semibold text-ink; }
   .kbd { @apply inline-flex h-5 min-w-[20px] items-center justify-center rounded border border-line bg-panel2 px-1 font-mono text-[10px] font-medium text-mute; }
@@ -67,7 +71,7 @@ p { text-wrap: pretty; }
 
 /* Touch devices: 44px targets, 16px inputs (stops iOS zooming into fields), no hover-only controls. */
 @media (pointer: coarse) {
-  .btn { min-height: 44px; }
+  .btn, .btn-primary, .btn-ghost { min-height: 44px; }
   .input { min-height: 44px; font-size: 16px; }
 }
 html { -webkit-text-size-adjust: 100%; }
