@@ -42,8 +42,8 @@ export async function sendEmail(m: Mail): Promise<{ provider: EmailProvider }> {
   return { provider };
 }
 
-/** The ZeptoMail API host. Defaults to the EU host. A value typed without https:// still works, and a pasted full send URL (…/v1.1/email) is reduced to the host. */
-export const ZEPTO_DEFAULT_HOST = "https://api.zeptomail.eu";
+/** The ZeptoMail API host. Defaults to cpaas.zoho.com. A value typed without https:// still works, and a pasted full send URL (…/v1.1/email) is reduced to the host. */
+export const ZEPTO_DEFAULT_HOST = "https://cpaas.zoho.com";
 export function zeptoBase(raw = process.env.ZEPTOMAIL_URL): string {
   const v = (raw ?? "").trim().replace(/\/+$/, "").replace(/\/v1\.1\/email$/i, "");
   if (!v) return ZEPTO_DEFAULT_HOST;

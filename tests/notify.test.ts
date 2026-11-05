@@ -82,7 +82,7 @@ describe("email providers", () => {
       const f = vi.fn().mockResolvedValue({ ok: true, status: 201, text: async () => "" }); vi.stubGlobal("fetch", f);
       await sendEmail({ to: "a@b.com", toName: "Amaya", subject: "S", text: "T", html: "<p>H</p>" });
       const [url, init] = f.mock.calls[0] as [string, any];
-      expect(url).toBe("https://api.zeptomail.eu/v1.1/email");
+      expect(url).toBe("https://cpaas.zoho.com/v1.1/email");
       expect(init.headers.Authorization).toBe("Zoho-enczapikey abc123");
       expect(JSON.parse(init.body)).toMatchObject({ from: { address: "noreply@x.com" }, to: [{ email_address: { address: "a@b.com", name: "Amaya" } }], subject: "S", htmlbody: "<p>H</p>", textbody: "T" });
     });
