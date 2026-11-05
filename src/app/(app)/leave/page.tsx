@@ -41,7 +41,9 @@ export default async function LeavePage({ searchParams }: { searchParams: Promis
     lead ? db.developer.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }) : undefined,
   ]);
   const row = (l: (typeof mine)[number] & { developer?: { name: string } }): LeaveRow => ({
-    id: l.id, who: l.developer?.name ?? me.name, mine: l.developerId === me.id, type: typeLabel(l.type), half: l.portion === "HALF", reason: l.reason, status: l.status, note: l.decisionNote,
+    // Why someone is away (and the kind of leave, e.g. sick) is private: only they, leads and admins see it.
+    id: l.id, who: l.developer?.name ?? me.name, mine: l.developerId === me.id, half: l.portion === "HALF", status: l.status,
+    ...(l.developerId === me.id || lead ? { type: typeLabel(l.type), reason: l.reason, note: l.decisionNote } : { type: "Leave", reason: "", note: null }),
     range: l.startDate === l.endDate ? fmt(l.startDate) : `${fmt(l.startDate)} to ${fmt(l.endDate)}`, days: requestDays(l.startDate, l.endDate, l.portion as "FULL" | "HALF", holidays),
     canCancel: (l.status === "PENDING" || l.status === "APPROVED") && l.endDate >= today && (l.developerId === me.id || lead),
   });
@@ -72,14 +74,14 @@ export default async function LeavePage({ searchParams }: { searchParams: Promis
           <div className="grid min-w-[680px] grid-cols-7 gap-px overflow-hidden rounded-lg border border-line bg-line text-xs" role="grid" aria-label={`Team leave in ${monthName}`}>
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => <div key={d} className="bg-panel2 px-2 py-1.5 font-semibold text-mute" role="columnheader">{d}</div>)}
             {days.map((d) => {
-              const away = inGrid.filter((l) => l.startDate <= d && l.endDate >= d);
+              const away = inGrid.filter((l) => l.startDate <= d && l.endDate >= d && (l.status === "APPROVED" || l.developerId === me.id || lead));
               const off = weekday(d) === 0 || weekday(d) === 6;
               return (
                 <div key={d} role="gridcell" className={clsx("min-h-[78px] bg-panel p-1.5", off && "bg-panel2", d.slice(0, 7) !== month && "opacity-45")}>
                   <div className={clsx("mb-1 font-mono", d === today ? "inline-grid h-5 w-5 place-items-center rounded-full bg-neon text-on-accent" : "text-mute")}>{+d.slice(8)}</div>
                   {hol.has(d) && <div className="mb-1 truncate rounded bg-neon-amber/15 px-1 text-[10px] text-neon-amber" title={hol.get(d)}>{hol.get(d)}</div>}
                   {!off && !hol.has(d) && away.map((l) => (
-                    <div key={l.id} title={`${l.developer.name}: ${typeLabel(l.type)}${l.portion === "HALF" ? " (half day)" : ""}${l.status === "PENDING" ? " (pending)" : ""}`}
+                    <div key={l.id} title={`${l.developer.name}: ${l.developerId === me.id || lead ? typeLabel(l.type) : "Away"}${l.portion === "HALF" ? " (half day)" : ""}${l.status === "PENDING" ? " (pending)" : ""}`}
                       className={clsx("mb-0.5 truncate rounded px-1 text-[10px]", l.status === "PENDING" ? "border border-dashed border-neon-amber/50 text-neon-amber" : "bg-neon/15 text-ink")}>
                       {l.developer.name.split(" ")[0]}{l.portion === "HALF" ? " ½" : ""}
                     </div>))}

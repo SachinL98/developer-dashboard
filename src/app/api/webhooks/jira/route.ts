@@ -17,7 +17,9 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   const secret = process.env.JIRA_WEBHOOK_SECRET;
   if (!secret && process.env.NODE_ENV === "production") return NextResponse.json({ error: "JIRA_WEBHOOK_SECRET is not configured" }, { status: 503 });
-  if (secret && !safeEqual(new URL(req.url).searchParams.get("secret") ?? "", secret)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  // Prefer the header (query strings end up in access logs); the query form stays for Jira, which cannot set custom headers.
+  const given = req.headers.get("x-webhook-secret") ?? new URL(req.url).searchParams.get("secret") ?? "";
+  if (secret && !safeEqual(given, secret)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: "invalid JSON" }, { status: 400 });
   const event: string = body.webhookEvent ?? "";

@@ -17,7 +17,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
   if (await currentUser()) redirect(safeNext(sp.next));
   const mode = authMode();
   const demoUsers = mode === "demo" ? await db.developer.findMany({ where: { active: true }, orderBy: { name: "asc" } }) : [];
-  const error = sp.error ? ERRORS[sp.error] ?? sp.error : null;
+  const error = sp.error ? ERRORS[sp.error] ?? sp.error.slice(0, 160) : null;
   return (
     <main className="grid min-h-screen place-items-center p-4">
       <div className="fixed right-4 top-4"><ThemeToggle signedIn={false} compact /></div>
