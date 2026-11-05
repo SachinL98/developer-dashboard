@@ -5,6 +5,7 @@ import * as svc from "@/lib/services";
 import { db } from "@/lib/db";
 import { PageHeader, Kpi } from "@/components/ui";
 import { getMeetingDefs } from "@/lib/config";
+import { MeetingJoin, JoinButton, LivePanel, LiveChip } from "@/components/MeetingJoin";
 import { NotesTaker, type MeetingView, type EngagementView } from "@/components/NotesTaker";
 import { engagementOf } from "@/lib/transcript";
 import { suggestPeople } from "@/lib/speakers";
@@ -81,25 +82,26 @@ export default async function Meetings() {
           {upcoming.map((m) => {
             const liveNow = now.getTime() >= m.startsAt.getTime() - 15 * 60_000 && now.getTime() <= m.endsAt.getTime() + 20 * 60_000;
             return (
-              <div key={m.id} id={m.id} className={`card-pad ${liveNow ? "border-neon/50" : ""}`}>
+              <MeetingJoin key={m.id} id={m.id}><div id={m.id} className={`card-pad ${liveNow ? "border-neon/50" : ""}`}>
                 <div className="flex items-center justify-between gap-3">
-                  <div><div className="flex items-center gap-2 font-medium">{m.title}{liveNow && <span className="chip border-neon/40 text-neon">Happening now</span>}</div><div className="text-xs text-mute">{fmtDay(m.startsAt)} · {fmtTime(m.startsAt)}–{fmtTime(m.endsAt)} · {defs.find((d) => d.kind === m.kind)?.blurb}</div></div>
-                  {m.meetUrl && <a href={m.meetUrl} target="_blank" rel="noreferrer" className="btn-primary"><Video size={14} /> Join</a>}
+                  <div><div className="flex items-center gap-2 font-medium">{m.title}<LiveChip liveNow={liveNow} /></div><div className="text-xs text-mute">{fmtDay(m.startsAt)} · {fmtTime(m.startsAt)}–{fmtTime(m.endsAt)} · {defs.find((d) => d.kind === m.kind)?.blurb}</div></div>
+                  {m.meetUrl && <JoinButton url={m.meetUrl} />}
                 </div>
-                {liveNow && <div className="mt-4"><NotesTaker m={view(m)} projectId={projects[0]?.id ?? ""} canEdit hasMeet={!!m.meetUrl} aiReady={aiReady} people={peopleList.map((p) => p.name)} everyone={peopleList.map((p) => ({ id: p.id, name: p.name }))} canLink={canLead} live /></div>}
-              </div>);
+                <LivePanel liveNow={liveNow}><div className="mt-4"><NotesTaker m={view(m)} projectId={projects[0]?.id ?? ""} canEdit hasMeet={!!m.meetUrl} aiReady={aiReady} people={peopleList.map((p) => p.name)} everyone={peopleList.map((p) => ({ id: p.id, name: p.name }))} canLink={canLead} live /></div></LivePanel>
+              </div></MeetingJoin>);
           })}
         </div>
         <div className="space-y-3">
           <div className="h-section">Recent · notes</div>
-          {past.map((m) => (
-            <details key={m.id} id={m.id} className="card-pad group" open={!!m.summary && past[0]?.id === m.id}>
+          {past.map((m) => { const recent = !!m.meetUrl && now.getTime() - m.endsAt.getTime() < 6 * 3_600_000; return (
+            <MeetingJoin key={m.id} id={m.id}><details id={m.id} className="card-pad group" open={!!m.summary && past[0]?.id === m.id}>
               <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
                 <div><div className="font-medium">{m.title}</div><div className="text-xs text-mute">{fmtDay(m.startsAt)} · {fmtTime(m.startsAt)}</div></div>
                 <span className={`chip ${m.summary ? "border-neon-lime/40 text-neon-lime" : ""}`}>{m.summary ? "notes ready" : "no notes"}</span>
               </summary>
-              <div className="mt-4"><NotesTaker m={view(m)} projectId={projects[0]?.id ?? ""} canEdit hasMeet={!!m.meetUrl} aiReady={aiReady} people={peopleList.map((p) => p.name)} everyone={peopleList.map((p) => ({ id: p.id, name: p.name }))} canLink={canLead} /></div>
-            </details>))}
+              {recent && m.meetUrl && <div className="mt-4 flex items-center gap-2"><JoinButton url={m.meetUrl} label="Rejoin" /><span className="text-xs text-mute">Still on the call? Rejoin to turn the recorder back on.</span></div>}
+              <LivePanel liveNow={false} fallback={<div className="mt-4"><NotesTaker m={view(m)} projectId={projects[0]?.id ?? ""} canEdit hasMeet={!!m.meetUrl} aiReady={aiReady} people={peopleList.map((p) => p.name)} everyone={peopleList.map((p) => ({ id: p.id, name: p.name }))} canLink={canLead} /></div>}><div className="mt-4"><NotesTaker m={view(m)} projectId={projects[0]?.id ?? ""} canEdit hasMeet={!!m.meetUrl} aiReady={aiReady} people={peopleList.map((p) => p.name)} everyone={peopleList.map((p) => ({ id: p.id, name: p.name }))} canLink={canLead}  live /></div></LivePanel>
+            </details></MeetingJoin>); })}
         </div>
       </div>
     </div>
