@@ -1,0 +1,44 @@
+import { NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { currentUser } from "@/lib/auth/session";
+import { aiKeyFor } from "@/lib/ai";
+import { AudioUnsupported, nameSpeakers, segmentsToText, transcribeAudio } from "@/lib/stt";
+import { rateLimit, RateLimited } from "@/lib/rate-limit";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+const MAX_BYTES = 3_500_000; // stays under the 4.5 MB request limit of serverless functions; the recorder sends short clips
+
+/** One short recording clip in, transcribed lines with speaker names out. The browser stitches the clips together. */
+export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const user = await currentUser();
+  if (!user || user.mustChangePassword) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
+  try { rateLimit(`audio:${user.id}`, 240, 3_600_000); } catch (e) { if (e instanceof RateLimited) return NextResponse.json({ ok: false, error: e.message }, { status: 429 }); throw e; }
+  const { id } = await ctx.params;
+  const meeting = await db.meeting.findUnique({ where: { id }, select: { id: true, attendees: true } });
+  if (!meeting) return NextResponse.json({ ok: false, error: "Meeting not found." }, { status: 404 });
+
+  let form: FormData;
+  try { form = await req.formData(); } catch { return NextResponse.json({ ok: false, error: "Could not read the recording." }, { status: 400 }); }
+  const file = form.get("audio");
+  if (!(file instanceof File) || !file.size) return NextResponse.json({ ok: false, error: "No audio received." }, { status: 400 });
+  if (file.size > MAX_BYTES) return NextResponse.json({ ok: false, error: "That clip is too large. Record in shorter clips." }, { status: 413 });
+  const mime = file.type || "audio/webm";
+  if (!/^(audio|video)\//.test(mime)) return NextResponse.json({ ok: false, error: "That is not an audio file." }, { status: 415 });
+  const offsetSec = Math.min(Math.max(Number(form.get("offset") ?? 0) || 0, 0), 6 * 3600);
+  const recent = String(form.get("recent") ?? "").slice(-2000);
+
+  const ai = await aiKeyFor(user.id, { audio: true });
+  if (!ai) return NextResponse.json({ ok: false, error: new AudioUnsupported().message }, { status: 400 });
+  const people = (await db.developer.findMany({ where: { active: true }, select: { name: true } })).map((p) => p.name);
+  const attendees = [...new Set([...meeting.attendees.filter((a) => !a.includes("@")), ...people])];
+  try {
+    let segs = await transcribeAudio(ai, { data: Buffer.from(await file.arrayBuffer()), mime }, { attendees, offsetSec, recent });
+    segs = await nameSpeakers(ai, segs, attendees, recent);
+    return NextResponse.json({ ok: true, text: segmentsToText(segs), segments: segs.length }, { headers: { "Cache-Control": "no-store" } });
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message.slice(0, 240) : "Transcription failed." }, { status: e instanceof AudioUnsupported ? 400 : 502 });
+  }
+}

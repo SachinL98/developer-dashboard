@@ -25,6 +25,7 @@ import { generateTempPassword, hashPassword } from "@/lib/auth/password";
 import { userMessage } from "@/lib/safe-error";
 import { rateLimit } from "@/lib/rate-limit";
 import { saveUserKey, removeUserKey, validateKey, listUserProviders, setPreferredProvider, PROVIDERS } from "@/lib/ai";
+import { norm as normSpeaker, isGenericSpeaker } from "@/lib/speakers";
 import { generateDevProfile, reviewEstimate, type EstimateReview } from "@/lib/insights";
 
 type Result<T = {}> = ({ ok: true } & T) | { ok: false; error: string };
@@ -689,5 +690,20 @@ export async function setPersonEmailAction(userId: string, email: string): Promi
     await db.developer.update({ where: { id: u.id }, data: { email: e } });
     revalidatePath("/admin/users");
     return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
+/** Lead/admin: say who a spoken name is. Saved as an alias so every past and future meeting links it automatically. */
+export async function linkSpeakerAction(speakerName: string, developerId: string): Promise<Result<{ linked: number }>> {
+  try {
+    await requireAccess("LEAD");
+    const name = z.string().trim().min(1).max(80).parse(speakerName);
+    const dev = await db.developer.findUniqueOrThrow({ where: { id: id.parse(developerId) }, select: { id: true } });
+    const alias = normSpeaker(name);
+    if (!alias || isGenericSpeaker(name)) return { ok: false, error: "That label is not a name, so it can't be saved for next time. Fix it in the transcript instead." };
+    await db.speakerAlias.upsert({ where: { alias }, update: { developerId: dev.id }, create: { alias, developerId: dev.id } });
+    const r = await db.meetingSpeaker.updateMany({ where: { name: { equals: name, mode: "insensitive" } }, data: { developerId: dev.id } });
+    revalidatePath("/meetings"); revalidatePath("/analytics");
+    return { ok: true, linked: r.count };
   } catch (e) { return fail(e); }
 }

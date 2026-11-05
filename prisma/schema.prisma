@@ -374,3 +374,13 @@ model MeetingSpeaker {
   @@index([meetingId])
   @@index([developerId])
 }
+
+// A spoken name that an admin or lead linked to a person, so future meetings match automatically.
+model SpeakerAlias {
+  id          String   @id @default(cuid())
+  alias       String   @unique // lower-case spoken name, e.g. "nim r"
+  developerId String
+  createdAt   DateTime @default(now())
+
+  @@index([developerId])
+}

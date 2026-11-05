@@ -27,20 +27,22 @@ export class AiUnavailable extends Error {
 const connName = (p: AiProvider) => `AI_${p.toUpperCase()}`; // stored in the Connection table: one row per provider per person
 
 /** The key an AI call should use for this person: their preferred provider, else any provider they saved, else a server-wide key. */
-export async function aiKeyFor(userId?: string | null): Promise<AiKey | null> {
+/** `audio`: only providers that can listen to recordings (OpenAI and Gemini; Claude cannot). */
+export async function aiKeyFor(userId?: string | null, opts: { audio?: boolean } = {}): Promise<AiKey | null> {
+  const ok = (p: AiProvider) => !opts.audio || p !== "anthropic";
   if (userId) {
     const [rows, me] = await Promise.all([
       db.connection.findMany({ where: { userId, provider: { in: PROVIDERS.map((p) => connName(p.id)) } } }),
       db.developer.findUnique({ where: { id: userId }, select: { aiProvider: true } }),
     ]);
-    const order = [me?.aiProvider, ...PROVIDERS.map((p) => p.id)].filter(isProvider);
+    const order = [me?.aiProvider, ...PROVIDERS.map((p) => p.id)].filter(isProvider).filter(ok);
     for (const p of order) {
       const row = rows.find((r) => r.provider === connName(p));
       if (!row) continue;
       try { return { key: decrypt(row.accessToken), provider: p, model: row.scope || defaultModel(p), source: "user" }; } catch { /* unreadable: try the next */ }
     }
   }
-  for (const p of PROVIDERS) {
+  for (const p of PROVIDERS.filter((x) => ok(x.id))) {
     const key = process.env[ENV_KEY[p.id]];
     if (key) return { key, provider: p.id, model: defaultModel(p.id), source: "server" };
   }

@@ -5,7 +5,11 @@ import { getMeetingDefs, getWorkspace } from "./config";
 import * as jira from "./integrations/jira";
 import * as gh from "./integrations/github";
 import { parseNotes, summariseWithClaude } from "./notes";
-import { matchPerson, parseTranscript, talkStats, type Segment } from "./transcript";
+import { parseTranscript, talkStats, type Segment } from "./transcript";
+import { matchSpeaker } from "./speakers";
+import { pickMeetings, type AutoState } from "./meet-auto";
+import { runAs } from "./context";
+import { serviceUserId } from "./integrations/connections";
 import { aiKeyFor } from "./ai";
 import * as gcal from "./integrations/google";
 import { fetchTranscript, meetCodeFromUrl } from "./integrations/meet";
@@ -367,7 +371,8 @@ export async function syncGithub() {
 export interface NotesExtra { segments?: Segment[]; durationSec?: number; source?: "meet" | "upload" | "live" | "paste" }
 
 export async function generateNotes(meetingId: string, transcript: string, userId?: string | null, extra: NotesExtra = {}) {
-  const [people, meeting] = await Promise.all([db.developer.findMany({ where: { active: true }, select: { id: true, name: true, email: true } }), db.meeting.findUniqueOrThrow({ where: { id: meetingId } })]);
+  const [people, meeting, aliasRows] = await Promise.all([db.developer.findMany({ where: { active: true }, select: { id: true, name: true, email: true } }), db.meeting.findUniqueOrThrow({ where: { id: meetingId } }), db.speakerAlias.findMany()]);
+  const aliases = Object.fromEntries(aliasRows.map((a) => [a.alias, a.developerId]));
   const names = people.map((d) => d.name);
   const parsed0 = extra.segments ? { segments: extra.segments, hasTimes: extra.segments.some((s) => s.start != null), durationSec: extra.durationSec } : parseTranscript(transcript);
   const durationSec = extra.durationSec ?? parsed0.durationSec ?? null;
@@ -376,7 +381,7 @@ export async function generateNotes(meetingId: string, transcript: string, userI
 
   // Who spoke and for how long: the basis of the engagement metrics.
   const stats = talkStats(parsed0.segments);
-  const speakerRows = stats.map((x) => ({ meetingId, name: x.name, developerId: matchPerson(x.name, people)?.id ?? null, talkSec: x.talkSec, words: x.words, turns: x.turns, estimated: x.estimated }));
+  const speakerRows = stats.map((x) => ({ meetingId, name: x.name, developerId: matchSpeaker(x.name, people, aliases)?.id ?? null, talkSec: x.talkSec, words: x.words, turns: x.turns, estimated: x.estimated }));
 
   await db.$transaction([
     db.meeting.update({ where: { id: meetingId }, data: { transcript, summary: parsed.summary, decisions: parsed.decisions, richNotes: (parsed.rich ?? null) as any, durationSec, transcriptSource: extra.source ?? "paste" } }),
@@ -455,4 +460,33 @@ export async function rebuildUpcomingMeetings(days = 14) {
   for (const d of defs.filter((x) => x.meetUrl)) await db.meeting.updateMany({ where: { kind: d.kind, startsAt: { gt: now } }, data: { meetUrl: d.meetUrl } });
   const r = await syncMeetingCadence(days);
   return { removed: stale.length, ...r };
+}
+
+
+/**
+ * Notes without anyone pressing a button: for meetings that have just ended, fetch the Meet transcript (exact speaking times),
+ * write the notes and store the engagement numbers. Uses the Google connection an admin made, and that admin's AI key (or a shared one).
+ * Safe to call often: it throttles itself, and remembers how many times each meeting was tried.
+ */
+export async function processEndedMeetings(opts: { force?: boolean } = {}) {
+  const now = new Date();
+  const last = await getSetting<string>("meet.auto.lastRun");
+  if (!opts.force && last && now.getTime() - new Date(last).getTime() < 3 * 60_000) return { ran: false, checked: 0, imported: 0 };
+  await setSetting("meet.auto.lastRun", now.toISOString());
+  const candidates = await db.meeting.findMany({ where: { transcript: null, summary: null, meetUrl: { not: null }, endsAt: { lt: now, gt: new Date(now.getTime() - 3 * 864e5) } }, orderBy: { endsAt: "desc" }, take: 30 });
+  const state: Record<string, AutoState | undefined> = {};
+  for (const c of candidates) state[c.id] = (await getSetting<AutoState>(`meet.auto:${c.id}`)) ?? undefined;
+  const todo = pickMeetings(candidates, state, now);
+  if (!todo.length) return { ran: true, checked: 0, imported: 0 };
+  const user = await serviceUserId("GOOGLE");
+  let imported = 0;
+  await runAs(user, async () => {
+    if (!(await gcal.googleReady())) return;
+    for (const m of todo) {
+      const prev = state[m.id];
+      await setSetting(`meet.auto:${m.id}`, { tries: (prev?.tries ?? 0) + 1, lastTry: now.toISOString() } satisfies AutoState);
+      try { if (await importMeetTranscript(m.id, user)) imported++; } catch (e) { warn("meet.auto", e); }
+    }
+  });
+  return { ran: true, checked: todo.length, imported };
 }

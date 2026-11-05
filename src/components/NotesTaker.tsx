@@ -1,15 +1,16 @@
 "use client";
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Mic, MicOff, Wand2, ListTodo, Check, Download, Upload, Video } from "lucide-react";
+import { Wand2, ListTodo, Check, Download, Upload, Video } from "lucide-react";
+import { MeetingRecorder } from "@/components/MeetingRecorder";
 import clsx from "clsx";
-import { actionToTicketAction, importTranscriptAction, saveNotesAction, toggleActionAction } from "@/app/(app)/actions";
+import { actionToTicketAction, importTranscriptAction, linkSpeakerAction, saveNotesAction, toggleActionAction } from "@/app/(app)/actions";
 import { fmtTalk } from "@/lib/transcript";
 import type { RichNotes } from "@/lib/notes";
 
 export interface EngagementView {
   totalTalkSec: number; speakers: number; balance: number; dominantShare: number; label: string; durationSec: number | null;
-  rows: { name: string; talkSec: number; sharePct: number; words: number; turns: number; estimated: boolean; self: boolean }[];
+  rows: { name: string; talkSec: number; sharePct: number; words: number; turns: number; estimated: boolean; self: boolean; linked: boolean; suggestions: { id: string; name: string }[] }[];
   hiddenRows: number; silent: string[]; source: string | null;
 }
 export interface MeetingView {
@@ -20,30 +21,23 @@ export interface MeetingView {
 
 const mmss = (ms: number) => { const s = Math.floor(ms / 1000); return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; };
 
-export function NotesTaker({ m, projectId, canEdit, hasMeet, aiReady = false, people = [] }: { m: MeetingView; projectId: string; canEdit: boolean; hasMeet: boolean; aiReady?: boolean; people?: string[] }) {
+export function NotesTaker({ m, projectId, canEdit, hasMeet, aiReady = false, people = [], everyone = [], canLink = false }: { m: MeetingView; projectId: string; canEdit: boolean; hasMeet: boolean; aiReady?: boolean; people?: string[]; everyone?: { id: string; name: string }[]; canLink?: boolean }) {
   const [text, setText] = useState(m.transcript ?? "");
   const [source, setSource] = useState<"upload" | "live" | "paste">("paste");
-  const [listening, setListening] = useState(false);
-  const [speaker, setSpeaker] = useState<string>(people[0] ?? "Speaker");
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
-  const rec = useRef<any>(null);
-  const t0 = useRef(0);
-  const who = useRef(speaker);
-  who.current = speaker;
+  const textRef = useRef(text);
+  textRef.current = text;
   const router = useRouter();
 
-  function toggleMic() {
-    if (listening) { rec.current?.stop(); setListening(false); return; }
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) { setMsg("Live capture needs a Chromium browser (Chrome or Edge). You can upload or paste a transcript instead."); return; }
-    const r = new SR(); r.continuous = true; r.interimResults = false; r.lang = "en-GB";
-    t0.current = Date.now();
-    // Each phrase is stamped with the time and the speaker you have selected, so talk time can be measured.
-    r.onresult = (e: any) => { const last = e.results[e.results.length - 1][0].transcript.trim(); if (!last) return; setSource("live"); setText((t) => `${t ? t + "\n" : ""}[${mmss(Date.now() - t0.current)}] ${who.current}: ${last}`); };
-    r.onend = () => setListening(false);
-    r.start(); rec.current = r; setListening(true);
-  }
+  /** New lines from the recorder: appended as they arrive, so the transcript grows while the meeting runs. */
+  const addLines = (lines: string) => { setSource("live"); setText((t) => (t.trim() ? `${t.replace(/\s+$/, "")}\n${lines}` : lines)); };
+  /** The recorder has transcribed the last clip: write the notes straight away, no extra click. */
+  const finished = () => start(async () => {
+    const r = await saveNotesAction(m.id, textRef.current, "live");
+    setMsg(r.ok ? `Recording transcribed and notes generated${r.ai ? " with AI" : ""}: ${r.actions} action item(s).` : r.error);
+    router.refresh();
+  });
 
   function onFile(f: File | undefined) {
     if (!f) return;
@@ -66,17 +60,11 @@ export function NotesTaker({ m, projectId, canEdit, hasMeet, aiReady = false, pe
             <div className="flex flex-wrap items-center gap-2">
               {m.meetUrl && <a href={m.meetUrl} target="_blank" rel="noreferrer" className="btn px-2 py-1" title="Google Meet cannot be shown inside another page, so it opens in its own tab. Capture or import the transcript here."><Video size={13} /> Open Meet</a>}
               <label className="btn cursor-pointer px-2 py-1"><Upload size={13} /> Upload file<input type="file" accept=".txt,.vtt,.srt,.md,text/plain,text/vtt" className="sr-only" onChange={(ev) => onFile(ev.target.files?.[0])} /></label>
-              <button className={clsx("btn px-2 py-1", listening && "border-neon-red/60 text-neon-red")} onClick={toggleMic}>{listening ? <><MicOff size={13} /> Stop capture</> : <><Mic size={13} /> Live capture</>}</button>
+              <MeetingRecorder meetingId={m.id} getText={() => textRef.current} onLines={addLines} onFinished={finished} disabled={pending} />
             </div>
           </div>
-          {listening && people.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-neon/30 bg-neon/5 p-2" role="radiogroup" aria-label="Who is speaking">
-              <span className="text-xs text-mute">Who is speaking:</span>
-              {[...people, "Speaker"].map((p) => <button key={p} role="radio" aria-checked={speaker === p} onClick={() => setSpeaker(p)} className={clsx("rounded-md border px-2 py-0.5 text-xs", speaker === p ? "border-neon bg-neon/15 text-neon" : "border-line text-mute hover:bg-panel2")}>{p.split(" ")[0]}</button>)}
-            </div>
-          )}
           <textarea id={`tr-${m.id}`} className="input min-h-[140px] font-mono text-[13px]" value={text} onChange={(ev) => { setText(ev.target.value); if (source !== "upload") setSource("paste"); }}
-            placeholder={"Paste a Meet transcript, or type:\nAmaya: Yesterday finished ATL-101. Today starting audit log. No blockers.\nNuwan: We decided to hold usage tiers for the next sprint.\n\nTimestamps like [00:01:20] or .vtt files give exact talk times."} />
+            placeholder={"Paste a Meet transcript, or type:\nAmaya: Yesterday finished ATL-101. Today starting audit log. No blockers.\nNuwan: We decided to hold usage tiers for the next sprint.\n\nRecording writes this for you, with speaker names. Timestamps like [00:01:20] or .vtt files give exact talk times."} />
           <div className="flex flex-wrap items-center gap-3">
             {hasMeet && <button className="btn" disabled={pending} onClick={() => start(async () => { const r = await importTranscriptAction(m.id); if (r.ok) setText(""); setMsg(r.ok ? `Imported the Meet transcript (${r.chars.toLocaleString()} chars) with exact speaking times${r.ai ? ", notes written by AI" : ""}: ${r.actions} action item(s)` : r.error); router.refresh(); })}><Download size={14} /> Import from Meet</button>}
             <button className="btn-primary" disabled={pending || !text.trim()} onClick={() => start(async () => { const r = await saveNotesAction(m.id, text, source); setMsg(r.ok ? `Notes generated${r.ai ? " with AI" : ""}: ${r.actions} action item(s).${!r.ai ? (r.aiError ? ` AI failed (${r.aiError}); used the basic summary.` : " Add an AI key in Settings for smarter notes.") : ""}` : r.error); router.refresh(); })}><Wand2 size={14} /> {pending ? "Working…" : aiReady ? "Generate smart notes" : "Generate notes"}</button>
@@ -117,12 +105,12 @@ export function NotesTaker({ m, projectId, canEdit, hasMeet, aiReady = false, pe
           <ul className="space-y-2">
             {e.rows.map((r) => (
               <li key={r.name} className="text-sm">
-                <div className="mb-0.5 flex items-center justify-between gap-2"><span>{r.name}{r.self && <span className="ml-2 chip">you</span>}</span><span className="text-xs text-mute">{fmtTalk(r.talkSec)} · {r.sharePct}% · {r.turns} turn{r.turns === 1 ? "" : "s"}{r.estimated ? " · estimated" : ""}</span></div>
+                <div className="mb-0.5 flex items-center justify-between gap-2"><span className="flex flex-wrap items-center gap-2">{r.name}{r.self && <span className="chip">you</span>}{canLink && !r.linked && <select className="input h-7 w-44 py-0 text-xs" aria-label={`Who is ${r.name}?`} defaultValue="" onChange={(ev) => { const v = ev.target.value; if (v) start(async () => { const x = await linkSpeakerAction(r.name, v); setMsg(x.ok ? `Linked "${r.name}". Future meetings will match it automatically.` : x.error); router.refresh(); }); }}><option value="">Who is this?</option>{r.suggestions.length > 0 && <optgroup label="Likely">{r.suggestions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</optgroup>}<optgroup label="Everyone">{everyone.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</optgroup></select>}</span><span className="text-xs text-mute">{fmtTalk(r.talkSec)} · {r.sharePct}% · {r.turns} turn{r.turns === 1 ? "" : "s"}{r.estimated ? " · estimated" : ""}</span></div>
                 <div className="h-2 overflow-hidden rounded-full bg-line"><div className="h-full rounded-full bg-neon" style={{ width: `${Math.min(100, r.sharePct)}%` }} /></div>
               </li>))}
           </ul>
           {e.silent.length > 0 && <p className="mt-3 text-xs text-mute">Invited but did not speak: {e.silent.join(", ")}.</p>}
-          {e.rows.some((r) => r.estimated) && <p className="mt-2 text-xs text-mute">Times marked estimated come from word counts because the transcript has no timestamps. Import from Meet, upload a .vtt file, or use Live capture for exact times.</p>}
+          {e.rows.some((r) => r.estimated) && <p className="mt-2 text-xs text-mute">Times marked estimated come from word counts because the transcript has no timestamps. Import from Meet, upload a .vtt file, or record the meeting here for exact times.</p>}
         </div>
       )}
     </div>
