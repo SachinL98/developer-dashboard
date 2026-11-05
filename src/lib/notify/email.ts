@@ -26,7 +26,7 @@ export async function sendEmail(m: Mail): Promise<{ provider: EmailProvider }> {
   if (!provider) throw new Error("Email is not set up (ZEPTOMAIL_TOKEN or ZOHO_SMTP_USER/ZOHO_SMTP_PASSWORD, and EMAIL_FROM).");
   if (provider === "zeptomail") {
     const token = process.env.ZEPTOMAIL_TOKEN!.trim();
-    const res = await fetch(`${(process.env.ZEPTOMAIL_URL || "https://api.zeptomail.com").replace(/\/$/, "")}/v1.1/email`, {
+    const res = await fetch(`${zeptoBase()}/v1.1/email`, {
       method: "POST", signal: AbortSignal.timeout(20_000), cache: "no-store",
       headers: { "content-type": "application/json", accept: "application/json", Authorization: /^Zoho-enczapikey /i.test(token) ? token : `Zoho-enczapikey ${token}` },
       body: JSON.stringify({ from: { address: fromAddress(), name: fromName() }, to: [{ email_address: { address: m.to, name: m.toName ?? m.to } }], subject: m.subject, htmlbody: m.html, textbody: m.text }),
@@ -40,6 +40,13 @@ export async function sendEmail(m: Mail): Promise<{ provider: EmailProvider }> {
   });
   await t.sendMail({ from: `"${fromName()}" <${fromAddress()}>`, to: m.toName ? `"${m.toName.replace(/"/g, "")}" <${m.to}>` : m.to, subject: m.subject, text: m.text, html: m.html });
   return { provider };
+}
+
+/** The ZeptoMail API host. Defaults to the US one; a value typed without https:// still works, trailing slashes are dropped. */
+export function zeptoBase(raw = process.env.ZEPTOMAIL_URL): string {
+  const v = (raw ?? "").trim().replace(/\/+$/, "");
+  if (!v) return "https://api.zeptomail.com";
+  return /^https?:\/\//i.test(v) ? v : `https://${v}`;
 }
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
