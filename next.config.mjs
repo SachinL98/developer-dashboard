@@ -5,15 +5,16 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 /** @type {import('next').NextConfig} */
 const isProd = process.env.NODE_ENV === "production";
 
-// Content-Security-Policy: no third-party scripts; Google Fonts for the typeface; avatars may come from any https host.
+// Content-Security-Policy: no third-party scripts; Google Fonts for the typeface; photos are same-origin.
 const csp = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isProd ? "" : " 'unsafe-eval'"}`, // Next injects inline bootstrap scripts
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com data:",
-  "img-src 'self' data: blob: https:",
+  "img-src 'self' data: blob:", // profile photos are served from this site
   "connect-src 'self'",
   "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'",
+  ...(isProd ? ["upgrade-insecure-requests"] : []),
 ].join("; ");
 
 const securityHeaders = [
@@ -33,7 +34,7 @@ const nextConfig = {
     return [
       { source: "/:path*", headers: securityHeaders },
       // Pages and API responses carry personal data: never cache them in shared caches.
-      { source: "/((?!_next/static|_next/image|icon.svg).*)", headers: [{ key: "Cache-Control", value: "private, no-store" }] },
+      { source: "/((?!_next/static|_next/image|icon|apple-icon|favicon|manifest|api/avatar).*)", headers: [{ key: "Cache-Control", value: "private, no-store" }] },
     ];
   },
   serverExternalPackages: ["@prisma/client", "pdfkit", "pptxgenjs"],
