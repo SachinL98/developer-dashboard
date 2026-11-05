@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
+import { getSetting } from "@/lib/settings";
 import { requireUser } from "@/lib/auth/session";
 import { atLeast } from "@/lib/permissions";
 import { PageHeader } from "@/components/ui";
@@ -39,6 +40,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
   const h = await headers();
   const jiraLive = await jiraReady();
   const board = jiraLive && isAdmin ? await cachedBoardInfo() : null;
+  const boardError = jiraLive && isAdmin && !board ? (await getSetting<string>("jira.boardError")) || null : null;
   const statusMap = board ? await loadStatusMap() : {};
   const origin = process.env.APP_URL || `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host")}`;
 
@@ -84,6 +86,14 @@ export default async function Settings({ searchParams }: { searchParams: Promise
         <div className="mb-5"><ProfilePhoto id={me.id} name={me.name} hue={me.avatarHue} ver={me.avatarVer} /></div>
         <ProfileForm userId={me.id} role={me.role} capacityHrs={me.capacityHrs} githubLogin={me.githubLogin ?? ""} email={me.email} access={me.access} />
       </div>
+
+      {boardError && (
+        <div className="card-pad border-neon-amber/40 text-sm">
+          <div className="h-section mb-1 text-neon-amber">Jira board columns could not be read</div>
+          <p className="text-mute">The board is using the standard workflow columns meanwhile. Jira said: <code className="text-xs">{boardError}</code></p>
+          <p className="mt-2 text-mute">A "scope does not match" error means the Jira connection was made without permission to read the board's configuration. In the Atlassian developer console, add the scope <code className="text-xs">read:board-scope.admin:jira-software</code> to the app, then disconnect and connect Jira again above.</p>
+        </div>
+      )}
 
       {jiraLive && isAdmin && (
         <div className="card-pad">
