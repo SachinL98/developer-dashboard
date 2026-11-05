@@ -2,7 +2,7 @@
 
 Result: every push to `main` is tested, the database is migrated, the app is deployed to Vercel, and a health check confirms it is up. A schedule keeps Jira and meeting transcripts in sync. Pull requests are tested automatically.
 
-You need: a GitHub repository, a Vercel account, a Google Workspace account (for sign-in) and about 30 minutes.
+You need: a GitHub repository, a Vercel account, and about 30 minutes.
 
 ## 1. Create the database (5 min)
 1. Go to **neon.tech**, create a project (choose a region near your team) and a database.
@@ -33,13 +33,11 @@ Open `.env.vercel` and fill in these values (leave the others empty or delete th
 | `DATABASE_URL` | the **pooled** string from step 1 |
 | `APP_URL` | `https://<your-project>.vercel.app` (or your own domain) |
 | `AUTH_SECRET` | run `openssl rand -base64 48` |
-| `ADMIN_EMAILS` | your email, so you become the admin |
 | `AUTH_ALLOWED_DOMAIN` | `spaceitlabs.com` |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | from step 5 below (you can add them after, see step 5) |
 | `CRON_SECRET` | run `openssl rand -hex 32` and keep a copy |
 | `TEAM_TIMEZONE` | `Asia/Colombo` |
 
-Do **not** set `DEMO_MODE`. The app refuses to start in production without Google sign-in, so complete step 5 before the first deploy.
+Sign-in is email and password, so no Google setup is needed to get started. Google is only used later, optionally, for Calendar and Meet links.
 
 Upload them to Vercel (Production):
 ```bash
@@ -58,11 +56,14 @@ gh secret set CRON_SECRET          # same as CRON_SECRET above
 ```
 Also create an environment named **production** (Settings → Environments). Optionally add required reviewers there to approve each production deploy.
 
-## 5. Set up Google sign-in (5 min)
-1. Open **console.cloud.google.com → APIs & Services → Credentials → Create credentials → OAuth client ID → Web application**.
-2. Under Authorised redirect URIs add: `https://<your-domain>/api/auth/google/callback`
-3. Copy the Client ID and Client secret into `.env.vercel`, then run `bash scripts/vercel-env.sh` again.
-4. In the OAuth consent screen choose **Internal** so only your Workspace can sign in.
+## 5. Create your first admin (2 min)
+The database starts empty and there is no self sign-up, so create the first admin from your computer, against the **production** database:
+```bash
+neon env pull --file .env.neon --branch production --services postgres
+set -a; . ./.env.neon; set +a
+DATABASE_URL="$DATABASE_URL_UNPOOLED" npm run user:create -- --email you@yourcompany.com --name "Your Name" --access ADMIN
+```
+Run it after the first deploy has applied the migrations (step 6). A one-time password is saved to `.credentials-<email>.txt` (never printed). Sign in with it, choose your own password, then delete the file. Add everyone else under **Admin → Users**.
 
 ## 6. First deploy (5 min)
 Merge your work into `main` (or open **Actions → Deploy to Vercel → Run workflow**). The workflow:
@@ -71,10 +72,10 @@ Merge your work into `main` (or open **Actions → Deploy to Vercel → Run work
 3. builds and deploys to Vercel,
 4. checks `/api/health`.
 
-When it is green, open your `APP_URL` and sign in with a Google account listed in `ADMIN_EMAILS`.
+When it is green, run step 5 if you have not yet, then open your `APP_URL` and sign in with the email and one-time password.
 
 ## 7. Finish inside the app (10 min)
-Open **Settings → Setup guide**. It walks through Jira, GitHub and the webhooks with copy buttons. The first sign-in creates your admin account; add colleagues in **Admin → Users**.
+Open **Settings → Setup guide**. It walks through Jira, GitHub and the webhooks with copy buttons. Add colleagues in **Admin → Users**; each gets a one-time password.
 
 ## What runs automatically
 | When | What |
@@ -102,8 +103,8 @@ Optional previews: set the repository variable `ENABLE_PREVIEWS=true`, and give 
 | Symptom | Fix |
 |---|---|
 | Deploy fails at "Apply database migrations" | Check `DATABASE_URL_DIRECT` is the direct (non-pooler) string and the database is reachable. |
-| Site shows an error right after deploy | Open the Vercel function logs. The app refuses to start without `AUTH_SECRET` (32+ characters), an `https://` `APP_URL` and Google sign-in. |
-| "redirect_uri_mismatch" on sign-in | The redirect URI in Google must be exactly `<APP_URL>/api/auth/google/callback`. |
+| Site shows an error right after deploy | Open the Vercel function logs. The app refuses to start without `AUTH_SECRET` (32+ characters), and an `https://` `APP_URL`. |
+| Cannot sign in | Check the email is on `AUTH_ALLOWED_DOMAIN` and the account exists (Admin → Users). Five wrong attempts lock an account for 15 minutes; an admin can reset the password. |
 | Health check fails | Check `DATABASE_URL` (pooled string with `pgbouncer=true`) and that the database allows connections from Vercel. |
 | Scheduled sync shows 401 or 503 | `CRON_SECRET` differs between GitHub and Vercel, or is missing in Vercel. |
 | Report PDF or slides fail | Look for a missing-file error in the function logs; redeploy and try again. |

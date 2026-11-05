@@ -4,10 +4,10 @@ Everything below is configuration; no code changes. Until it is done the app run
 
 ## 1. Deploy basics
 1. Postgres + `npm run db:deploy` (applies `prisma/migrations`). Demo data is optional: `npm run db:seed` (**wipes tables, never run it against real data**).
-2. Set `APP_URL` (public https URL), `AUTH_SECRET` (`openssl rand -base64 48`), `ADMIN_EMAILS` (you), `CRON_SECRET` (any long random string).
+2. Set `APP_URL` (public https URL), `AUTH_SECRET` (`openssl rand -base64 48`), `CRON_SECRET` (any long random string).
 3. `NODE_ENV=production`: demo sign-in is then off, cookies are `Secure`, webhooks refuse to run without their secrets.
 
-## 2. Google (sign-in + Calendar + Meet)
+## 2. Google (Calendar + Meet, optional; sign-in does not use Google)
 1. Google Cloud Console → new project → **APIs & Services → Library**: enable **Google Calendar API** and **Google Meet REST API**.
 2. **OAuth consent screen**: User type **Internal** (needs the Workspace org; avoids Google's app verification). Add scopes: `openid`, `email`, `profile`, `.../auth/calendar.events`, `.../auth/meetings.space.readonly`.
 3. **Credentials → Create OAuth client ID → Web application**. Authorised redirect URI: `{APP_URL}/api/auth/google/callback`.
@@ -45,7 +45,7 @@ curl -fsS -H "Authorization: Bearer $CRON_SECRET" $APP_URL/api/cron/transcripts 
 | Plan sprints, assign tickets, move any card (staging/prod), apply estimates, reviewer pass, sync, meetings setup | | ✔ | ✔ |
 | Manage users and roles | | | ✔ |
 
-New `@spaceitlabs.com` sign-ins start as Developer. The first sign-in on an instance with no admin, and anyone in `ADMIN_EMAILS`, becomes Admin.
+People sign in with email and password. There is no self sign-up: an admin adds each person under **Admin → Users** (they get a one-time password and must choose their own at first sign-in). The very first admin is created from a terminal with `npm run user:create -- --email you@company.com --name "Your Name" --access ADMIN` (uses `DATABASE_URL`; the one-time password is saved to a private `.credentials-*.txt` file). Passwords need 12+ characters with a letter and a number. Five wrong attempts lock the account for 15 minutes. If someone forgets their password, an admin resets it.
 
 ## Admin settings (no redeploy needed)
 
@@ -97,7 +97,7 @@ Only a lead can override a Claude review's items; a developer re-runs it after p
 ## Production checklist
 The server refuses to start in production (`src/instrumentation.ts`) unless these are right:
 - `AUTH_SECRET`: 32+ random characters (`openssl rand -base64 48`). It encrypts every stored Jira, Google and Claude key. Changing it signs everyone out of those connections.
-- `APP_URL`: the public `https://` address. `DATABASE_URL` set. Google sign-in configured (`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`) with `AUTH_ALLOWED_DOMAIN`. `DEMO_MODE` must not be used.
+- `APP_URL`: the public `https://` address. `DATABASE_URL` set. `AUTH_ALLOWED_DOMAIN` set. Create the first admin with `npm run user:create` (see Roles).
 - `CRON_SECRET`, `JIRA_WEBHOOK_SECRET` and `GITHUB_WEBHOOK_SECRET`: each endpoint is switched off until its secret exists. Jira can send the secret as `?secret=`; other callers should use the `x-webhook-secret` header.
 - Serve over HTTPS only (the app sends HSTS, a strict Content-Security-Policy, `X-Frame-Options: DENY`, and `no-store` caching on pages and API responses).
 - Run `npm run db:deploy` (applies migrations) then `npm run build` and `npm start`. Health check: `GET /api/health`.

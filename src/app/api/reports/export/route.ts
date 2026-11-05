@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 /** GET /api/reports/export?kind=week|sprint|month&ref=...&format=pdf|pptx. Signed-in users only. */
 export async function GET(req: Request) {
   const user = await currentUser();
-  if (!user) return NextResponse.json({ error: "Sign in first" }, { status: 401 });
+  if (!user || user.mustChangePassword) return NextResponse.json({ error: "Sign in first" }, { status: 401 });
   const q = new URL(req.url).searchParams;
   const kind = q.get("kind") as ReportKind;
   const format = q.get("format");

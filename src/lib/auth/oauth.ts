@@ -35,6 +35,4 @@ export async function finishTx(provider: Tx["provider"], state: string | null): 
 }
 
 export const googleLoginConfigured = () => !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
-/** Demo sign-in exists only while real sign-in is NOT configured: configuring Google switches it off even if DEMO_MODE=true. */
-export const demoMode = () => !googleLoginConfigured() && (process.env.DEMO_MODE === "true" || process.env.NODE_ENV !== "production");
 export const atlassianConfigured = () => !!(process.env.ATLASSIAN_CLIENT_ID && process.env.ATLASSIAN_CLIENT_SECRET);

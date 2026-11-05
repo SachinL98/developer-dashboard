@@ -11,3 +11,4 @@ next-env.d.ts
 .env.neon
 .env*
 !.env.example
+.credentials-*
