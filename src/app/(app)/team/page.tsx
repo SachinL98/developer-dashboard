@@ -1,12 +1,16 @@
 import Link from "next/link";
 import { PageHeader, Avatar, Progress } from "@/components/ui";
 import { developerStats } from "@/lib/queries";
+import { requireUser } from "@/lib/auth/session";
+import { canViewDeveloper } from "@/lib/permissions";
 
 export default async function Team() {
-  const stats = await developerStats();
+  const me = await requireUser();
+  // Developers see only themselves; leads and admins see everyone.
+  const stats = (await developerStats()).filter((s) => canViewDeveloper(me, s.d.id));
   return (
     <div>
-      <PageHeader title="People" sub="Workload and delivery for each developer." />
+      <PageHeader title="People" sub={me.access === "DEVELOPER" ? "Your workload and delivery." : "Workload and delivery for each developer."} />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {stats.map((s) => (
           <Link key={s.d.id} href={`/team/${s.d.id}`} className="card-pad block transition hover:border-neon/40">

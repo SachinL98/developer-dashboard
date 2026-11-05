@@ -7,7 +7,7 @@ import { LineSeries } from "@/components/Charts";
 import { hoursPerDay } from "@/lib/analytics";
 import { fmtDay, fmtTime } from "@/lib/time";
 import { requireUser } from "@/lib/auth/session";
-import { atLeast } from "@/lib/permissions";
+import { atLeast, canViewDeveloper } from "@/lib/permissions";
 import { aiKeyFor, latestInsight } from "@/lib/ai";
 import { loadDoneTickets, type DevProfile } from "@/lib/insights";
 import { profileStats } from "@/lib/insights-calc";
@@ -15,6 +15,8 @@ import { DevInsights } from "@/components/DevInsights";
 
 export default async function Dev({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const viewer = await requireUser();
+  if (!canViewDeveloper(viewer, id)) notFound();
   const [s] = await developerStats(id);
   if (!s) notFound();
   const now = new Date();
@@ -23,7 +25,6 @@ export default async function Dev({ params }: { params: Promise<{ id: string }> 
   const series = Object.entries(per).map(([name, v]) => ({ name: name.slice(5), hours: Math.round(v * 10) / 10 }));
   const avgStart = sessions.length ? sessions.reduce((a, x) => a + ((x.startedAt.getUTCHours() * 60 + x.startedAt.getUTCMinutes())), 0) / sessions.length : 0;
   const tickets = await db.ticket.findMany({ where: { assigneeId: id }, orderBy: { updatedAt: "desc" }, take: 12 });
-  const viewer = await requireUser();
   const [stats, saved, ai] = await Promise.all([loadDoneTickets().then((d) => profileStats(id, d)), latestInsight("DEV_PROFILE", id), aiKeyFor(viewer.id)]);
   const profile = saved ? ({ ...(saved.content as any), stats } as DevProfile) : null;
   return (
