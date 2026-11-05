@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
 import { Nav } from "@/components/Nav";
@@ -16,6 +17,7 @@ export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const me = await requireUser();
+  if (me.mustChangePassword) redirect("/change-password");
   const [session, timer, conns, cards] = await Promise.all([
     db.workSession.findFirst({ where: { developerId: me.id, endedAt: null } }),
     db.timeEntry.findFirst({ where: { developerId: me.id, endedAt: null }, include: { ticket: true } }),

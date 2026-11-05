@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth/session";
 import { atLeast } from "@/lib/permissions";
 import { PageHeader } from "@/components/ui";
 import { setupGuide, atlassianConfigured } from "@/lib/integrations/status";
+import { ChangePasswordForm } from "@/components/ChangePasswordForm";
 import { CopyText } from "@/components/CopyText";
 import { googleOAuthConfigured } from "@/lib/integrations/google";
 import { SyncButtons } from "@/components/SyncButtons";
@@ -45,7 +46,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Settings" sub={isAdmin ? "Connect Jira and Google for the team, add your Claude key and manage your profile." : "Add your Claude key and manage your profile."}
+      <PageHeader title="Settings" sub={isAdmin ? "Connect Jira and Google for the team, add your Claude key, and manage your profile and password." : "Add your Claude key, and manage your profile and password."}
         actions={atLeast(me.access, "LEAD") ? <SyncButtons what="jira" /> : undefined} />
       {isAdmin && sp.connected && <div className="rounded-lg border border-neon-lime/40 bg-neon-lime/10 px-4 py-2 text-sm text-neon-lime">{sp.connected === "jira" ? "Jira" : "Google"} connected.</div>}
       {sp.error && <div role="alert" className="rounded-lg border border-neon-red/40 bg-neon-red/10 px-4 py-2 text-sm text-neon-red">{NOTES[sp.error] ?? sp.error}</div>}
@@ -67,6 +68,11 @@ export default async function Settings({ searchParams }: { searchParams: Promise
       </div>}
 
       <ClaudeKeyCard connected={!!get("CLAUDE")} serverFallback={!!process.env.ANTHROPIC_API_KEY} />
+
+      <div className="card-pad">
+        <div className="h-section mb-3">Change password</div>
+        <div className="max-w-md"><ChangePasswordForm /></div>
+      </div>
 
       <div className="card-pad">
         <div className="h-section mb-3">My profile</div>

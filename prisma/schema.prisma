@@ -73,6 +73,12 @@ model Developer {
   googleSub   String?  @unique
   picture     String?
   lastLoginAt DateTime?
+  // Email + password sign-in
+  passwordHash        String?
+  mustChangePassword  Boolean   @default(false)
+  passwordChangedAt   DateTime?
+  failedLogins        Int       @default(0)
+  lockedUntil         DateTime?
   authSessions AuthSession[]
   connections Connection[]
   tickets     Ticket[]       @relation("Assignee")

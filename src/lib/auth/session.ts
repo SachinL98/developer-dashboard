@@ -45,10 +45,17 @@ export class ForbiddenError extends Error {}
 export async function requireAccess(min: AccessLevel) {
   const u = await currentUser();
   if (!u) throw new ForbiddenError("Your session has expired. Sign in again.");
+  if (u.mustChangePassword) throw new ForbiddenError("Change your password first.");
   if (!atLeast(u.access, min)) throw new ForbiddenError(min === "ADMIN" ? "Admins only." : "Leads and admins only.");
   return u;
 }
 
 export async function pruneSessions() {
   await db.authSession.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+}
+
+/** Signs out every session of a user except (optionally) the one making this request. */
+export async function revokeSessions(userId: string, exceptCurrent = false) {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  await db.authSession.deleteMany({ where: { userId, ...(exceptCurrent && token ? { tokenHash: { not: sha256(token) } } : {}) } });
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { appUrl, finishTx } from "@/lib/auth/oauth";
-import { LoginError, decodeJwtPayload, provisionUser, validateClaims } from "@/lib/auth/identity";
-import { createSession, currentUser } from "@/lib/auth/session";
+import { LoginError, decodeJwtPayload, validateClaims } from "@/lib/auth/identity";
+import { currentUser } from "@/lib/auth/session";
 import { atLeast } from "@/lib/permissions";
 import { GOOGLE_TOKEN_URL, saveConnection, type TokenSet } from "@/lib/integrations/connections";
 import { GOOGLE_WORK_SCOPES } from "@/lib/auth/scopes";
@@ -42,9 +42,7 @@ export async function GET(req: Request) {
       return NextResponse.redirect(`${base}/settings?connected=google`);
     }
 
-    const user = await provisionUser(who);
-    await createSession(user.id);
-    return NextResponse.redirect(`${base}${tx.next}`);
+    return fail("/login", "Google is only used to connect Calendar and Meet. Sign in with your email and password.");
   } catch (e) {
     return fail(back, e instanceof LoginError ? e.message : "Google sign-in failed. Try again, or contact an admin if it keeps happening.");
   }

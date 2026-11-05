@@ -19,6 +19,8 @@ import { localDate } from "@/lib/time";
 import { STATUS_ORDER, type StatusKey } from "@/lib/workflow";
 import type { ReviewItem } from "@/lib/review-template";
 import { redirect } from "next/navigation";
+import { createUserWithPassword } from "@/lib/auth/login";
+import { generateTempPassword, hashPassword } from "@/lib/auth/password";
 import { userMessage } from "@/lib/safe-error";
 import { rateLimit } from "@/lib/rate-limit";
 import { saveUserKey, removeUserKey, validateKey } from "@/lib/ai";
@@ -596,5 +598,33 @@ export async function reviewEstimateAction(ticketId: string): Promise<Result<{ r
     rateLimit(`ai:${u.id}`, 30, 3_600_000);
     const review = await reviewEstimate(id.parse(ticketId), u.id);
     return { ok: true, review };
+  } catch (e) { return fail(e); }
+}
+
+
+// ----- accounts (admin) -----
+/** Create a user with a one-time password. The password is returned once so the admin can hand it over. */
+export async function createUserAction(input: { name: string; email: string; access: "DEVELOPER" | "LEAD" | "ADMIN" }): Promise<Result<{ tempPassword: string; email: string }>> {
+  try {
+    await requireAccess("ADMIN");
+    const p = z.object({ name: z.string().trim().min(2).max(80), email: z.string().trim().email().max(120), access: z.enum(["DEVELOPER", "LEAD", "ADMIN"]) }).parse(input);
+    const temp = generateTempPassword();
+    const u = await createUserWithPassword(p, temp);
+    revalidatePath("/admin/users");
+    return { ok: true, tempPassword: temp, email: u.email };
+  } catch (e) { return fail(e); }
+}
+
+/** New one-time password, clears any lock and signs the person out everywhere. */
+export async function resetPasswordAction(userId: string): Promise<Result<{ tempPassword: string }>> {
+  try {
+    const admin = await requireAccess("ADMIN");
+    const uid = id.parse(userId);
+    if (uid === admin.id) return { ok: false, error: "Use Change password in Settings for your own account." };
+    const temp = generateTempPassword();
+    await db.developer.update({ where: { id: uid }, data: { passwordHash: await hashPassword(temp), mustChangePassword: true, failedLogins: 0, lockedUntil: null } });
+    await db.authSession.deleteMany({ where: { userId: uid } });
+    revalidatePath("/admin/users");
+    return { ok: true, tempPassword: temp };
   } catch (e) { return fail(e); }
 }

@@ -25,7 +25,7 @@ export function canPatchTicket(actor: Actor, ticket: { assigneeId: string | null
   return ticket.assigneeId === actor.id || ticket.assigneeId === null;
 }
 
-/** Emails that always get ADMIN on first sign-in (comma separated env). */
+/** Emails that get the Admin role when their account is created (comma separated env). */
 export const bootstrapAdmins = () => (process.env.ADMIN_EMAILS ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
 
 export const allowedDomain = () => (process.env.AUTH_ALLOWED_DOMAIN || "spaceitlabs.com").toLowerCase();

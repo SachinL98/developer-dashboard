@@ -11,7 +11,7 @@ export const runtime = "nodejs";
 /** GET /api/reports/patterns?dev=<developer id>|team&format=pdf|pptx. Only that developer, leads and admins; never other developers. */
 export async function GET(req: Request) {
   const user = await currentUser();
-  if (!user) return NextResponse.json({ error: "Sign in first" }, { status: 401 });
+  if (!user || user.mustChangePassword) return NextResponse.json({ error: "Sign in first" }, { status: 401 });
   const q = new URL(req.url).searchParams;
   const dev = q.get("dev") || user.id;
   const format = q.get("format");

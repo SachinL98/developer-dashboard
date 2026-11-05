@@ -17,7 +17,7 @@ npm test                      # unit tests (workflow rules, estimation, notes, a
 
 **Hosting on Vercel with automated deploys: [docs/VERCEL.md](docs/VERCEL.md).**
 
-Out of the box (no Google credentials, not production) the login page offers a seeded-user picker. For real use follow **[docs/SETUP.md](docs/SETUP.md)**: Google sign-in restricted to the office domain, per-user Jira and Google connections, webhooks and scheduled sync.
+Sign-in is email and password. In development the login page also offers a seeded-user picker (demo accounts use the password `Welcome-Dash-2026`). In production there is no self sign-up: create the first admin with `npm run user:create` and add everyone else under Admin → Users. For real use follow **[docs/SETUP.md](docs/SETUP.md)**: email + password accounts restricted to the office domain, per-user Jira and Google connections, webhooks and scheduled sync.
 
 ## What's in it
 
@@ -52,7 +52,7 @@ Standup Mon–Fri 08:45–09:00 · Grooming Mon–Fri 09:00–09:15 · Estimatio
 If an integration call fails, the local change still succeeds and the error is surfaced in the UI.
 
 ## Security model
-- Sign-in with Google (OIDC, PKCE, state cookie), only `AUTH_ALLOWED_DOMAIN` accounts with verified email; DB-backed sessions (hashed token, httpOnly cookie, 14 days); deactivating a user signs them out everywhere.
+- Sign-in with email and password: scrypt-hashed passwords (12+ characters), accounts only for `AUTH_ALLOWED_DOMAIN` emails, no self sign-up, one-time passwords that must be changed at first sign-in, per-account lockout (5 wrong attempts locks for 15 minutes), identical error messages so emails can't be enumerated. DB-backed sessions (hashed token, httpOnly cookie, 14 days); changing or resetting a password signs out other devices; deactivating a user signs them out everywhere.
 - Roles: developer, lead, admin (see the table in docs/SETUP.md). Every server action re-checks the role; inputs are validated with zod.
 - Jira and Google tokens are per user, AES-256-GCM encrypted with `AUTH_SECRET`, refreshed automatically and dropped if revoked. Actions in Jira/Google are done as the signed-in person.
 - Webhooks and cron endpoints require their secrets and refuse to run in production without them.

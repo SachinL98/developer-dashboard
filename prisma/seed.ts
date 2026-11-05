@@ -3,7 +3,9 @@ import { STATUS_ORDER } from "../src/lib/workflow";
 import { occurrences, defFor } from "../src/lib/schedule";
 import { parseNotes } from "../src/lib/notes";
 import { scanDiff, freshChecklist } from "../src/lib/review-template";
+import { hashPassword } from "../src/lib/auth/password";
 
+if (process.env.NODE_ENV === "production" && process.env.ALLOW_PROD_SEED !== "true") { console.error("Refusing to seed demo data in production."); process.exit(1); }
 const db = new PrismaClient();
 let seedN = 42;
 const rnd = () => ((seedN = (seedN * 1664525 + 1013904223) % 4294967296) / 4294967296);
@@ -55,7 +57,9 @@ async function main() {
     db.timeEntry.deleteMany(), db.workSession.deleteMany(), db.connection.deleteMany(), db.authSession.deleteMany(), db.appSetting.deleteMany(), db.transition.deleteMany(), db.ticket.deleteMany(), db.sprint.deleteMany(),
     db.project.deleteMany(), db.developer.deleteMany(),
   ]);
-  const D = await Promise.all(devs.map((d) => db.developer.create({ data: d })));
+  // Demo accounts share one password so the seeded team can sign in during development. Never seed a production database.
+  const demoHash = await hashPassword("Welcome-Dash-2026");
+  const D = await Promise.all(devs.map((d) => db.developer.create({ data: { ...d, passwordHash: demoHash } })));
   const coders = D.slice(0, 5);
   const P = await Promise.all(projects.map((p) => db.project.create({ data: p })));
 

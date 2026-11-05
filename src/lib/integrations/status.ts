@@ -1,7 +1,7 @@
 import { githubConfigured } from "./github";
 import { googleOAuthConfigured } from "./google";
 import { jiraProjectConfigured } from "./jira";
-import { atlassianConfigured, demoMode } from "../auth/oauth";
+import { atlassianConfigured } from "../auth/oauth";
 
 export interface EnvCheck { name: string; ok: boolean; hint: string }
 
@@ -12,10 +12,10 @@ export function setupChecklist(): { group: string; items: EnvCheck[] }[] {
     { group: "Core", items: [
       { name: "APP_URL", ok: has("APP_URL"), hint: "Public URL, e.g. https://dev.spaceitlabs.com. Used for OAuth redirect URIs." },
       { name: "AUTH_SECRET", ok: (process.env.AUTH_SECRET?.length ?? 0) >= 32, hint: "32+ random chars (openssl rand -base64 48). Encrypts stored OAuth tokens." },
-      { name: "ADMIN_EMAILS", ok: has("ADMIN_EMAILS"), hint: "Comma-separated emails that become admins on first sign-in." },
+      { name: "ADMIN_EMAILS", ok: has("ADMIN_EMAILS"), hint: "Optional: accounts created with these emails get the Admin role." },
       { name: "CRON_SECRET", ok: has("CRON_SECRET"), hint: "Bearer token for /api/cron/* (scheduled Jira sync and transcript import)." },
     ] },
-    { group: "Google sign-in, Calendar and Meet", items: [
+    { group: "Google Calendar and Meet (optional)", items: [
       { name: "GOOGLE_CLIENT_ID", ok: has("GOOGLE_CLIENT_ID"), hint: "OAuth client (Web). Consent screen user type: Internal." },
       { name: "GOOGLE_CLIENT_SECRET", ok: has("GOOGLE_CLIENT_SECRET"), hint: "Secret of the same client." },
       { name: "AUTH_ALLOWED_DOMAIN", ok: has("AUTH_ALLOWED_DOMAIN"), hint: "Defaults to spaceitlabs.com." },
@@ -37,7 +37,6 @@ export function setupChecklist(): { group: string; items: EnvCheck[] }[] {
   ];
 }
 
-export const authMode = () => (googleOAuthConfigured() ? "google" : demoMode() ? "demo" : "unconfigured") as "google" | "demo" | "unconfigured";
 export { atlassianConfigured };
 
 export interface SetupStep {
@@ -52,7 +51,7 @@ export function setupGuide(origin: string): SetupStep[] {
   const has = (k: string) => !!process.env[k];
   const v = (name: string, ok = has(name)) => ({ name, ok });
   const all = (xs: { ok: boolean }[]) => xs.every((x) => x.ok);
-  const basics = [v("APP_URL"), v("AUTH_SECRET", (process.env.AUTH_SECRET?.length ?? 0) >= 32), v("ADMIN_EMAILS")];
+  const basics = [v("APP_URL"), v("AUTH_SECRET", (process.env.AUTH_SECRET?.length ?? 0) >= 32), v("AUTH_ALLOWED_DOMAIN")];
   const google = [v("GOOGLE_CLIENT_ID"), v("GOOGLE_CLIENT_SECRET")];
   const jira = [v("ATLASSIAN_CLIENT_ID"), v("ATLASSIAN_CLIENT_SECRET"), v("JIRA_PROJECT_KEY", jiraProjectConfigured()), v("JIRA_BOARD_ID")];
   const github = [v("GITHUB_TOKEN", githubConfigured()), v("GITHUB_ORG"), v("GITHUB_WEBHOOK_SECRET")];
@@ -61,9 +60,10 @@ export function setupGuide(origin: string): SetupStep[] {
     { id: "basics", title: "Basic settings", summary: "Tell the server its address and a secret.", done: all(basics), vars: basics, steps: [
       "Set APP_URL to the address people use, for example https://dev.spaceitlabs.com.",
       "Set AUTH_SECRET to a long random text. Run: openssl rand -base64 48",
-      "Set ADMIN_EMAILS to your email so you become the admin when you sign in.",
+      "Set AUTH_ALLOWED_DOMAIN to your company email domain, for example spaceitlabs.com. Only addresses on it can have accounts.",
+      "Create the first admin from a terminal: npm run user:create -- --email you@company.com --name \"Your Name\" --access ADMIN. It saves a one-time password to a private file. Sign in, then choose your own password. Add everyone else in Admin, then Users.",
     ] },
-    { id: "google", title: "Google sign-in, Calendar and Meet", summary: "Lets the team sign in and creates meeting links.", done: all(google), vars: google,
+    { id: "google", title: "Google Calendar and Meet", optional: true, summary: "Optional. Creates meeting links and reads transcripts. Sign-in does not use Google.", done: all(google), vars: google,
       copy: [{ label: "Redirect URI", value: `${origin}/api/auth/google/callback` }], steps: [
       "Open console.cloud.google.com, go to APIs & Services, then Credentials, and create an OAuth client of type Web application.",
       "Paste the Redirect URI below into Authorised redirect URIs.",
