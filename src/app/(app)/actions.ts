@@ -467,6 +467,22 @@ export async function saveProjectAction(projectId: string, patch: { name: string
     return { ok: true };
   } catch (e) { return fail(e); }
 }
+/** Admin: add a project. Jira sync also creates one automatically for the project key it finds. */
+export async function createProjectAction(input: { key: string; name: string; repo?: string }): Promise<Result> {
+  try {
+    await requireAccess("ADMIN");
+    const v = z.object({
+      key: z.string().trim().toUpperCase().regex(/^[A-Z][A-Z0-9_]{1,9}$/, "Project key is 2-10 capital letters or digits, like ATL"),
+      name: z.string().trim().min(1).max(80),
+      repo: z.string().trim().regex(/^([A-Za-z0-9-]+\/[A-Za-z0-9._-]+)?$/, "Use org/repo").optional(),
+    }).parse(input);
+    if (await db.project.findUnique({ where: { key: v.key } })) return { ok: false, error: "A project with that key already exists." };
+    await svc.ensureProject(v.key);
+    await db.project.update({ where: { key: v.key }, data: { name: v.name, repo: v.repo || null } });
+    touch(); revalidatePath("/admin/workspace");
+    return { ok: true };
+  } catch (e) { return fail(e); }
+}
 void getMeetingSettings;
 
 // ----- admin: review template -----

@@ -203,8 +203,21 @@ export async function saveReview(reviewId: string, items: ReviewItem[]) {
 // ---------- Jira sync ----------
 const STATUS_ORDER_LIST = ["BACKLOG", "READY_TO_DEV", "IN_PROGRESS", "INITIAL_REVIEW", "REVIEW", "DEPLOYED_STG", "FAILED_STG", "DOCUMENTED", "DEPLOYED_PROD", "DONE"];
 
+const PROJECT_COLORS = ["#2563eb", "#7c3aed", "#0891b2", "#16a34a", "#d97706", "#db2777"];
+
+/** A project row for a Jira project key. Created on first use so a fresh install does not need manual setup. */
+export async function ensureProject(key: string) {
+  const k = key.trim().toUpperCase();
+  const n = await db.project.count();
+  return db.project.upsert({ where: { key: k }, update: {}, create: { key: k, name: k, color: PROJECT_COLORS[n % PROJECT_COLORS.length] } });
+}
+
 async function syncContext() {
-  return { devs: await db.developer.findMany(), projects: await db.project.findMany({ orderBy: { key: "asc" } }), map: await jira.loadStatusMap() };
+  const projects = await db.project.findMany({ orderBy: { key: "asc" } });
+  // The Jira project from workspace settings always has a local project to attach tickets to.
+  const configured = (await getWorkspace()).jira.projectKey;
+  if (/^[A-Z][A-Z0-9_]{1,9}$/.test(configured) && !projects.some((p) => p.key === configured)) projects.push(await ensureProject(configured));
+  return { devs: await db.developer.findMany(), projects, map: await jira.loadStatusMap() };
 }
 
 /**
@@ -213,8 +226,9 @@ async function syncContext() {
  */
 export async function applyJiraIssue(i: jira.JiraIssue, c?: Awaited<ReturnType<typeof syncContext>>) {
   const ctx = c ?? (await syncContext());
-  const project = ctx.projects.find((p) => p.key === i.key.split("-")[0]) ?? ctx.projects[0];
-  if (!project) throw new Error("Create a project first");
+  const prefix = i.key.split("-")[0];
+  let project = ctx.projects.find((p) => p.key === prefix);
+  if (!project) { project = await ensureProject(prefix); ctx.projects.push(project); }
   const status = jira.statusFromJira(i.status, ctx.map, i.statusCategory) ?? "BACKLOG";
   const dev = ctx.devs.find((d) => (i.assigneeEmail && d.email === i.assigneeEmail) || (i.assigneeId && d.jiraAccount === i.assigneeId));
   const sprint = i.sprintId ? await db.sprint.findFirst({ where: { jiraId: i.sprintId } }) : null;

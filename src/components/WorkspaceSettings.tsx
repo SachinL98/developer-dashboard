@@ -1,9 +1,9 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { Save } from "lucide-react";
-import { saveProjectAction, saveWorkspaceAction } from "@/app/(app)/actions";
+import { saveProjectAction, createProjectAction, saveWorkspaceAction } from "@/app/(app)/actions";
 import type { WorkspaceConfig } from "@/lib/config";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -16,11 +16,13 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 export function WorkspaceSettings({ cfg, timezones, projects }: { cfg: WorkspaceConfig; timezones: string[]; projects: Proj[] }) {
   const [v, setV] = useState(cfg);
   const [projs, setProjs] = useState(projects);
+  useEffect(() => { setProjs(projects); }, [projects]);
   const [msg, setMsg] = useState<{ t: string; bad?: boolean } | null>(null);
   const [pending, start] = useTransition();
   const router = useRouter();
   const num = (s: string) => (s === "" ? NaN : Number(s));
   const say = (ok: boolean, t: string) => setMsg({ t, bad: !ok });
+  const [np, setNp] = useState({ key: "", name: "", repo: "" });
 
   return (
     <div className="space-y-6">
@@ -72,6 +74,13 @@ export function WorkspaceSettings({ cfg, timezones, projects }: { cfg: Workspace
               <button className="btn" disabled={pending} onClick={() => start(async () => { const r = await saveProjectAction(p.id, { name: p.name, repo: p.repo }); say(r.ok, r.ok ? `${p.key} saved.` : r.error); router.refresh(); })}>Save</button>
             </li>))}
         </ul>
+        {!projs.length && <p className="text-sm text-mute">No projects yet. They are created automatically when Jira syncs, or add one here.</p>}
+        <div className="grid gap-2 border-t border-line pt-3 sm:grid-cols-[110px_1fr_1fr_auto]">
+          <input className="input" aria-label="New project key" placeholder="Key (ATL)" value={np.key} onChange={(e) => setNp({ ...np, key: e.target.value.toUpperCase() })} />
+          <input className="input" aria-label="New project name" placeholder="Name" value={np.name} onChange={(e) => setNp({ ...np, name: e.target.value })} />
+          <input className="input" aria-label="New project repository" placeholder={`${v.github.org || "org"}/repo (optional)`} value={np.repo} onChange={(e) => setNp({ ...np, repo: e.target.value })} />
+          <button className="btn-primary" disabled={pending || !np.key || !np.name} onClick={() => start(async () => { const r = await createProjectAction({ key: np.key, name: np.name, repo: np.repo }); say(r.ok, r.ok ? `${np.key} added.` : r.error); if (r.ok) setNp({ key: "", name: "", repo: "" }); router.refresh(); })}>Add project</button>
+        </div>
       </div>
     </div>
   );
