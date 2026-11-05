@@ -18,6 +18,9 @@ import { addDays } from "@/lib/capacity";
 import { forecastFinish } from "@/lib/capacity";
 import { localDate } from "@/lib/time";
 import { DONE_STATES } from "@/lib/workflow";
+import { suggestFinishHours } from "@/lib/finish-time";
+import { loadPaceHistory } from "@/lib/finish-time-data";
+import { FinishCountdown } from "@/components/FinishCountdown";
 
 export default async function TicketPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -40,6 +43,12 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
     if (d) forecast = { date: d, leaveDays: plain && plain !== d ? Math.round((new Date(d).getTime() - new Date(plain).getTime()) / 86_400_000) : 0 };
   }
   const running = t.timeEntries.some((e) => !e.endedAt && e.developerId === me?.id);
+  // How long this should take for this person, from how long their earlier tickets of the same size took.
+  const open = !(DONE_STATES as string[]).includes(t.status);
+  const pace = open ? await loadPaceHistory(t.assigneeId) : null;
+  const finish = pace ? suggestFinishHours({ points: t.storyPoints, estimateHrs: t.estimateHrs }, pace.mine, pace.team) : null;
+  const doneSec = Math.floor(sumEntries(t.timeEntries.filter((e) => e.endedAt)) / 1000);
+  const runEntry = t.timeEntries.find((e) => !e.endedAt);
   const idx = STATUS_ORDER.indexOf(t.status as StatusKey);
   const visited = new Set([t.status, ...t.transitions.map((x) => x.to), ...t.transitions.map((x) => x.from)]);
 
@@ -93,10 +102,11 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
         </div>
 
         <div className="space-y-6">
-          <div className="card-pad"><TicketControls canLead={atLeast(me.access, "LEAD")} id={t.id} status={t.status} progress={t.progressPct} timerRunning={running} assigneeId={t.assigneeId} devs={devs.map((d) => ({ id: d.id, name: d.name }))} prUrl={t.prUrl} points={t.storyPoints} estimateHrs={t.estimateHrs} sprintId={t.sprintId} sprints={sprints.map((s) => ({ id: s.id, name: s.name }))} /></div>
+          <div className="card-pad"><TicketControls canLead={atLeast(me.access, "LEAD")} id={t.id} status={t.status} progress={t.progressPct} timerRunning={running} assigneeId={t.assigneeId} devs={devs.map((d) => ({ id: d.id, name: d.name }))} prUrl={t.prUrl} points={t.storyPoints} estimateHrs={t.estimateHrs} dueDate={t.dueDate ? t.dueDate.toISOString().slice(0, 10) : null} sprintId={t.sprintId} sprints={sprints.map((s) => ({ id: s.id, name: s.name }))} /></div>
 
           <div className="card-pad">
             <div className="h-section mb-2">Time</div>
+            {finish && open && <div className="mb-3"><FinishCountdown targetHrs={finish.hours} trackedSec={doneSec} runningSince={runEntry ? runEntry.startedAt.toISOString() : null} note={finish.note} /></div>}
             <div className="flex items-end justify-between"><span className="font-semibold tabular-nums text-2xl">{fmtDur(logged)}</span><span className="text-xs text-mute">{t.estimateHrs ? `of ${t.estimateHrs}h estimate` : "no estimate"}</span></div>
             {forecast && <p className="mt-2 text-xs text-mute">Forecast finish <b className="text-ink">{new Date(forecast.date + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })}</b> at {t.assignee!.name.split(" ")[0]}&apos;s pace{forecast.leaveDays > 0 ? `, ${forecast.leaveDays} day(s) later because of leave or holidays` : ""}.</p>}
             {t.estimateHrs ? <Progress className="mt-2" pct={(logged / 3_600_000 / t.estimateHrs) * 100} color={logged / 3_600_000 > t.estimateHrs ? "#fb7185" : "#6ee7ff"} /> : null}

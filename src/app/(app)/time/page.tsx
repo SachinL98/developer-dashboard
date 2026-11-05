@@ -6,6 +6,9 @@ import { TimerButton } from "@/components/TimerButton";
 import { fmtDay, fmtDur, fmtTime, hours, TZ } from "@/lib/time";
 import { sumEntries } from "@/lib/analytics";
 import { DAY } from "@/lib/queries";
+import { suggestFinishHours } from "@/lib/finish-time";
+import { loadPaceHistory } from "@/lib/finish-time-data";
+import { FinishCountdown } from "@/components/FinishCountdown";
 import { approvedLeave, getHolidays } from "@/lib/leave";
 import { leaveFractions } from "@/lib/capacity";
 
@@ -39,6 +42,7 @@ export default async function TimePage() {
   const devName = new Map(devs.map((d) => [d.id, d]));
   const keys = (list: string[]) => list.map((i) => tk.get(i)).filter(Boolean).map((t) => (
     <Link key={t!.id} href={`/tickets/${t!.id}`} title={t!.title} className="chip hover:text-ink">{t!.key}</Link>));
+  const pace = await loadPaceHistory(me?.id ?? null);
   const todayKey = dayKey(now);
   const clockedIn = sessions.filter((s) => !s.endedAt);
   const mySessions = sessions.filter((s) => s.developerId === me?.id).slice(0, 8);
@@ -108,6 +112,7 @@ export default async function TimePage() {
                       <div className="mt-1 flex items-center gap-3 text-xs text-mute"><StatusBadge status={t.status} /><span className="font-mono">{logged.toFixed(1)}h{t.estimateHrs ? ` / ${t.estimateHrs}h` : ""}</span></div></div>
                     {t.status === "IN_PROGRESS" && <TimerButton ticketId={t.id} running={running} />}
                   </div>
+                  {t.status === "IN_PROGRESS" && (() => { const f = suggestFinishHours({ points: t.storyPoints, estimateHrs: t.estimateHrs }, pace.mine, pace.team); const run = t.timeEntries.find((e) => !e.endedAt); return f ? <div className="mt-3"><FinishCountdown compact targetHrs={f.hours} trackedSec={Math.floor(sumEntries(t.timeEntries.filter((e) => e.endedAt)) / 1000)} runningSince={run ? run.startedAt.toISOString() : null} /></div> : null; })()}
                   {t.status === "IN_PROGRESS" && <div className="mt-3 flex items-center gap-3"><Progress pct={t.progressPct} color="#a78bfa" /><span className="font-mono text-xs text-mute">{t.progressPct}%</span></div>}
                 </div>
               );

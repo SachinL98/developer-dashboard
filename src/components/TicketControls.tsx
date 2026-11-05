@@ -6,13 +6,14 @@ import { STATUS_META, allowedNext, STORY_POINTS, type StatusKey } from "@/lib/wo
 
 export function TicketControls(p: {
   id: string; status: StatusKey; progress: number; timerRunning: boolean; assigneeId: string | null; devs: { id: string; name: string }[];
-  canLead: boolean; prUrl: string | null; points: number | null; estimateHrs: number | null; sprintId: string | null; sprints: { id: string; name: string }[];
+  canLead: boolean; prUrl: string | null; points: number | null; estimateHrs: number | null; sprintId: string | null; dueDate?: string | null; sprints: { id: string; name: string }[];
 }) {
   const [msg, setMsg] = useState<{ t: string; bad?: boolean } | null>(null);
   const [pct, setPct] = useState(p.progress);
   const [note, setNote] = useState("");
   const [pr, setPr] = useState(p.prUrl ?? "");
   const [est, setEst] = useState(p.estimateHrs?.toString() ?? "");
+  const [due, setDue] = useState(p.dueDate ?? "");
   const [pending, start] = useTransition();
   const run = (fn: () => Promise<{ ok: boolean; error?: string } & Record<string, any>>, ok?: string) =>
     start(async () => { const r = await fn(); setMsg(r.ok ? { t: ok ?? "Saved" } : { t: (r as any).error, bad: true }); });
@@ -60,6 +61,9 @@ export function TicketControls(p: {
         <div><label className="label">Estimate (hours)</label>
           <div className="flex gap-2"><input className="input" inputMode="decimal" value={est} onChange={(e) => setEst(e.target.value)} />
             <button className="btn" onClick={() => run(() => updateTicketAction(p.id, { estimateHrs: est ? +est : null }))}><Save size={14} /></button></div></div>
+        <div><label className="label">Due date</label>
+          <div className="flex gap-2"><input className="input" type="date" value={due} onChange={(e) => setDue(e.target.value)} />
+            <button className="btn" onClick={() => run(() => updateTicketAction(p.id, { dueDate: due || null }))}><Save size={14} /></button></div></div>
         <div><label className="label">Sprint</label>
           <select className="input" disabled={!p.canLead} value={p.sprintId ?? ""} onChange={async (e) => { const { assignToSprintAction } = await import("@/app/(app)/actions"); run(() => assignToSprintAction(p.id, e.target.value || null)); }}>
             <option value="">Backlog</option>{p.sprints.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}

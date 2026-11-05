@@ -50,7 +50,7 @@ export default async function OneOnOne({ searchParams }: { searchParams: Promise
           <div className="card-pad">
             <div className="mb-1 text-xs text-mute">{monthName(r.monthKey)} · covers {r.curLabel} · compared with {r.baseLabel} · generated {new Date(r.generatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</div>
             {r.ai ? <p className="text-base leading-relaxed">{r.ai.headline}</p> : <p className="text-sm text-mute">{r.aiNote ?? "No written analysis for this report."}</p>}
-            {r.ai && <p className="mt-2 text-xs text-mute">Written by AI ({r.provider}, {r.model}) from your tickets, time, reviews and check-ins. Treat it as a starting point for the conversation.</p>}
+            {r.ai && <p className="mt-2 text-xs text-mute">Written by AI ({r.provider}, {r.model}) from your tickets, time, reviews and check-ins, to encourage you and give you something to talk about. It is a starting point, not a verdict.</p>}
           </div>
 
           <div className="card overflow-x-auto">
@@ -70,19 +70,19 @@ export default async function OneOnOne({ searchParams }: { searchParams: Promise
 
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="card-pad">
-              <div className="h-section mb-2 text-neon-lime">Improvements and what went well</div>
+              <div className="h-section mb-2 text-neon-lime">Wins and improvements</div>
               <ul className="space-y-2 text-sm">
                 {(r.ai?.wentWell ?? []).map((x, i) => <li key={i}><div className="font-medium">{x.point}</div><div className="text-mute">{x.evidence}</div></li>)}
                 {!r.ai && r.findings.improved.map((x, i) => <li key={i}>{x}</li>)}
-                {!(r.ai?.wentWell.length ?? r.findings.improved.length) && <li className="text-mute">Nothing stands out as clearly better.</li>}
+                {!(r.ai?.wentWell.length ?? r.findings.improved.length) && <li className="text-mute">Steady work. Nothing jumped out this time.</li>}
               </ul>
             </div>
             <div className="card-pad">
-              <div className="h-section mb-2 text-neon-amber">Needs attention</div>
+              <div className="h-section mb-2 text-neon-amber">Room to grow</div>
               <ul className="space-y-2 text-sm">
                 {(r.ai?.needsAttention ?? []).map((x, i) => <li key={i}><div className="font-medium">{x.point}</div><div className="text-mute">{x.evidence}</div></li>)}
                 {!r.ai && r.findings.attention.map((x, i) => <li key={i}>{x}</li>)}
-                {!(r.ai?.needsAttention.length ?? r.findings.attention.length) && <li className="text-mute">Nothing stands out as clearly worse.</li>}
+                {!(r.ai?.needsAttention.length ?? r.findings.attention.length) && <li className="text-mute">Nothing to worry about here. Keep going.</li>}
               </ul>
             </div>
           </div>
@@ -93,7 +93,7 @@ export default async function OneOnOne({ searchParams }: { searchParams: Promise
 
           {r.ai && r.ai.suggestions.length > 0 && (
             <div className="card-pad">
-              <div className="h-section mb-3">AI suggestions for improvement</div>
+              <div className="h-section mb-3">AI suggestions to help you grow</div>
               <ol className="space-y-4">{r.ai.suggestions.map((x, i) => (
                 <li key={i} className="flex gap-3"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-neon/10 text-xs font-semibold text-neon">{i + 1}</span>
                   <div className="min-w-0"><div className="font-medium">{x.title} <span className="chip ml-1">{x.area}</span></div><p className="mt-0.5 text-sm text-mute"><b className="font-medium text-ink">Why: </b>{x.why}</p><p className="text-sm text-mute"><b className="font-medium text-ink">How: </b>{x.how}</p></div></li>))}</ol>
@@ -104,6 +104,21 @@ export default async function OneOnOne({ searchParams }: { searchParams: Promise
             <div className="grid gap-6 lg:grid-cols-3">
               {([["Talking points for your 1:1", r.ai.talkingPoints], ["Questions you could ask your lead", r.ai.questionsForLead], ["Focus for next month", r.ai.focusNextMonth]] as const).map(([t, items]) => items.length > 0 && (
                 <div key={t} className="card-pad"><div className="h-section mb-2">{t}</div><ul className="list-disc space-y-1 pl-5 text-sm">{items.map((x, i) => <li key={i}>{x}</li>)}</ul></div>))}
+            </div>
+          )}
+
+          {((r.ai?.estimateCheck.length ?? 0) > 0 || (r.pointsGaps?.length ?? 0) > 0) && (
+            <div className="card-pad">
+              <div className="h-section mb-1">Story points check</div>
+              <p className="mb-3 text-xs text-mute">Where a ticket took noticeably more or less time than its points suggest. Often the card was simply pointed low for its scope, which is an estimation gap and not a speed problem.</p>
+              <ul className="space-y-3">
+                {(r.ai?.estimateCheck.length ? r.ai.estimateCheck : []).map((x, i) => { const g = r.pointsGaps?.find((p) => p.key === x.key); return (
+                  <li key={i} className="text-sm"><div className="flex flex-wrap items-center gap-2"><span className="text-xs text-mute">{x.key}</span><span className="font-medium">{g?.title ?? ""}</span>
+                    <span className="chip">{x.assignedPoints ?? g?.points ?? "?"} pts given</span><span className="chip border-neon/40 text-neon">{x.suggestedPoints} pts looks right</span>
+                    <span className="chip">{x.verdict === "pointed_low" ? "pointed low" : x.verdict === "pointed_high" ? "pointed high" : "pointed right"}</span>{g && <span className="text-xs text-mute">{g.actualHrs}h taken vs {g.expectedHrs}h expected</span>}</div>
+                    <p className="mt-0.5 text-mute">{x.reason}{x.tip ? ` Tip: ${x.tip}` : ""}</p></li>); })}
+                {!r.ai?.estimateCheck.length && (r.pointsGaps ?? []).map((g) => <li key={g.key} className="text-sm"><span className="text-xs text-mute">{g.key}</span> <span className="font-medium">{g.title}</span> <span className="text-mute">· {g.points} pts, {g.actualHrs}h taken vs {g.expectedHrs}h expected</span></li>)}
+              </ul>
             </div>
           )}
 

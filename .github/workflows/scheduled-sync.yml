@@ -24,3 +24,6 @@ jobs:
       - name: Monthly 1:1 reports (does nothing outside the first week of the month)
         run: |
           curl --fail --show-error --silent --max-time 120 -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/cron/one-on-one"
+      - name: Overdue alerts and start-of-day reminders
+        run: |
+          curl --fail --show-error --silent --max-time 120 -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/cron/notify"

@@ -28,6 +28,8 @@ import { saveUserKey, removeUserKey, validateKey, listUserProviders, setPreferre
 import { norm as normSpeaker, isGenericSpeaker } from "@/lib/speakers";
 import { mergePeople } from "@/lib/jira-people";
 import { generateOneOnOne } from "@/lib/one-on-one";
+import { saveNotifyConfig, sendTest as sendNotifyTest } from "@/lib/notify/run";
+import { validDiscordId } from "@/lib/notify/discord";
 import { generateDevProfile, reviewEstimate, type EstimateReview } from "@/lib/insights";
 
 type Result<T = {}> = ({ ok: true } & T) | { ok: false; error: string };
@@ -64,7 +66,7 @@ export async function createTicketAction(input: svc.NewTicket): Promise<Result<{
   } catch (e) { return fail(e); }
 }
 
-export async function moveTicketAction(ticketId: string, to: StatusKey): Promise<Result<{ label: string; syncError: string | null }>> {
+export async function moveTicketAction(ticketId: string, to: StatusKey): Promise<Result<{ label: string; syncError: string | null; timerStarted: boolean }>> {
   try {
     const user = await me();
     status.parse(to);
@@ -75,13 +77,14 @@ export async function moveTicketAction(ticketId: string, to: StatusKey): Promise
     // Entering Initial Review kicks off the Claude review of the linked PR (in the background: it can take a minute).
     if (r.ok && to === "INITIAL_REVIEW" && t.prUrl && (await getReviewConfig()).autoRun) after(async () => { await svc.runInitialReview(ticketId, "move", user.id).catch(() => {}); });
     touch(); revalidatePath(`/tickets/${ticketId}`);
-    return r.ok ? { ok: true, label: r.label, syncError: r.syncError } : { ok: false, error: r.error };
+    return r.ok ? { ok: true, label: r.timerStarted ? `${r.label} · timer started` : r.label, syncError: r.syncError, timerStarted: r.timerStarted } : { ok: false, error: r.error };
   } catch (e) { return fail(e); }
 }
 
 const patchSchema = z.object({
   assigneeId: id.nullable(), storyPoints: z.number().int().min(0).max(100).nullable(), estimateHrs: z.number().min(0).max(1000).nullable(),
   prUrl: z.string().url().max(300).regex(/^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+/, "Use a GitHub pull request URL").nullable(),
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-11-20").nullable(),
   complicated: z.boolean(), priority, title: z.string().trim().min(1).max(240), description: z.string().max(20_000),
 }).partial().strict();
 
@@ -92,7 +95,8 @@ export async function updateTicketAction(ticketId: string, patch: z.input<typeof
     const t = await db.ticket.findUniqueOrThrow({ where: { id: id.parse(ticketId) } });
     if (!canPatchTicket({ id: user.id, access: user.access }, t, Object.keys(p)))
       return { ok: false, error: "You can edit your own tickets. Reassigning and re-prioritising are for leads." };
-    const upd = await db.ticket.update({ where: { id: ticketId }, data: { ...p, ...(p.prUrl ? { prNumber: Number(p.prUrl.match(/pull\/(\d+)/)?.[1]) || null, prState: "open" } : {}) } });
+    const { dueDate, ...rest } = p;
+    const upd = await db.ticket.update({ where: { id: ticketId }, data: { ...rest, ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(`${dueDate}T12:00:00Z`) : null } : {}), ...(p.prUrl ? { prNumber: Number(p.prUrl.match(/pull\/(\d+)/)?.[1]) || null, prState: "open" } : {}) } });
     // An estimate change is written straight to the real Jira issue, in the unit that project uses.
     const jiraResult = upd.jiraKey && (p.storyPoints != null || p.estimateHrs != null) ? await svc.pushEstimate(upd.id) : undefined;
     touch(); revalidatePath(`/tickets/${ticketId}`);
@@ -729,5 +733,34 @@ export async function generateOneOnOneAction(devId: string): Promise<Result> {
     rateLimit(`oneonone:${u.id}`, 8, 3_600_000);
     await generateOneOnOne(d, { keyUserId: u.id });
     revalidatePath("/one-on-one"); return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
+// ----- notifications -----
+export async function saveNotifyConfigAction(input: { overdue: boolean; startReminder: boolean; graceMin: number }): Promise<Result> {
+  try {
+    await requireAccess("ADMIN");
+    const v = z.object({ overdue: z.boolean(), startReminder: z.boolean(), graceMin: z.number().int().min(5).max(240) }).parse(input);
+    await saveNotifyConfig(v);
+    revalidatePath("/admin/notifications"); return { ok: true };
+  } catch (e) { return fail(e); }
+}
+export async function sendTestNotificationAction(): Promise<Result<{ channels: Record<string, string> }>> {
+  try {
+    const u = await requireAccess("ADMIN");
+    rateLimit(`notify-test:${u.id}`, 10, 600_000);
+    const r = await sendNotifyTest({ id: u.id, name: u.name, email: u.email, discordId: u.discordId, notifyEmail: true, notifyDiscord: true });
+    revalidatePath("/admin/notifications");
+    return { ok: true, channels: r.channels };
+  } catch (e) { return fail(e); }
+}
+/** Each person's own alert settings: email on or off, Discord on or off, and their Discord user id. */
+export async function saveNotifyPrefsAction(input: { notifyEmail: boolean; notifyDiscord: boolean; discordId: string }): Promise<Result> {
+  try {
+    const u = await me();
+    const v = z.object({ notifyEmail: z.boolean(), notifyDiscord: z.boolean(), discordId: z.string().trim().max(30) }).parse(input);
+    if (v.discordId && !validDiscordId(v.discordId)) return { ok: false, error: "A Discord user id is 17 to 20 digits. In Discord turn on Developer Mode (Settings, Advanced), then right-click your name and choose Copy User ID." };
+    await db.developer.update({ where: { id: u.id }, data: { notifyEmail: v.notifyEmail, notifyDiscord: v.notifyDiscord, discordId: v.discordId || null } });
+    revalidatePath("/settings"); return { ok: true };
   } catch (e) { return fail(e); }
 }

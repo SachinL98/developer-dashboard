@@ -12,6 +12,7 @@ import { ProfileForm } from "@/components/ProfileForm";
 import { headers } from "next/headers";
 import { CheckCircle2, CircleDashed, Link2 } from "lucide-react";
 import { GOOGLE_WORK_SCOPES } from "@/lib/auth/scopes";
+import { NotifyPrefsCard } from "@/components/NotifyPrefsCard";
 import { AiProviderCard } from "@/components/AiProviderCard";
 import { listUserProviders } from "@/lib/ai";
 import { StatusMapEditor } from "@/components/StatusMapEditor";
@@ -69,6 +70,8 @@ export default async function Settings({ searchParams }: { searchParams: Promise
       </div>}
 
       <AiProviderCard {...(await listUserProviders(me.id))} />
+
+      <NotifyPrefsCard notifyEmail={me.notifyEmail} notifyDiscord={me.notifyDiscord} discordId={me.discordId ?? ""} email={me.email} />
 
       <div className="card-pad">
         <div className="h-section mb-3">Change password</div>

@@ -92,7 +92,7 @@ export async function saveStatusMap(map: StatusMap) { await setSetting("jira.sta
 
 export interface JiraIssue {
   key: string; title: string; description: string; type: string; priority: string; status: string; statusCategory?: string; points: number | null;
-  assigneeEmail?: string; assigneeId?: string; assigneeName?: string; sprintId?: string; sprintName?: string; labels: string[]; estimateHrs: number | null; updated?: string;
+  assigneeEmail?: string; assigneeId?: string; assigneeName?: string; dueDate?: string; sprintId?: string; sprintName?: string; labels: string[]; estimateHrs: number | null; updated?: string;
 }
 
 /** The sprint field is an array of every sprint the issue has been in: prefer the active one, else the newest. */
@@ -113,7 +113,7 @@ export function parseIssue(i: any): JiraIssue {
   return {
     key: i.key, title: f.summary ?? "", description: adfText(f.description), type: mapType(f.issuetype?.name ?? ""), priority: mapPriority(f.priority?.name),
     status: f.status?.name ?? "", statusCategory: f.status?.statusCategory?.key, points: typeof pts === "number" ? pts : null,
-    assigneeEmail: f.assignee?.emailAddress, assigneeId: f.assignee?.accountId, assigneeName: f.assignee?.displayName, ...pickSprint(f[e.sprintField]), labels: f.labels ?? [],
+    assigneeEmail: f.assignee?.emailAddress, assigneeId: f.assignee?.accountId, assigneeName: f.assignee?.displayName, dueDate: typeof f.duedate === "string" ? f.duedate : undefined, ...pickSprint(f[e.sprintField]), labels: f.labels ?? [],
     estimateHrs: f.timeoriginalestimate ? f.timeoriginalestimate / 3600 : null, updated: f.updated,
   };
 }
@@ -140,7 +140,7 @@ export async function searchIssues(jql?: string): Promise<JiraIssue[]> {
   do {
     const data: any = await call("/rest/api/3/search/jql", {
       method: "POST",
-      body: JSON.stringify({ jql: query, maxResults: 100, nextPageToken, fields: ["summary", "description", "issuetype", "priority", "status", "assignee", "labels", "timeoriginalestimate", "updated", e.sprintField, e.spField] }),
+      body: JSON.stringify({ jql: query, maxResults: 100, nextPageToken, fields: ["summary", "description", "issuetype", "priority", "status", "assignee", "labels", "timeoriginalestimate", "updated", "duedate", e.sprintField, e.spField] }),
     });
     for (const i of data.issues ?? []) out.push(parseIssue(i));
     nextPageToken = data.nextPageToken;

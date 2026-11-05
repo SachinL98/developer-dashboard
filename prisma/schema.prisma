@@ -66,7 +66,7 @@ model Developer {
   jiraAccount String?
   role        String   @default("Developer")
   avatarHue   Int      @default(200)
-  theme       String   @default("system") // light | dark | system, remembered per user
+  theme       String   @default("light") // light | dark | system, remembered per user; light unless they choose otherwise
   capacityHrs Float    @default(30) // productive hours per sprint week
   access      Access   @default(DEVELOPER)
   active      Boolean  @default(true)
@@ -79,6 +79,9 @@ model Developer {
   passwordChangedAt   DateTime?
   failedLogins        Int       @default(0)
   lockedUntil         DateTime?
+  discordId           String? // Discord user id, for direct messages and mentions
+  notifyEmail         Boolean   @default(true)
+  notifyDiscord       Boolean   @default(true)
   aiProvider          String? // anthropic | openai | gemini: which saved AI key this person's AI buttons use
   authSessions AuthSession[]
   connections Connection[]
@@ -132,6 +135,7 @@ model Ticket {
   estimateSyncedAt  DateTime? // last time the estimate was written to the Jira issue
   estimateSyncError String? // why the last write-back failed, if it did
   complicated  Boolean     @default(false) // flagged for grooming
+  dueDate      DateTime? // from Jira's due date, or set here; a ticket past it that is not done is overdue
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   startedAt    DateTime?
@@ -383,4 +387,19 @@ model SpeakerAlias {
   createdAt   DateTime @default(now())
 
   @@index([developerId])
+}
+
+// One row per notification decision, so each person gets at most one of each kind per day.
+model NotificationLog {
+  id        String   @id @default(cuid())
+  userId    String
+  kind      String // OVERDUE | START_REMINDER | TEST
+  dayKey    String // local date, e.g. 2026-11-05
+  status    String // sent | failed | skipped
+  channels  Json?
+  summary   String?
+  createdAt DateTime @default(now())
+
+  @@unique([userId, kind, dayKey])
+  @@index([createdAt])
 }

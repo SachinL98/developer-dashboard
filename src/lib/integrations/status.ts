@@ -89,6 +89,15 @@ export function setupGuide(origin: string): SetupStep[] {
       "In your scheduler, call the two addresses below every 10 minutes with the header Authorization: Bearer <CRON_SECRET>.",
       "In Jira, add a webhook with the Jira webhook URL below (replace the end with your secret).",
     ] },
+    { id: "alerts", title: "Email and Discord alerts", summary: "Optional. Overdue-ticket messages and start-of-day reminders.", optional: true,
+      done: !!(has("ZEPTOMAIL_TOKEN") || (has("ZOHO_SMTP_USER") && has("ZOHO_SMTP_PASSWORD")) || has("DISCORD_BOT_TOKEN") || has("DISCORD_WEBHOOK_URL")),
+      vars: [v("EMAIL_FROM"), v("ZEPTOMAIL_TOKEN"), v("ZOHO_SMTP_USER"), v("ZOHO_SMTP_PASSWORD"), v("DISCORD_BOT_TOKEN"), v("DISCORD_WEBHOOK_URL")], steps: [
+      "Email with ZeptoMail: create a Mail Agent, verify your sending domain, copy its Send Mail token into ZEPTOMAIL_TOKEN (add ZEPTOMAIL_URL for the EU or India region).",
+      "Or email with Zoho Mail: create an app password for a mailbox and set ZOHO_SMTP_USER and ZOHO_SMTP_PASSWORD (ZOHO_SMTP_HOST for other regions).",
+      "Set EMAIL_FROM to a verified sender address.",
+      "Discord: either create a bot (discord.com/developers), add it to your server and set DISCORD_BOT_TOKEN so it can message people directly, or create a channel webhook and set DISCORD_WEBHOOK_URL. Each person adds their Discord user id in Settings.",
+      "Open Admin, then Alerts, and press Send a test to me. Alerts run every 10 minutes from the scheduled sync.",
+    ] },
     { id: "ai", title: "AI for the whole team", summary: "Optional. Each person can add their own Claude, Gemini or OpenAI key in Settings.", optional: true, done: has("ANTHROPIC_API_KEY") || has("OPENAI_API_KEY") || has("GEMINI_API_KEY"), vars: [v("ANTHROPIC_API_KEY"), v("OPENAI_API_KEY"), v("GEMINI_API_KEY")], steps: [
       "Create a key with Claude (console.anthropic.com), OpenAI (platform.openai.com) or Gemini (aistudio.google.com) and set the matching setting. It is used for AI features, including pull request reviews, by anyone who has not added their own key.",
     ] },

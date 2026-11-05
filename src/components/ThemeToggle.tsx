@@ -23,11 +23,11 @@ const readCookie = (): ThemeChoice | null => { const m = document.cookie.match(/
  * when signed in, on the user's profile so it follows them to other browsers. `saved` is the profile value.
  */
 export function ThemeToggle({ saved, signedIn = true, compact = false }: { saved?: ThemeChoice; signedIn?: boolean; compact?: boolean }) {
-  const [theme, setTheme] = useState<ThemeChoice>(saved ?? "system");
+  const [theme, setTheme] = useState<ThemeChoice>(saved ?? "light");
   useEffect(() => {
     // A profile choice made on another device wins over a missing/stale cookie.
     const c = readCookie();
-    const t = signedIn && saved ? saved : c ?? "system";
+    const t = signedIn && saved ? saved : c ?? "light";
     setTheme(t); writeCookie(t); applyTheme(t);
   }, [saved, signedIn]);
   useEffect(() => {

@@ -2,6 +2,7 @@ import { fg } from "@/lib/theme";
 import Link from "next/link";
 import { after } from "next/server";
 import { autoGenerateOneOnOnes } from "@/lib/one-on-one";
+import { runNotifications } from "@/lib/notify/run";
 import * as svc from "@/lib/services";
 import { db } from "@/lib/db";
 import { activeSprint, sprintSnapshot, DAY } from "@/lib/queries";
@@ -15,7 +16,7 @@ import { localDate } from "@/lib/time";
 
 export default async function Overview() {
 
-  after(() => Promise.all([svc.processEndedMeetings(), autoGenerateOneOnOnes()]).then(() => {}, () => {})); // notes for meetings that just ended, without anyone pressing a button
+  after(() => Promise.all([svc.processEndedMeetings(), autoGenerateOneOnOnes(), runNotifications()]).then(() => {}, () => {})); // notes for meetings that just ended, without anyone pressing a button
   const sprint = await activeSprint();
   if (!sprint) return <Empty>No sprint yet. Create one in <Link className="text-neon underline" href="/sprints">Sprints</Link>.</Empty>;
   const snap = await sprintSnapshot(sprint.id);

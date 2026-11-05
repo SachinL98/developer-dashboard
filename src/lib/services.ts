@@ -84,6 +84,9 @@ export async function moveTicket(ticketId: string, to: StatusKey, byId?: string 
   ]);
   // Stop running timers when work leaves the developer's hands.
   if (to !== "IN_PROGRESS") await db.timeEntry.updateMany({ where: { ticketId, endedAt: null }, data: { endedAt: now } });
+  // Taking a ticket into In Progress starts its timer (and the work day) for the person doing the work. Someone else dragging a card does not start your clock.
+  let timerStarted = false;
+  if (to === "IN_PROGRESS" && byId && t.assigneeId === byId) { try { await startTimer(ticketId, byId); timerStarted = true; } catch (e) { warn("timer.auto", e); } }
 
   let syncError: string | null = null;
   if (t.jiraKey && (await jira.jiraReady())) {
@@ -92,7 +95,7 @@ export async function moveTicket(ticketId: string, to: StatusKey, byId?: string 
       await db.ticket.update({ where: { id: ticketId }, data: { jiraStatus: name } });
     } catch (e) { syncError = e instanceof Error ? e.message : String(e); warn("jira.transition", e); }
   }
-  return { ok: true as const, from, to, label: STATUS_META[to].label, syncError };
+  return { ok: true as const, from, to, label: STATUS_META[to].label, syncError, timerStarted };
 }
 
 // ---------- Time tracking ----------
@@ -251,7 +254,7 @@ export async function applyJiraIssue(i: jira.JiraIssue, c?: Awaited<ReturnType<t
   const estimateHrs = i.estimateHrs ?? (points != null && (pointsChanged || existing?.estimateHrs == null) ? hoursForPoints(points) : existing?.estimateHrs ?? null);
   const data = {
     title: i.title, description: i.description, type: i.type as any, priority: i.priority as any, status: status as any, jiraStatus: i.status,
-    storyPoints: points, labels: i.labels, jiraKey: i.key, assigneeId: dev?.id ?? null, sprintId: i.sprintId ? sprint?.id ?? existing?.sprintId ?? null : null, estimateHrs,
+    storyPoints: points, labels: i.labels, jiraKey: i.key, ...(i.dueDate ? { dueDate: new Date(`${i.dueDate}T12:00:00Z`) } : {}), assigneeId: dev?.id ?? null, sprintId: i.sprintId ? sprint?.id ?? existing?.sprintId ?? null : null, estimateHrs,
   };
   if (existing) {
     // Never let a stale Jira update move a card backwards in the workflow.
