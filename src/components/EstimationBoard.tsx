@@ -49,12 +49,12 @@ export function EstimationBoard({ tickets, devCount, canLead, isAdmin, sprintId,
 
   return (
     <>
-    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-line bg-panel px-4 py-3 text-sm">
+    {canLead && <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-line bg-panel px-4 py-3 text-sm">
       <CloudUpload size={16} className="text-neon" />
       <span className="text-mute">{jiraLive ? <>Jira estimates in <b className="text-ink">{unit ? unitLabel(unit.mode) : "an unknown unit — press Sync Jira in Integrations"}</b>. Applying an estimate updates the Jira ticket right away.</> : "Jira isn't connected: estimates stay in this dashboard. Connect Jira in Integrations to write them to the real tickets."}</span>
       {jiraLive && sprintId && canLead && <button className="btn ml-auto" disabled={pending} onClick={pushAll}><CloudUpload size={14} /> Push {sprintName} estimates to Jira{unsynced ? ` (${unsynced} pending)` : ""}</button>}
       {note && <span className={clsx("w-full text-xs", note.bad ? "text-neon-red" : "text-neon-lime")}>{note.t}</span>}
-    </div>
+    </div>}
     <div className="grid gap-6 xl:grid-cols-3">
       <div className="card-pad max-h-[760px] overflow-y-auto xl:col-span-1">
         <div className="h-section mb-3">To estimate · {tickets.length}</div>
@@ -63,7 +63,7 @@ export function EstimationBoard({ tickets, devCount, canLead, isAdmin, sprintId,
             <li key={x.id}><button onClick={() => setSel(x.id)} className={clsx("flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm", x.id === sel ? "border-neon/60 bg-neon/10" : "border-line hover:border-line/80 hover:bg-panel2")}>
               <span className="min-w-0 flex-1 truncate"><span className="font-mono text-xs text-mute">{x.key}</span> {x.title}</span>
               {x.complicated && <Flame size={13} className="text-neon-amber" />}
-              {x.jira === "error" && <AlertTriangle size={13} className="text-neon-red" aria-label={x.jiraError ?? "Jira write failed"} />}
+              {canLead && x.jira === "error" && <AlertTriangle size={13} className="text-neon-red" aria-label={x.jiraError ?? "Jira write failed"} />}
               {x.jira === "synced" && <CloudUpload size={13} className="text-neon-lime" aria-label="Written to Jira" />}
               <span className="font-mono text-xs text-mute">{x.estimateHrs != null ? `${x.estimateHrs}h` : `${x.votes.length}/${devCount}`}</span>
             </button></li>
@@ -80,8 +80,8 @@ export function EstimationBoard({ tickets, devCount, canLead, isAdmin, sprintId,
               <div className="flex flex-col items-end gap-1">
                 {t.estimateHrs != null && <span className="chip border-neon-lime/40 text-neon-lime"><Check size={11} /> {t.estimateHrs}h agreed</span>}
                 {t.jira === "synced" && <span className="text-[11px] text-neon-lime">In Jira ✓</span>}
-                {t.jira === "pending" && t.estimateHrs != null && <span className="text-[11px] text-neon-amber">Not written to Jira yet</span>}
-                {t.jira === "error" && <span className="max-w-[260px] text-right text-[11px] text-neon-red">Jira write failed: {t.jiraError}</span>}
+                {canLead && t.jira === "pending" && t.estimateHrs != null && <span className="text-[11px] text-neon-amber">Not written to Jira yet</span>}
+                {canLead && t.jira === "error" && <span className="max-w-[260px] text-right text-[11px] text-neon-red">Jira write failed: {t.jiraError}</span>}
               </div>
             </div>
             <p className="mt-3 line-clamp-4 whitespace-pre-wrap text-sm text-mute">{t.description || "No description."}</p>

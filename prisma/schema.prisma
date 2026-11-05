@@ -66,6 +66,7 @@ model Developer {
   jiraAccount String?
   role        String   @default("Developer")
   avatarHue   Int      @default(200)
+  avatarVer   Int      @default(0) // 0 = no photo; bumps on every upload so browsers refetch
   theme       String   @default("light") // light | dark | system, remembered per user; light unless they choose otherwise
   capacityHrs Float    @default(30) // productive hours per sprint week
   access      Access   @default(DEVELOPER)
@@ -402,4 +403,12 @@ model NotificationLog {
 
   @@unique([userId, kind, dayKey])
   @@index([createdAt])
+}
+
+/// A person's profile photo, resized in the browser to a small square before upload.
+model AvatarImage {
+  developerId String   @id
+  mime        String
+  data        Bytes
+  updatedAt   DateTime @updatedAt
 }

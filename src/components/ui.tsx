@@ -51,8 +51,12 @@ export const PriorityTag = ({ p }: { p: string }) => {
   return <span className="text-xs font-medium" style={{ color: fg(m.color) }}>▲ {m.label}</span>;
 };
 
-export function Avatar({ name, hue, size = 28 }: { name: string; hue: number; size?: number }) {
+export function Avatar({ name, hue, size = 28, id, ver }: { name: string; hue: number; size?: number; id?: string; ver?: number }) {
   const initials = name.split(" ").map((p) => p[0]).slice(0, 2).join("");
+  if (id && ver && ver > 0) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={`/api/avatar/${id}?v=${ver}`} alt={name} title={name} width={size} height={size} loading="lazy" className="inline-block shrink-0 rounded-full object-cover ring-2 ring-panel" style={{ width: size, height: size }} />;
+  }
   return (
     <span title={name} className="inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-[#07090f] ring-2 ring-panel"
       style={{ width: size, height: size, fontSize: size * 0.38, background: `linear-gradient(135deg, hsl(${hue} 85% 70%), hsl(${(hue + 50) % 360} 80% 62%))` }}>{initials}</span>

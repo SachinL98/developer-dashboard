@@ -112,7 +112,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
             {t.estimateHrs ? <Progress className="mt-2" pct={(logged / 3_600_000 / t.estimateHrs) * 100} color={logged / 3_600_000 > t.estimateHrs ? "#fb7185" : "#6ee7ff"} /> : null}
             <ul className="mt-4 space-y-2 text-xs">
               {t.timeEntries.slice(0, 8).map((e) => (
-                <li key={e.id} className="flex items-center gap-2"><Avatar name={e.developer.name} hue={e.developer.avatarHue} size={20} /><span className="flex-1 text-mute">{fmtDay(e.startedAt)} {fmtTime(e.startedAt)}</span><span className="font-mono">{e.endedAt ? fmtDur(e.endedAt.getTime() - e.startedAt.getTime()) : <span className="text-neon-lime">running</span>}</span></li>
+                <li key={e.id} className="flex items-center gap-2"><Avatar name={e.developer.name} hue={e.developer.avatarHue} id={e.developer.id} ver={e.developer.avatarVer} size={20} /><span className="flex-1 text-mute">{fmtDay(e.startedAt)} {fmtTime(e.startedAt)}</span><span className="font-mono">{e.endedAt ? fmtDur(e.endedAt.getTime() - e.startedAt.getTime()) : <span className="text-neon-lime">running</span>}</span></li>
               ))}
             </ul>
           </div>
@@ -123,7 +123,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
               <ul className="space-y-2 text-sm">{t.progressLogs.map((l) => <li key={l.id} className="flex gap-2"><span className="font-mono text-neon-violet">{l.pct}%</span><span className="flex-1 text-mute">{l.note || "—"}</span><span className="text-xs text-mute">{fmtTime(l.at)}</span></li>)}</ul>
             </div>
           )}
-          {t.assignee && <Link href={`/team/${t.assignee.id}`} className="card-pad flex items-center gap-3 hover:border-neon/40"><Avatar name={t.assignee.name} hue={t.assignee.avatarHue} size={36} /><div><div className="text-sm">{t.assignee.name}</div><div className="text-xs text-mute">{t.assignee.role}</div></div></Link>}
+          {t.assignee && <Link href={`/team/${t.assignee.id}`} className="card-pad flex items-center gap-3 hover:border-neon/40"><Avatar name={t.assignee.name} hue={t.assignee.avatarHue} id={t.assignee.id} ver={t.assignee.avatarVer} size={36} /><div><div className="text-sm">{t.assignee.name}</div><div className="text-xs text-mute">{t.assignee.role}</div></div></Link>}
         </div>
       </div>
     </div>

@@ -4,14 +4,20 @@ import { requireUser } from "@/lib/auth/session";
 import { atLeast } from "@/lib/permissions";
 import { loadReport, periodOptions } from "@/lib/report-data";
 import { REPORT_KINDS, type ReportKind } from "@/lib/report";
+import { db } from "@/lib/db";
+import { aiKeyFor } from "@/lib/ai";
+import { loadOneOnOne } from "@/lib/one-on-one-data";
+import { OneOnOneActions } from "@/components/OneOnOneActions";
+import { OneOnOneDetail } from "@/components/OneOnOneDetail";
 import { PageHeader, Empty } from "@/components/ui";
 import { SlideView } from "@/components/SlideView";
 import { ReportNotes } from "@/components/ReportNotes";
 import clsx from "clsx";
 
-export default async function Reports({ searchParams }: { searchParams: Promise<{ kind?: string; ref?: string }> }) {
+export default async function Reports({ searchParams }: { searchParams: Promise<{ kind?: string; ref?: string; dev?: string; m?: string }> }) {
   const me = await requireUser();
   const sp = await searchParams;
+  if (sp.kind === "oneonone") return <OneOnOneTab me={me} dev={sp.dev} month={sp.m} />;
   const kind = (["week", "sprint", "month"].includes(sp.kind ?? "") ? sp.kind : "week") as ReportKind;
   const [report, options] = await Promise.all([loadReport(kind, sp.ref, new Date(), { includePeople: atLeast(me.access, "LEAD") }), periodOptions()]);
   const q = (k: ReportKind, ref?: string) => `kind=${k}${ref ? `&ref=${encodeURIComponent(ref)}` : ""}`;
@@ -31,9 +37,7 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
 
       <div className="card-pad space-y-4">
         <div role="tablist" aria-label="Report period" className="flex flex-wrap gap-2">
-          {REPORT_KINDS.map((k) => (
-            <Link key={k.kind} role="tab" aria-selected={k.kind === kind} href={`/reports?kind=${k.kind}`}
-              className={clsx("rounded-lg border px-3 py-1.5 text-sm", k.kind === kind ? "border-neon/60 bg-neon/10 text-ink" : "border-line text-mute hover:text-ink")}>{k.label}</Link>))}
+          <KindTabs active={kind} />
         </div>
         <p className="text-xs text-mute">{meta.hint}</p>
         {options[kind].length > 0 && (
@@ -52,6 +56,56 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
         </div>
         <ReportNotes key={report.facts.period.key} periodKey={report.facts.period.key} canEdit={atLeast(me.access, "LEAD")} slides={report.slides.map((s) => ({ id: s.id, title: s.title, note: s.note ?? "" }))} />
       </>)}
+    </div>
+  );
+}
+
+function KindTabs({ active }: { active: ReportKind | "oneonone" }) {
+  return (
+    <>
+      {[...REPORT_KINDS.map((k) => ({ kind: k.kind as string, label: k.label })), { kind: "oneonone", label: "1:1 report" }].map((k) => (
+        <Link key={k.kind} role="tab" aria-selected={k.kind === active} href={`/reports?kind=${k.kind}`}
+          className={clsx("rounded-lg border px-3 py-1.5 text-sm", k.kind === active ? "border-neon/60 bg-neon/10 text-ink" : "border-line text-mute hover:text-ink")}>{k.label}</Link>))}
+    </>
+  );
+}
+
+const monthName = (k: string) => new Date(`${k}-15T12:00:00Z`).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
+
+/** Monthly 1:1 report as a slideshow plus the full written report. Visible to the person, leads and admins only. */
+async function OneOnOneTab({ me, dev, month }: { me: Awaited<ReturnType<typeof requireUser>>; dev?: string; month?: string }) {
+  const data = await loadOneOnOne(me, dev, month);
+  if (!data) return <Empty>You can only see your own 1:1 report.</Empty>;
+  const { devId, person, own, reports, report, slides } = data;
+  const ai = await aiKeyFor(me.id);
+  const people = atLeast(me.access, "LEAD") ? await db.developer.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : [];
+  const here = `kind=oneonone${own ? "" : `&dev=${devId}`}${report ? `&m=${report.monthKey}` : ""}`;
+  return (
+    <div className="space-y-6">
+      <PageHeader title="Reports" sub={own ? "Your monthly 1:1: the last two weeks compared with the 30 days before, with suggestions to take into the conversation." : `Monthly 1:1 report for ${person.name}.`}
+        actions={report ? <>
+          <Link href={`/present?${here}`} className="btn-primary"><Presentation size={14} /> Present</Link>
+          <Link href={`/report-print?${here}`} className="btn"><Printer size={14} /> Print view</Link></> : undefined} />
+      <div className="card-pad space-y-4">
+        <div role="tablist" aria-label="Report type" className="flex flex-wrap gap-2"><KindTabs active="oneonone" /></div>
+        {people.length > 1 && (
+          <div className="flex flex-wrap gap-1.5" aria-label="Choose a person">
+            {people.map((p) => <Link key={p.id} href={`/reports?kind=oneonone${p.id === me.id ? "" : `&dev=${p.id}`}`} className={clsx("rounded-md border px-2.5 py-1 text-xs", p.id === devId ? "border-neon/60 bg-neon/10 text-ink" : "border-line text-mute hover:text-ink")}>{p.id === me.id ? "Me" : p.name}</Link>)}
+          </div>)}
+        {reports.length > 1 && (
+          <div className="flex flex-wrap gap-1.5" aria-label="Choose a month">
+            {reports.map((x) => <Link key={x.id} href={`/reports?kind=oneonone${own ? "" : `&dev=${devId}`}&m=${x.report.monthKey}`} className={clsx("rounded-md border px-2.5 py-1 text-xs", x.report.monthKey === report?.monthKey ? "border-neon/60 bg-neon/10 text-ink" : "border-line text-mute hover:text-ink")}>{monthName(x.report.monthKey)}</Link>)}
+          </div>)}
+        <OneOnOneActions devId={devId} hasReport={!!report} aiReady={!!ai} />
+      </div>
+      {slides.length > 0 && (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {slides.map((s, i) => (
+            <Link key={s.id} href={`/present?${here}#${i}`} className="group block" aria-label={`Open slide ${i + 1}: ${s.title}`}>
+              <div className="pointer-events-none transition group-hover:-translate-y-0.5"><SlideView slide={s} index={i} total={slides.length} /></div>
+            </Link>))}
+        </div>)}
+      <OneOnOneDetail r={report} own={own} />
     </div>
   );
 }

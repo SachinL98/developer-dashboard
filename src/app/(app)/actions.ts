@@ -512,6 +512,36 @@ export async function saveReviewConfigAction(input: ReviewConfig): Promise<Resul
 }
 
 /** The signed-in user's colour theme (light, dark or follow the system). */
+const sniff = (b: Uint8Array): string | null =>
+  b[0] === 0xff && b[1] === 0xd8 ? "image/jpeg" : b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47 ? "image/png"
+  : b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 ? "image/webp" : null;
+
+/** Save the signed-in person's profile photo. The browser has already cropped it to a small square; we still check the type by its bytes and cap the size. */
+export async function uploadAvatarAction(form: FormData): Promise<Result> {
+  try {
+    const u = await me();
+    rateLimit(`avatar:${u.id}`, 20, 3_600_000);
+    const file = form.get("photo");
+    if (!(file instanceof Blob) || file.size === 0) throw new Error("Choose a photo first.");
+    if (file.size > 400_000) throw new Error("That photo is too large. Try a smaller one.");
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const mime = sniff(bytes);
+    if (!mime) throw new Error("Use a JPG, PNG or WebP photo.");
+    await db.$transaction([
+      db.avatarImage.upsert({ where: { developerId: u.id }, update: { mime, data: bytes }, create: { developerId: u.id, mime, data: bytes } }),
+      db.developer.update({ where: { id: u.id }, data: { avatarVer: { increment: 1 } } }),
+    ]);
+    revalidatePath("/", "layout"); return { ok: true };
+  } catch (e) { return fail(e); }
+}
+export async function removeAvatarAction(): Promise<Result> {
+  try {
+    const u = await me();
+    await db.$transaction([db.avatarImage.deleteMany({ where: { developerId: u.id } }), db.developer.update({ where: { id: u.id }, data: { avatarVer: 0 } })]);
+    revalidatePath("/", "layout"); return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
 export async function setThemeAction(theme: string): Promise<Result> {
   try { const user = await me(); if (!isTheme(theme)) return { ok: false, error: "Unknown theme" }; await db.developer.update({ where: { id: user.id }, data: { theme } }); return { ok: true }; } catch (e) { return fail(e); }
 }
@@ -738,7 +768,7 @@ export async function generateOneOnOneAction(devId: string): Promise<Result> {
     if (d !== u.id && !atLeast(u.access, "LEAD")) throw new Error("You can only make your own report.");
     rateLimit(`oneonone:${u.id}`, 8, 3_600_000);
     await generateOneOnOne(d, { keyUserId: u.id });
-    revalidatePath("/one-on-one"); return { ok: true };
+    revalidatePath("/one-on-one"); revalidatePath("/reports"); return { ok: true };
   } catch (e) { return fail(e); }
 }
 

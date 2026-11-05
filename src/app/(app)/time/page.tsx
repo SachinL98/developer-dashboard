@@ -65,7 +65,7 @@ export default async function TimePage() {
           <thead><tr><th className="w-44 text-left font-normal text-mute" />{days.map((k) => <th key={k} className="pb-2 font-normal text-mute">{k.slice(8)}</th>)}<th className="pb-2 text-right font-normal text-mute">Total</th></tr></thead>
           <tbody>{grid.map(({ d, perDay, worked, away }) => (
             <tr key={d.id}>
-              <td className="py-1"><Link href={`/team/${d.id}`} className="flex items-center gap-2 hover:text-ink"><Avatar name={d.name} hue={d.avatarHue} size={22} />{d.name}</Link></td>
+              <td className="py-1"><Link href={`/team/${d.id}`} className="flex items-center gap-2 hover:text-ink"><Avatar name={d.name} hue={d.avatarHue} id={d.id} ver={d.avatarVer} size={22} />{d.name}</Link></td>
               {days.map((k) => { const lv = away.get(k) ?? 0, ph = holSet.has(k); return <td key={k} className="p-0.5"><div title={`${k}: ${perDay[k].toFixed(1)}h${lv ? (lv === 1 ? " · on leave" : " · half-day leave") : ""}${ph ? " · public holiday" : ""}`} className="grid h-7 place-items-center rounded font-mono text-[10px]" style={{ background: perDay[k] > 0 ? heat(perDay[k]) : lv ? "color-mix(in srgb, rgb(var(--neon-amber)) 18%, transparent)" : heat(0), color: perDay[k] > 5 ? "#07090f" : "rgb(var(--mute))" }}>{perDay[k] > 0 ? perDay[k].toFixed(0) : lv ? (lv === 1 ? "L" : "½L") : ph ? "H" : ""}</div></td>; })}
               <td className="pl-2 text-right font-mono">{worked.toFixed(0)}h</td>
             </tr>))}</tbody>
@@ -81,7 +81,7 @@ export default async function TimePage() {
             return (
               <div key={x.id} className="grid gap-3 py-3 md:grid-cols-[200px_1fr_1fr]">
                 <div className="flex items-start gap-2">
-                  {d && <Avatar name={d.name} hue={d.avatarHue} size={28} />}
+                  {d && <Avatar name={d.name} hue={d.avatarHue} id={d.id} ver={d.avatarVer} size={28} />}
                   <div className="min-w-0"><div className="truncate text-sm font-medium">{d?.name}</div>
                     <div className="text-xs text-mute">{fmtDay(x.startedAt)} · {fmtTime(x.startedAt)} – {x.endedAt ? fmtTime(x.endedAt) : "now"} · {fmtDur((x.endedAt ?? now).getTime() - x.startedAt.getTime())}</div></div>
                 </div>

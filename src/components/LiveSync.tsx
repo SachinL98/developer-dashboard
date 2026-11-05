@@ -12,7 +12,7 @@ const ago = (iso: string | null, now: number) => {
  * Realtime indicator + poll fallback. Jira webhooks push changes into the database; this asks the server for any
  * changes every 30 s while the tab is visible (the server collapses concurrent viewers into one Jira call) and refreshes.
  */
-export function LiveSync({ enabled, lastSync }: { enabled: boolean; lastSync: string | null }) {
+export function LiveSync({ enabled, lastSync, showStatus = true }: { enabled: boolean; lastSync: string | null; showStatus?: boolean }) {
   const router = useRouter();
   const [last, setLast] = useState(lastSync);
   const [now, setNow] = useState<number | null>(null);
@@ -42,6 +42,7 @@ export function LiveSync({ enabled, lastSync }: { enabled: boolean; lastSync: st
     return () => { stop = true; clearInterval(t); document.removeEventListener("visibilitychange", vis); };
   }, [enabled, router]);
 
+  if (!showStatus) return null; // developers get the live updates, but not the integration details
   if (!enabled) return <span className="chip" title="An admin needs to connect Jira in Settings to show the real board">Demo data · Jira not connected</span>;
   return (
     <span className={`chip ${err ? "text-neon-red" : ""}`} title={err ?? "Updates arrive from Jira by webhook, with a 30 s poll as fallback"}>

@@ -9,6 +9,7 @@ import { CopyText } from "@/components/CopyText";
 import { googleOAuthConfigured } from "@/lib/integrations/google";
 import { SyncButtons } from "@/components/SyncButtons";
 import { ProfileForm } from "@/components/ProfileForm";
+import { ProfilePhoto } from "@/components/ProfilePhoto";
 import { headers } from "next/headers";
 import { CheckCircle2, CircleDashed, Link2 } from "lucide-react";
 import { GOOGLE_WORK_SCOPES } from "@/lib/auth/scopes";
@@ -37,7 +38,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
   const isAdmin = atLeast(me.access, "ADMIN");
   const h = await headers();
   const jiraLive = await jiraReady();
-  const board = jiraLive && atLeast(me.access, "LEAD") ? await cachedBoardInfo() : null;
+  const board = jiraLive && isAdmin ? await cachedBoardInfo() : null;
   const statusMap = board ? await loadStatusMap() : {};
   const origin = process.env.APP_URL || `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host")}`;
 
@@ -49,7 +50,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
   return (
     <div className="space-y-6">
       <PageHeader title="Settings" sub={isAdmin ? "Connect Jira and Google for the team, add your AI key, and manage your profile and password." : "Add your AI key, and manage your profile and password."}
-        actions={atLeast(me.access, "LEAD") ? <SyncButtons what="jira" /> : undefined} />
+        actions={isAdmin ? <SyncButtons what="jira" /> : undefined} />
       {isAdmin && sp.connected && <div className="rounded-lg border border-neon-lime/40 bg-neon-lime/10 px-4 py-2 text-sm text-neon-lime">{sp.connected === "jira" ? "Jira" : "Google"} connected.</div>}
       {sp.error && <div role="alert" className="rounded-lg border border-neon-red/40 bg-neon-red/10 px-4 py-2 text-sm text-neon-red">{NOTES[sp.error] ?? sp.error}</div>}
 
@@ -79,11 +80,12 @@ export default async function Settings({ searchParams }: { searchParams: Promise
       </div>
 
       <div className="card-pad">
-        <div className="h-section mb-3">My profile</div>
+        <div className="h-section mb-4">My profile</div>
+        <div className="mb-5"><ProfilePhoto id={me.id} name={me.name} hue={me.avatarHue} ver={me.avatarVer} /></div>
         <ProfileForm userId={me.id} role={me.role} capacityHrs={me.capacityHrs} githubLogin={me.githubLogin ?? ""} email={me.email} access={me.access} />
       </div>
 
-      {jiraLive && atLeast(me.access, "LEAD") && (
+      {jiraLive && isAdmin && (
         <div className="card-pad">
           <div className="h-section mb-3">Jira board → workflow mapping</div>
           {board ? (

@@ -108,7 +108,7 @@ export default async function Overview() {
                 const c = rowColor(r.pct, dp.expectedPct);
                 return (
                   <div key={r.d.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3.5">
-                    <div className="flex w-44 shrink-0 items-center gap-3"><Avatar name={r.d.name} hue={r.d.avatarHue} /><div className="min-w-0"><div className="truncate text-sm font-medium">{r.d.name}</div>{(dp.leaveDays > 0 || dp.holidayDays > 0) && <div className="truncate text-xs text-mute">{dp.leaveDays > 0 ? `${dp.leaveDays} leave day${dp.leaveDays === 1 ? "" : "s"}` : ""}{dp.leaveDays > 0 && dp.holidayDays > 0 ? " · " : ""}{dp.holidayDays > 0 ? `${dp.holidayDays} holiday${dp.holidayDays === 1 ? "" : "s"}` : ""} this sprint</div>}</div></div>
+                    <div className="flex w-44 shrink-0 items-center gap-3"><Avatar name={r.d.name} hue={r.d.avatarHue} id={r.d.id} ver={r.d.avatarVer} /><div className="min-w-0"><div className="truncate text-sm font-medium">{r.d.name}</div>{(dp.leaveDays > 0 || dp.holidayDays > 0) && <div className="truncate text-xs text-mute">{dp.leaveDays > 0 ? `${dp.leaveDays} leave day${dp.leaveDays === 1 ? "" : "s"}` : ""}{dp.leaveDays > 0 && dp.holidayDays > 0 ? " · " : ""}{dp.holidayDays > 0 ? `${dp.holidayDays} holiday${dp.holidayDays === 1 ? "" : "s"}` : ""} this sprint</div>}</div></div>
                     <div className="relative h-2.5 min-w-[140px] flex-1 overflow-hidden rounded-full bg-line">
                       <div className="absolute inset-y-0 left-0 bg-neon/25" style={{ width: `${Math.min(100, r.pct + r.wipPct)}%` }} />
                       <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${r.pct}%`, background: c }} />
@@ -166,7 +166,7 @@ export default async function Overview() {
                 const today = sumEntries(todayEntries.filter((e) => e.developerId === d.id), now);
                 return (
                   <div key={d.id} className="flex items-center gap-3">
-                    <div className="relative"><Avatar name={d.name} hue={d.avatarHue} />{s && <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-panel bg-neon-lime" />}</div>
+                    <div className="relative"><Avatar name={d.name} hue={d.avatarHue} id={d.id} ver={d.avatarVer} />{s && <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-panel bg-neon-lime" />}</div>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-medium">{d.name}</div>
                       <div className="truncate text-xs text-mute">{timer ? <><span className="text-neon">{timer.ticket.key}</span> {timer.ticket.title}</> : s ? `Working since ${fmtTime(s.startedAt)}` : away === 1 ? "On leave today" : away > 0 ? "Half-day leave today" : snap.pace.holidaysToday ? "Public holiday" : "Not working"}</div>

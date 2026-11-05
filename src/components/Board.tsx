@@ -13,7 +13,7 @@ import { Avatar, Progress } from "./ui";
 export interface BoardTicket {
   id: string; key: string; title: string; status: StatusKey; type: keyof typeof TYPE_META; priority: keyof typeof PRIORITY_META;
   points: number | null; estimateHrs: number | null; loggedHrs: number; progressPct: number; prNumber: number | null; prState: string | null;
-  assigneeId: string | null; assignee: { name: string; hue: number } | null; project: { key: string; color: string }; complicated: boolean;
+  assigneeId: string | null; assignee: { name: string; hue: number; id: string; ver: number } | null; project: { key: string; color: string }; complicated: boolean;
   columnId: string; jiraStatus: string | null; labels: string[]; jiraUrl: string | null;
   review: "none" | "running" | "passed" | "blocked" | "error"; // latest initial Claude review of the linked PR
 }
@@ -119,7 +119,7 @@ function Card({ t, actor, onDragStart, onDragEnd, onMove }: { t: BoardTicket; ac
               <ArrowRight size={13} />
             </button>
           ))}
-          {t.assignee && <Avatar name={t.assignee.name} hue={t.assignee.hue} size={22} />}
+          {t.assignee && <Avatar name={t.assignee.name} hue={t.assignee.hue} id={t.assignee.id} ver={t.assignee.ver} size={22} />}
         </div>
       </div>
     </div>

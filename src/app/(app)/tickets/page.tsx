@@ -22,7 +22,7 @@ export default async function Tickets({ searchParams }: { searchParams: Promise<
             <tr key={t.id} className="border-t border-line/60 hover:bg-panel2/60">
               <td className="p-3 font-mono text-xs text-mute">{t.key}</td><td className="max-w-md truncate"><Link className="hover:text-neon" href={`/tickets/${t.id}`}>{t.title}</Link></td>
               <td><TypeDot type={t.type} /></td><td><PriorityTag p={t.priority} /></td><td><StatusBadge status={t.status} /></td><td className="text-xs text-mute">{t.sprint?.name ?? "—"}</td>
-              <td className="font-mono text-xs">{t.storyPoints ?? "—"}</td><td className="pr-3">{t.assignee && <Avatar name={t.assignee.name} hue={t.assignee.avatarHue} size={22} />}</td>
+              <td className="font-mono text-xs">{t.storyPoints ?? "—"}</td><td className="pr-3">{t.assignee && <Avatar name={t.assignee.name} hue={t.assignee.avatarHue} id={t.assignee.id} ver={t.assignee.avatarVer} size={22} />}</td>
             </tr>))}</tbody>
         </table>
       </div>

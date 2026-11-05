@@ -35,7 +35,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const jump: PaletteItem[] = [
     { href: "/tickets/new", label: "New ticket", hint: "Create" }, { href: "/", label: "Overview" }, { href: "/board", label: "Board", hint: "Kanban" }, { href: "/sprints", label: "Sprints" },
     { href: "/estimation", label: "Estimates", hint: "Planning poker" }, { href: "/time", label: "Time", hint: "Timer, check-ins" }, { href: "/team", label: "People" },
-    { href: "/one-on-one", label: "1:1 report" }, { href: "/leave", label: "Leave" }, { href: "/meetings", label: "Meetings", hint: "Notes, recorder" },
+    { href: "/reports?kind=oneonone", label: "1:1 report", hint: "Reports" }, { href: "/leave", label: "Leave" }, { href: "/meetings", label: "Meetings", hint: "Notes, recorder" },
     { href: "/analytics", label: "Analytics" }, { href: "/reports", label: "Reports" }, { href: "/settings", label: "Settings", hint: "Profile, AI, alerts" },
     ...(atLeast(me.access, "ADMIN") ? [{ href: "/admin", label: "Admin", hint: "Users, integrations" }, { href: "/admin/notifications", label: "Alerts", hint: "Email, Discord" }] : []),
   ];
@@ -44,7 +44,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <WorkClock cards={cards} planned={session?.planTicketIds ?? []} targetHrs={targetHrs} sessionStart={session?.startedAt.toISOString() ?? null} timer={timer ? { key: timer.ticket.key, title: timer.ticket.title, startedAt: timer.startedAt.toISOString() } : null} />
           <ThemeToggle saved={me.theme as ThemeChoice} />
           <div className="flex items-center gap-2 rounded-lg border border-line p-2">
-            <Avatar name={me.name} hue={me.avatarHue} />
+            <Avatar name={me.name} hue={me.avatarHue} id={me.id} ver={me.avatarVer} />
             <div className="min-w-0 flex-1"><div className="truncate text-sm">{me.name}</div><div className="text-[10px] text-mute">{me.access.toLowerCase()}</div></div>
             <form action={logoutAction}><button className="btn-ghost p-1.5" title="Sign out" aria-label="Sign out"><LogOut size={15} /></button></form>
           </div>
@@ -68,7 +68,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="max-w-md flex-1"><PaletteButton className="h-9 bg-panel" /></div>
           <div className="ml-auto flex items-center gap-3">
             <Link href="/tickets/new" className="btn-primary">+ New ticket</Link>
-            <UserMenu name={me.name} role={me.access.toLowerCase()} hue={me.avatarHue} theme={me.theme as ThemeChoice} logout={logoutAction} />
+            <UserMenu id={me.id} ver={me.avatarVer} name={me.name} role={me.access.toLowerCase()} hue={me.avatarHue} theme={me.theme as ThemeChoice} logout={logoutAction} />
           </div>
         </header>
       <main id="main" tabIndex={-1} className="min-w-0 flex-1 p-4 pb-24 sm:p-6 sm:pb-24 lg:px-8 lg:py-8 2xl:px-12">
