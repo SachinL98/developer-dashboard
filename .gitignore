@@ -3,3 +3,6 @@ node_modules
 .env
 *.tsbuildinfo
 next-env.d.ts
+
+.env.vercel
+.vercel

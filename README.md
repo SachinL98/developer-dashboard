@@ -15,6 +15,8 @@ npm run dev                   # http://localhost:3000
 npm test                      # unit tests (workflow rules, estimation, notes, analytics)
 ```
 
+**Hosting on Vercel with automated deploys: [docs/VERCEL.md](docs/VERCEL.md).**
+
 Out of the box (no Google credentials, not production) the login page offers a seeded-user picker. For real use follow **[docs/SETUP.md](docs/SETUP.md)**: Google sign-in restricted to the office domain, per-user Jira and Google connections, webhooks and scheduled sync.
 
 ## What's in it

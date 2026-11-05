@@ -37,6 +37,8 @@ const nextConfig = {
     ];
   },
   serverExternalPackages: ["@prisma/client", "pdfkit", "pptxgenjs"],
+  // pdfkit reads its font files from disk at runtime; make sure they are shipped with the report export functions.
+  outputFileTracingIncludes: { "/api/reports/**": ["./node_modules/pdfkit/js/data/**"] },
   // Explicit alias so "@/..." resolves regardless of the TypeScript version's tsconfig handling.
   webpack(config) {
     config.resolve.alias["@"] = path.join(root, "src");
