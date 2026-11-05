@@ -28,11 +28,11 @@ export async function sprintSnapshot(sprintId: string) {
   const today = localDate(now);
   const dayFrac = dayFraction(now);
   const pace = paceModel({ start, end, today, dayFrac, devs: devs.map((d) => ({ id: d.id, capacityHrs: d.capacityHrs })), leaves, holidays });
-  const burn = burndown(sprint.startDate, sprint.endDate, tickets.map((t) => ({ points: t.storyPoints ?? 0, hours: t.estimateHrs ?? 0, doneAt: isDone(t.status) ? t.doneAt ?? now : null })), now, pace.idealRemaining);
+  const burn = burndown(sprint.startDate, sprint.endDate, tickets.map((t) => ({ points: points > 0 ? t.storyPoints ?? 0 : 1, hours: t.estimateHrs ?? 0, doneAt: isDone(t.status) ? t.doneAt ?? now : null })), now, pace.idealRemaining);
   const daysLeft = pace.workdaysLeft;
   const totalDays = Math.max(1, Math.round((sprint.endDate.getTime() - sprint.startDate.getTime()) / DAY));
   const elapsedPct = pace.elapsedPct;
-  return { sprint, tickets, points, donePts, estHrs, loggedHrs, byStatus, burn, daysLeft, totalDays, elapsedPct, pace, leaves, holidays, now };
+  return { sprint, tickets, usePoints: points > 0, points, donePts, estHrs, loggedHrs, byStatus, burn, daysLeft, totalDays, elapsedPct, pace, leaves, holidays, now };
 }
 
 /** Closed-sprint velocity per developer & team. */

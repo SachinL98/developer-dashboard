@@ -21,7 +21,7 @@ export function MeetingRecorder({ meetingId, getText, onLines, onFinished, disab
   const [err, setErr] = useState<string | null>(null);
   const [tab, setTab] = useState(!!live); // during an online call the other people are only heard through the shared tab
   const [info, setInfo] = useState<string | null>(null);
-  const st = useRef<{ stream?: MediaStream; ctx?: AudioContext; owned: MediaStream[]; rec?: MediaRecorder; timer?: ReturnType<typeof setTimeout>; t0: number; offset: number; stopping: boolean; queue: Promise<void>; pending: number; lock?: any }>({ owned: [], t0: 0, offset: 0, stopping: false, queue: Promise.resolve(), pending: 0 });
+  const st = useRef<{ stream?: MediaStream; micStream?: MediaStream; tabAudio?: MediaStream; ctx?: AudioContext; owned: MediaStream[]; rec?: MediaRecorder; rec2?: MediaRecorder; timer?: ReturnType<typeof setTimeout>; t0: number; offset: number; stopping: boolean; queue: Promise<void>; pending: number; lock?: any }>({ owned: [], t0: 0, offset: 0, stopping: false, queue: Promise.resolve(), pending: 0 });
   const canTab = typeof navigator !== "undefined" && !!navigator.mediaDevices?.getDisplayMedia;
   const canRecord = typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== "undefined";
 
@@ -30,16 +30,16 @@ export function MeetingRecorder({ meetingId, getText, onLines, onFinished, disab
     const t = setInterval(() => setElapsed(Math.floor((Date.now() - st.current.t0) / 1000)), 1000);
     return () => clearInterval(t);
   }, [on]);
-  useEffect(() => () => { const s = st.current; s.stopping = true; clearTimeout(s.timer); try { s.rec?.stop(); } catch {} s.owned.forEach((m) => m.getTracks().forEach((t) => t.stop())); s.ctx?.close().catch(() => {}); }, []);
+  useEffect(() => () => { const s = st.current; s.stopping = true; clearTimeout(s.timer); try { s.rec?.stop(); s.rec2?.stop(); } catch {} s.owned.forEach((m) => m.getTracks().forEach((t) => t.stop())); s.ctx?.close().catch(() => {}); }, []);
 
-  async function send(blob: Blob, offset: number) {
+  async function send(blob: Blob, offset: number, micBlob?: Blob) {
     const s = st.current;
     s.pending++; setClips((c) => ({ ...c, sent: c.sent + 1 }));
     s.queue = s.queue.then(async () => {
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
           const f = new FormData();
-          f.set("audio", blob, "clip"); f.set("offset", String(offset)); f.set("recent", getText().split("\n").slice(-8).join("\n"));
+          f.set("audio", blob, "clip"); if (micBlob) f.set("mic", micBlob, "mic"); f.set("offset", String(offset)); f.set("recent", getText().split("\n").slice(-8).join("\n"));
           const r = await fetch(`/api/meetings/${meetingId}/audio`, { method: "POST", body: f });
           const j = await r.json().catch(() => ({ ok: false, error: "Unreadable answer from the server." }));
           if (j.ok) { if (j.text) onLines(j.text); setClips((c) => ({ ...c, done: c.done + 1 })); break; }
@@ -53,23 +53,36 @@ export function MeetingRecorder({ meetingId, getText, onLines, onFinished, disab
     });
   }
 
+  /**
+   * One clip. When a tab is shared, the microphone and the tab are recorded separately: the microphone is certainly the signed-in
+   * person, the tab is everyone else (whose voices are told apart on the server). Otherwise one recording is diarized.
+   */
   function startClip() {
     const s = st.current;
     if (!s.stream) return;
     const mime = pickMime();
-    const rec = new MediaRecorder(s.stream, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: 24_000 });
-    const parts: Blob[] = [];
-    const offset = s.offset;
-    const began = Date.now();
-    rec.ondataavailable = (e) => { if (e.data.size) parts.push(e.data); };
-    rec.onstop = () => {
+    const mk = (stream: MediaStream) => {
+      const rec = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: 24_000 });
+      const parts: Blob[] = [];
+      rec.ondataavailable = (e) => { if (e.data.size) parts.push(e.data); };
+      return { rec, parts, blob: () => new Blob(parts, { type: rec.mimeType || mime || "audio/webm" }) };
+    };
+    const main = mk(s.tabAudio ?? s.stream);
+    const mic = s.tabAudio && s.micStream ? mk(s.micStream) : null;
+    const offset = s.offset, began = Date.now();
+    let stopped = 0;
+    const done = () => {
+      if (++stopped < (mic ? 2 : 1)) return;
       s.offset = offset + Math.round((Date.now() - began) / 1000);
-      if (parts.length) void send(new Blob(parts, { type: rec.mimeType || mime || "audio/webm" }), offset);
+      if (main.parts.length) void send(main.blob(), offset, mic?.parts.length ? mic.blob() : undefined);
       else if (s.stopping && s.pending === 0) onFinished();
       if (!s.stopping) startClip();
     };
-    rec.start(); s.rec = rec;
-    s.timer = setTimeout(() => { try { rec.stop(); } catch {} }, CLIP_SEC * 1000);
+    main.rec.onstop = done;
+    if (mic) mic.rec.onstop = done;
+    main.rec.start(); mic?.rec.start();
+    s.rec = main.rec; s.rec2 = mic?.rec;
+    s.timer = setTimeout(() => { try { main.rec.stop(); } catch {} try { mic?.rec.stop(); } catch {} }, CLIP_SEC * 1000);
   }
 
   async function start() {
@@ -77,7 +90,7 @@ export function MeetingRecorder({ meetingId, getText, onLines, onFinished, disab
     const s = st.current;
     try {
       const mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
-      s.owned = [mic];
+      s.owned = [mic]; s.micStream = undefined; s.tabAudio = undefined;
       let stream = mic;
       if (tab && canTab) {
         try {
@@ -86,7 +99,7 @@ export function MeetingRecorder({ meetingId, getText, onLines, onFinished, disab
           if (disp.getAudioTracks().length) {
             const ctx = new AudioContext(); const dest = ctx.createMediaStreamDestination();
             ctx.createMediaStreamSource(mic).connect(dest); ctx.createMediaStreamSource(new MediaStream(disp.getAudioTracks())).connect(dest);
-            s.ctx = ctx; stream = dest.stream;
+            s.ctx = ctx; stream = dest.stream; s.micStream = mic; s.tabAudio = new MediaStream(disp.getAudioTracks());
             disp.getVideoTracks().forEach((t) => { t.onended = () => { if (st.current.rec) void stop(); }; });
           } else setInfo("That share has no audio. When sharing, choose a browser tab and tick 'Share tab audio'. Recording the microphone only.");
         } catch { setInfo("Tab sharing was cancelled. Recording the microphone only."); }
@@ -104,7 +117,7 @@ export function MeetingRecorder({ meetingId, getText, onLines, onFinished, disab
   async function stop() {
     const s = st.current;
     s.stopping = true; clearTimeout(s.timer);
-    try { s.rec?.stop(); } catch {}
+    try { s.rec?.stop(); } catch {} try { s.rec2?.stop(); } catch {}
     s.owned.forEach((m) => m.getTracks().forEach((t) => t.stop())); s.owned = [];
     s.ctx?.close().catch(() => {}); s.ctx = undefined;
     try { await s.lock?.release(); } catch {}

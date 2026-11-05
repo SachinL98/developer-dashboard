@@ -38,17 +38,19 @@ export default async function Overview() {
   const waiting = snap.tickets.filter((t) => ["INITIAL_REVIEW", "REVIEW"].includes(t.status));
   const burn = snap.burn.map((r) => ({ day: r.day, ideal: r.idealPts, actual: r.actualPts }));
   const statusData = STATUS_ORDER.map((s) => ({ name: STATUS_META[s].label, value: snap.byStatus[s], color: STATUS_META[s].color }));
-  const pace = snap.points ? (snap.donePts / snap.points) * 100 : 0;
+  // Progress is measured in tickets: it works for every board, including Jira projects that do not use story points.
+  const doneCount = snap.tickets.filter((t) => isDone(t.status)).length;
+  const pace = snap.tickets.length ? (doneCount / snap.tickets.length) * 100 : 0;
   const health = pace + 8 >= snap.elapsedPct ? ["On track", "#a3e635"] : pace + 25 >= snap.elapsedPct ? ["At risk", "#fbbf24"] : ["Behind", "#fb7185"];
 
   const rows = devs.map((d) => {
     const mine = snap.tickets.filter((t) => t.assigneeId === d.id);
-    const pts = (ts: typeof mine) => ts.reduce((a, t) => a + (t.storyPoints ?? 0), 0);
     const done = mine.filter((t) => isDone(t.status));
     const wip = mine.filter((t) => !isDone(t.status) && !["BACKLOG", "READY_TO_DEV"].includes(t.status));
-    const total = pts(mine), donePts = pts(done), wipPts = pts(wip);
-    return { d, total, donePts, wipPts, tickets: mine.length, doneTickets: done.length, pct: total ? (donePts / total) * 100 : 0, wipPct: total ? (wipPts / total) * 100 : 0 };
-  }).filter((r) => r.tickets > 0).sort((a, b) => b.total - a.total);
+    const total = mine.length;
+    const pts = mine.reduce((a, t) => a + (t.storyPoints ?? 0), 0);
+    return { d, total, doneTickets: done.length, wipTickets: wip.length, pts, pct: total ? (done.length / total) * 100 : 0, wipPct: total ? (wip.length / total) * 100 : 0 };
+  }).filter((r) => r.total > 0).sort((a, b) => b.total - a.total);
   const unassigned = snap.tickets.filter((t) => !t.assigneeId);
   const rowColor = (pct: number, expected: number) => (pct + 8 >= expected ? "#a3e635" : pct + 25 >= expected ? "#fbbf24" : "#fb7185");
   const paceOf = (id: string) => snap.pace.perDev[id] ?? { expectedPct: snap.elapsedPct, availableDays: 0, leaveDays: 0, leaveDaysLeft: 0, holidayDays: 0, awayToday: 0 };
@@ -61,7 +63,7 @@ export default async function Overview() {
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Kpi label="Working days left" value={snap.daysLeft} sub={`${Math.round(snap.elapsedPct)}% of available time used${leaveTotal ? ` · ${leaveTotal} leave day${leaveTotal === 1 ? "" : "s"} planned` : ""}`} accent="#2563eb" />
-        <Kpi label="Points completed" value={<>{snap.donePts}<span className="text-lg font-normal text-mute"> / {snap.points}</span></>} sub={`${Math.round(pace)}% of sprint scope`} accent="#16a34a" />
+        <Kpi label="Tickets completed" value={<>{doneCount}<span className="text-lg font-normal text-mute"> / {snap.tickets.length}</span></>} sub={`${Math.round(pace)}% of the sprint${snap.usePoints ? ` · ${snap.donePts} of ${snap.points} points` : ""}`} accent="#16a34a" />
         <Kpi label="Hours logged" value={Math.round(snap.loggedHrs)} sub={`of ${Math.round(snap.estHrs)}h estimated`} accent="#4f46e5" />
         <Kpi label="Needs attention" value={waiting.length + failed.length} sub={`${waiting.length} in review · ${failed.length} failed in staging`} accent="#d97706" />
       </div>
@@ -69,7 +71,7 @@ export default async function Overview() {
       <div className="grid gap-4">
         <div className="card-pad">
           <div className="mb-2 flex items-center justify-between"><span className="h-section">Sprint burndown</span><Link href="/analytics" className="text-sm text-neon">View analytics</Link></div>
-          <BurndownChart data={burn} />
+          <BurndownChart data={burn} unit={snap.usePoints ? "pts" : "tickets"} />
         </div>
         <div className="card-pad">
           <div className="mb-2 h-section">Tickets by status</div>
@@ -99,14 +101,14 @@ export default async function Overview() {
                   <div className="absolute inset-y-0 w-0.5 bg-ink/80" style={{ left: `${dp.expectedPct}%` }} />
                 </div>
                 <div className="w-40 shrink-0 text-right">
-                  <span className="text-lg font-semibold" style={{ color: fg(c) }}>{r.donePts}</span><span className="text-sm text-mute"> / {r.total} pts</span>
-                  <div className="text-xs text-mute">{r.doneTickets}/{r.tickets} tickets · {Math.round(r.pct)}%</div>
+                  <span className="text-lg font-semibold" style={{ color: fg(c) }}>{r.doneTickets}</span><span className="text-sm text-mute"> / {r.total} tickets</span>
+                  <div className="text-xs text-mute">{Math.round(r.pct)}% done{r.wipTickets ? ` · ${r.wipTickets} in flight` : ""}{r.pts ? ` · ${r.pts} pts` : ""}</div>
                 </div>
               </div>
             );
           })}
         </div>
-        {unassigned.length > 0 && <div className="mt-2 text-xs text-neon-amber">{unassigned.length} unassigned ticket{unassigned.length > 1 ? "s" : ""} ({unassigned.reduce((a, t) => a + (t.storyPoints ?? 0), 0)} pts) not assigned to anyone</div>}
+        {unassigned.length > 0 && <div className="mt-2 text-xs text-neon-amber">{unassigned.length} unassigned ticket{unassigned.length > 1 ? "s" : ""} not assigned to anyone</div>}
         {!rows.length && <Empty>No tickets assigned in this sprint yet.</Empty>}
       </div>
 
