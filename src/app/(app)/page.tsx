@@ -7,6 +7,8 @@ import { BurndownChart, StatusBars } from "@/components/Charts";
 import { STATUS_META, STATUS_ORDER } from "@/lib/workflow";
 import { fmtDay, fmtDur, fmtTime } from "@/lib/time";
 import { sumEntries, isDone } from "@/lib/analytics";
+import { idleWorkdays } from "@/lib/pace";
+import { localDate } from "@/lib/time";
 
 export default async function Overview() {
   const sprint = await activeSprint();
@@ -21,7 +23,13 @@ export default async function Overview() {
     db.developer.findMany({ include: { timers: { where: { endedAt: null }, include: { ticket: true } } } }),
   ]);
   const todayEntries = await db.timeEntry.findMany({ where: { startedAt: { gte: dayStart } } });
-  const stale = snap.tickets.filter((t) => t.status === "IN_PROGRESS" && t.timeEntries.every((e) => (e.endedAt ?? now).getTime() < now.getTime() - 2 * DAY));
+  // Idle = no time logged for 2+ working days. Weekends, public holidays and the assignee's approved leave don't count.
+  const todayStr = localDate(now);
+  const stale = snap.tickets.filter((t) => {
+    if (t.status !== "IN_PROGRESS" || !t.assigneeId) return false;
+    const last = t.timeEntries.reduce<Date | null>((m, e) => { const x = e.endedAt ?? now; return !m || x > m ? x : m; }, null) ?? t.startedAt ?? t.updatedAt;
+    return idleWorkdays(localDate(last), todayStr, t.assigneeId, snap.leaves, snap.holidays) >= 2;
+  });
   const failed = snap.tickets.filter((t) => t.status === "FAILED_STG");
   const waiting = snap.tickets.filter((t) => ["INITIAL_REVIEW", "REVIEW"].includes(t.status));
   const burn = snap.burn.map((r) => ({ day: r.day, ideal: r.idealPts, actual: r.actualPts }));
@@ -38,7 +46,9 @@ export default async function Overview() {
     return { d, total, donePts, wipPts, tickets: mine.length, doneTickets: done.length, pct: total ? (donePts / total) * 100 : 0, wipPct: total ? (wipPts / total) * 100 : 0 };
   }).filter((r) => r.tickets > 0).sort((a, b) => b.total - a.total);
   const unassigned = snap.tickets.filter((t) => !t.assigneeId);
-  const rowColor = (pct: number) => (pct + 8 >= snap.elapsedPct ? "#a3e635" : pct + 25 >= snap.elapsedPct ? "#fbbf24" : "#fb7185");
+  const rowColor = (pct: number, expected: number) => (pct + 8 >= expected ? "#a3e635" : pct + 25 >= expected ? "#fbbf24" : "#fb7185");
+  const paceOf = (id: string) => snap.pace.perDev[id] ?? { expectedPct: snap.elapsedPct, availableDays: 0, leaveDays: 0, leaveDaysLeft: 0, holidayDays: 0, awayToday: 0 };
+  const leaveTotal = Object.values(snap.pace.perDev).reduce((a, p) => a + p.leaveDays, 0);
 
   return (
     <div className="space-y-6">
@@ -46,7 +56,7 @@ export default async function Overview() {
         actions={<><Link href="/tickets/new" className="btn">New ticket</Link><Link href="/board" className="btn-primary">Open board</Link></>} />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Kpi label="Days left" value={snap.daysLeft} sub={`of ${snap.totalDays} days · ${Math.round(snap.elapsedPct)}% elapsed`} accent="#2563eb" />
+        <Kpi label="Working days left" value={snap.daysLeft} sub={`${Math.round(snap.elapsedPct)}% of available time used${leaveTotal ? ` · ${leaveTotal} leave day${leaveTotal === 1 ? "" : "s"} planned` : ""}`} accent="#2563eb" />
         <Kpi label="Points completed" value={<>{snap.donePts}<span className="text-lg font-normal text-mute"> / {snap.points}</span></>} sub={`${Math.round(pace)}% of sprint scope`} accent="#16a34a" />
         <Kpi label="Hours logged" value={Math.round(snap.loggedHrs)} sub={`of ${Math.round(snap.estHrs)}h estimated`} accent="#4f46e5" />
         <Kpi label="Needs attention" value={waiting.length + failed.length} sub={`${waiting.length} in review · ${failed.length} failed in staging`} accent="#d97706" />
@@ -69,19 +79,20 @@ export default async function Overview() {
           <span className="flex items-center gap-3 text-xs text-mute">
             <span className="flex items-center gap-1"><i className="inline-block h-2 w-2 rounded-full bg-neon-lime" />Completed</span>
             <span className="flex items-center gap-1"><i className="inline-block h-2 w-2 rounded-full bg-neon/40" />In flight</span>
-            <span className="flex items-center gap-1"><i className="inline-block h-3 w-0.5 bg-ink" />Today ({Math.round(snap.elapsedPct)}% of sprint)</span>
+            <span className="flex items-center gap-1"><i className="inline-block h-3 w-0.5 bg-ink" />Expected by today (allows for leave)</span>
           </span>
         </div>
         <div className="divide-y divide-line">
           {rows.map((r) => {
-            const c = rowColor(r.pct);
+            const dp = paceOf(r.d.id);
+            const c = rowColor(r.pct, dp.expectedPct);
             return (
               <div key={r.d.id} className="flex items-center gap-4 py-3">
-                <div className="flex w-44 shrink-0 items-center gap-2"><Avatar name={r.d.name} hue={r.d.avatarHue} /><span className="truncate text-sm">{r.d.name}</span></div>
+                <div className="flex w-44 shrink-0 items-center gap-2"><Avatar name={r.d.name} hue={r.d.avatarHue} /><div className="min-w-0"><div className="truncate text-sm">{r.d.name}</div>{(dp.leaveDays > 0 || dp.holidayDays > 0) && <div className="truncate text-xs text-mute">{dp.leaveDays > 0 ? `${dp.leaveDays} leave day${dp.leaveDays === 1 ? "" : "s"}` : ""}{dp.leaveDays > 0 && dp.holidayDays > 0 ? " · " : ""}{dp.holidayDays > 0 ? `${dp.holidayDays} holiday${dp.holidayDays === 1 ? "" : "s"}` : ""} this sprint</div>}</div></div>
                 <div className="relative h-3 flex-1 overflow-hidden rounded-full bg-line">
                   <div className="absolute inset-y-0 left-0 bg-neon/25" style={{ width: `${Math.min(100, r.pct + r.wipPct)}%` }} />
                   <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${r.pct}%`, background: c }} />
-                  <div className="absolute inset-y-0 w-0.5 bg-ink/80" style={{ left: `${snap.elapsedPct}%` }} />
+                  <div className="absolute inset-y-0 w-0.5 bg-ink/80" style={{ left: `${dp.expectedPct}%` }} />
                 </div>
                 <div className="w-40 shrink-0 text-right">
                   <span className="text-lg font-semibold" style={{ color: fg(c) }}>{r.donePts}</span><span className="text-sm text-mute"> / {r.total} pts</span>
@@ -102,13 +113,14 @@ export default async function Overview() {
             {devs.map((d) => {
               const s = live.find((l) => l.developerId === d.id);
               const timer = d.timers[0];
+              const away = paceOf(d.id).awayToday;
               const today = sumEntries(todayEntries.filter((e) => e.developerId === d.id), now);
               return (
                 <div key={d.id} className="flex items-center gap-3">
                   <div className="relative"><Avatar name={d.name} hue={d.avatarHue} />{s && <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-panel bg-neon-lime" />}</div>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm">{d.name}</div>
-                    <div className="truncate text-xs text-mute">{timer ? <><span className="text-neon">{timer.ticket.key}</span> {timer.ticket.title}</> : s ? `Working since ${fmtTime(s.startedAt)}` : "Not working"}</div>
+                    <div className="truncate text-xs text-mute">{timer ? <><span className="text-neon">{timer.ticket.key}</span> {timer.ticket.title}</> : s ? `Working since ${fmtTime(s.startedAt)}` : away === 1 ? "On leave today" : away > 0 ? "Half-day leave today" : snap.pace.holidaysToday ? "Public holiday" : "Not working"}</div>
                   </div>
                   <div className="text-xs text-mute">{fmtDur(today)}</div>
                 </div>

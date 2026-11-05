@@ -69,3 +69,47 @@ describe("requests", () => {
     expect(checkRequest({ ...ok, start: "2026-02-30" }, [], [], today)).toMatch(/valid dates/);
   });
 });
+
+import { idleWorkdays, paceModel } from "@/lib/pace";
+
+describe("leave-aware pace", () => {
+  // Sprint Mon 2026-10-05 to Fri 2026-10-16 (10 working days), two developers with 40h/week.
+  const devs = [{ id: "a", capacityHrs: 40 }, { id: "b", capacityHrs: 40 }];
+  const base = { start: "2026-10-05", end: "2026-10-16", dayFrac: 0, devs, holidays: [] as Holiday[] };
+
+  it("matches a plain calendar when nobody is away", () => {
+    const p = paceModel({ ...base, today: "2026-10-12", leaves: [] });
+    expect(p.elapsedPct).toBeCloseTo(50, 0);
+    expect(p.perDev.a.expectedPct).toBeCloseTo(50, 0);
+    expect(p.workdaysLeft).toBe(5);
+  });
+  it("expects less progress from someone who has been on leave", () => {
+    // a is away the whole first week, so by Mon 12 Oct none of a's available time has been used.
+    const p = paceModel({ ...base, today: "2026-10-12", leaves: [leave("2026-10-05", "2026-10-09", "FULL", "a")] });
+    expect(p.perDev.a.expectedPct).toBeCloseTo(0, 0);
+    expect(p.perDev.b.expectedPct).toBeCloseTo(50, 0);
+    expect(p.perDev.a.leaveDays).toBe(5);
+    expect(p.elapsedPct).toBeLessThan(50); // team has used less than half of its available time
+  });
+  it("makes the ideal burndown flat while the team is away and keeps it reaching zero", () => {
+    const p = paceModel({ ...base, today: "2026-10-05", leaves: [leave("2026-10-07", "2026-10-07", "FULL", "a"), leave("2026-10-07", "2026-10-07", "FULL", "b")] });
+    const i = p.dates.indexOf("2026-10-07");
+    expect(p.idealRemaining[i]).toBeCloseTo(p.idealRemaining[i - 1], 5);
+    expect(p.idealRemaining.at(-1)).toBeCloseTo(0, 5);
+  });
+  it("skips public holidays and reports leave today", () => {
+    const p = paceModel({ ...base, today: "2026-10-07", leaves: [leave("2026-10-07", "2026-10-07", "HALF", "a")], holidays: [{ date: "2026-10-08", name: "Poya" }] });
+    expect(p.perDev.a.awayToday).toBe(0.5);
+    expect(p.perDev.a.holidayDays).toBe(1);
+  });
+});
+
+describe("idleWorkdays", () => {
+  it("does not count weekends, holidays or days on leave", () => {
+    // Last active Fri 9 Oct; today Wed 14 Oct. Mon 12 is a holiday, Tue 13 is leave -> only Wed counts.
+    expect(idleWorkdays("2026-10-09", "2026-10-14", "a", [leave("2026-10-13", "2026-10-13")], [{ date: "2026-10-12", name: "H" }])).toBe(1);
+  });
+  it("counts normal working days", () => {
+    expect(idleWorkdays("2026-10-08", "2026-10-12", "a", [], [])).toBe(2); // Fri + Mon
+  });
+});
