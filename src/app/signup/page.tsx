@@ -15,8 +15,8 @@ export default async function Signup() {
       <div className="fixed right-4 top-4"><ThemeToggle signedIn={false} compact /></div>
       <div className="card-pad w-full max-w-md space-y-5">
         <div className="flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-xl bg-neon text-lg font-bold text-on-accent">S</div>
-          <div><h1 className="text-xl font-semibold leading-tight">Create your account</h1><p className="text-sm text-mute">SpaceIT Delivery</p></div>
+          <img src="/icon-192.png" alt="" width={44} height={44} className="h-11 w-11 rounded-xl" />
+          <div><h1 className="text-xl font-semibold leading-tight">Create your account</h1><p className="text-sm text-mute">Dev Dashboard</p></div>
         </div>
         {signupEnabled() ? <SignupForm /> : (
           <div className="space-y-4 text-center"><p className="text-sm text-mute">Sign-up is closed. Ask an admin to add you.</p><Link href="/login" className="btn w-full">Back to sign in</Link></div>

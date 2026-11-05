@@ -57,8 +57,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <MobileNav isAdmin={atLeast(me.access, "ADMIN")}>{footer}</MobileNav>
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col gap-6 overflow-y-auto border-r border-line/70 bg-bg px-3 py-4 lg:flex">
         <Link href="/" className="flex items-center gap-2.5 px-2">
-          <div className="grid h-8 w-8 place-items-center rounded-lg bg-neon text-sm font-bold text-on-accent">S</div>
-          <div className="text-sm font-semibold tracking-tight">SpaceIT Delivery</div>
+          <img src="/icon-192.png" alt="" width={32} height={32} className="h-8 w-8 rounded-lg" />
+          <div className="text-sm font-semibold tracking-tight">Dev Dashboard</div>
         </Link>
         <Nav isAdmin={atLeast(me.access, "ADMIN")} />
         <div className="mt-auto"><WorkClock cards={cards} planned={session?.planTicketIds ?? []} targetHrs={targetHrs} sessionStart={session?.startedAt.toISOString() ?? null} timer={timer ? { key: timer.ticket.key, title: timer.ticket.title, startedAt: timer.startedAt.toISOString() } : null} /></div>

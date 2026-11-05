@@ -154,7 +154,7 @@ function prComment(t: { key: string; title: string }, r: { passed: boolean; summ
     `### Initial review (round ${r.round}) for ${t.key}: ${r.passed ? "✅ passed" : "❌ needs changes"}`, "", r.summary, "",
     ...(r.findings.length ? ["**Findings**", ...r.findings.map((f) => `- ${sev(f.severity)} **${f.title}**${f.file ? ` (\`${f.file}${f.line ? ":" + f.line : ""}\`)` : ""}: ${f.detail}`), ""] : []),
     "**Checklist**", ...r.items.map((i) => `- [${i.checked ? "x" : " "}] ${i.label}${i.severity === "critical" ? " _(critical)_" : ""}${i.note && !i.checked ? ` — ${i.note}` : ""}`), "",
-    "---", `_Automated review by the SpaceIT Dev Dashboard${r.model ? ` using ${r.model}` : ""}. Push fixes and it re-runs._`,
+    "---", `_Automated review by the Dev Dashboard${r.model ? ` using ${r.model}` : ""}. Push fixes and it re-runs._`,
   ].join("\n");
 }
 

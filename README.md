@@ -1,4 +1,4 @@
-# SpaceIT Developer Dashboard
+# Dev Dashboard
 
 One place for the whole sprint workflow of the SpaceIT Labs dev team: backlog → sprint plan → estimate → board → review → staging → production, with time tracking, a meeting notes taker and analytics on top.
 

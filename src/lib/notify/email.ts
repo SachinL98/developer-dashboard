@@ -19,7 +19,7 @@ export function emailProvider(env: NodeJS.ProcessEnv = process.env): EmailProvid
 }
 
 const fromAddress = () => process.env.EMAIL_FROM || process.env.ZOHO_SMTP_USER || "";
-const fromName = () => process.env.EMAIL_FROM_NAME || "SpaceIT Delivery";
+const fromName = () => process.env.EMAIL_FROM_NAME || "Dev Dashboard";
 
 export async function sendEmail(m: Mail): Promise<{ provider: EmailProvider }> {
   const provider = emailProvider();

@@ -95,7 +95,7 @@ export async function runNotifications(now = new Date(), opts: { force?: boolean
 
 /** A test message to one person, so an admin can check email and Discord are working. Not limited to once a day. */
 export async function sendTest(p: Person) {
-  const r = await sendToPerson(p, { subject: "Test notification from SpaceIT Delivery", intro: `Hi ${p.name.split(" ")[0]}, this is a test. If you can read it, alerts for overdue tickets and start-of-day reminders will reach you here.`, url: `${base()}/settings`, discord: `✅ Hi ${p.name.split(" ")[0]}, this is a test message from SpaceIT Delivery.` });
+  const r = await sendToPerson(p, { subject: "Test notification from Dev Dashboard", intro: `Hi ${p.name.split(" ")[0]}, this is a test. If you can read it, alerts for overdue tickets and start-of-day reminders will reach you here.`, url: `${base()}/settings`, discord: `✅ Hi ${p.name.split(" ")[0]}, this is a test message from SpaceIT Delivery.` });
   await db.notificationLog.create({ data: { userId: p.id, kind: "TEST", dayKey: `${localDate(new Date())}-${Date.now()}`, status: r.status, channels: r.channels as any, summary: "Test" } });
   return r;
 }

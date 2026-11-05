@@ -29,15 +29,15 @@ export function MobileNav({ isAdmin, children }: { isAdmin: boolean; children: R
     <div className="lg:hidden">
       <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-bg/85 px-4 backdrop-blur">
         <button className="btn-ghost -ml-2 h-11 w-11 p-0" aria-label="Open menu" aria-expanded={open} onClick={() => setOpen(true)}><Menu size={22} /></button>
-        <div className="grid h-8 w-8 place-items-center rounded-lg bg-neon text-sm font-bold text-on-accent">S</div>
-        <span className="truncate font-semibold">SpaceIT Delivery</span>
+        <img src="/icon-192.png" alt="" width={32} height={32} className="h-8 w-8 rounded-lg" />
+        <span className="truncate font-semibold">Dev Dashboard</span>
       </header>
 
       {open && <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={() => setOpen(false)} aria-hidden />}
       <aside className={clsx("fixed inset-y-0 left-0 z-50 flex w-[300px] max-w-[85vw] flex-col gap-4 overflow-y-auto border-r border-line bg-bg p-4 transition-transform duration-200", open ? "translate-x-0" : "-translate-x-full")}
         aria-hidden={!open} role="dialog" aria-label="Menu">
         <div className="flex items-center justify-between">
-          <span className="font-semibold">SpaceIT Labs</span>
+          <span className="font-semibold">Dev Dashboard</span>
           <button className="btn-ghost h-11 w-11 p-0" aria-label="Close menu" onClick={() => setOpen(false)}><X size={20} /></button>
         </div>
         <Nav isAdmin={isAdmin} />

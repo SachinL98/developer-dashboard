@@ -18,8 +18,8 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
       <div className="fixed right-4 top-4"><ThemeToggle signedIn={false} compact /></div>
       <div className="card-pad w-full max-w-md space-y-6">
         <div className="flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-xl bg-neon text-lg font-bold text-on-accent">S</div>
-          <div><h1 className="text-xl font-semibold leading-tight">SpaceIT Delivery</h1><p className="text-sm text-mute">Sign in to continue</p></div>
+          <img src="/icon-192.png" alt="" width={44} height={44} className="h-11 w-11 rounded-xl" />
+          <div><h1 className="text-xl font-semibold leading-tight">Dev Dashboard</h1><p className="text-sm text-mute">Sign in to continue</p></div>
         </div>
         {sp.error === "session" && <div role="alert" className="rounded-lg border border-neon-amber/40 bg-neon-amber/10 px-3 py-2 text-sm text-neon-amber">Your session ended. Sign in again.</div>}
         <LoginForm next={safeNext(sp.next)} />

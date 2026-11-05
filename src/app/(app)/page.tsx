@@ -77,7 +77,7 @@ export default async function Overview() {
       <section className="card-pad">
         <div className="grid divide-line lg:grid-cols-4 lg:divide-x max-lg:grid-cols-2 max-lg:gap-x-4">
           {stat("Tickets completed", <>{doneCount}<span className="text-base font-normal text-mute"> / {snap.tickets.length}</span></>, `${Math.round(pace)}% of the sprint${snap.usePoints ? ` · ${snap.donePts}/${snap.points} pts` : ""}`)}
-          {stat("Working days left", snap.daysLeft, `${Math.round(snap.elapsedPct)}% of time used${leaveTotal ? ` · ${leaveTotal} leave day${leaveTotal === 1 ? "" : "s"}` : ""}`)}
+          {stat("Working days left", snap.daysLeft, `Today included, weekends skipped · ${Math.round(snap.elapsedPct)}% used${leaveTotal ? ` · ${leaveTotal} leave day${leaveTotal === 1 ? "" : "s"}` : ""}`)}
           {stat("Hours logged", <>{Math.round(snap.loggedHrs)}<span className="text-base font-normal text-mute">h</span></>, `of ${Math.round(snap.estHrs)}h estimated`)}
           {stat("Needs attention", attention, `${waiting.length} in review · ${failed.length} failed in staging`)}
         </div>

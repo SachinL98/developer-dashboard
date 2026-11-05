@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
-export const metadata: Metadata = { title: "SpaceIT Dev Dashboard", description: "Sprint, time, estimation and analytics hub for SpaceIT Labs developers" };
+export const metadata: Metadata = { title: "Dev Dashboard", description: "Sprint, time, estimation and analytics hub for SpaceIT Labs developers" };
 export const viewport: Viewport = { themeColor: [{ media: "(prefers-color-scheme: dark)", color: "#07090f" }, { media: "(prefers-color-scheme: light)", color: "#f4f6fb" }] };
 
 // Runs before first paint: picks light/dark from the saved choice (cookie); light is the default. No flash.
