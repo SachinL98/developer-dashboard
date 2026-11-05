@@ -1,15 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const db = vi.hoisted(() => ({ developer: { findFirst: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), count: vi.fn() } }));
+const db = vi.hoisted(() => {
+  const m = () => ({ updateMany: vi.fn().mockResolvedValue({ count: 0 }), deleteMany: vi.fn().mockResolvedValue({ count: 0 }), findMany: vi.fn().mockResolvedValue([]), count: vi.fn().mockResolvedValue(0) });
+  return {
+  developer: { findFirst: vi.fn(), findUnique: vi.fn(), findUniqueOrThrow: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), count: vi.fn() },
+  estimateVote: m(), ticket: m(), transition: m(), workSession: m(), timeEntry: m(), leave: m(), meetingSpeaker: m(), speakerAlias: m(),
+  $transaction: vi.fn(async (ops: unknown[]) => ops),
+  };
+});
 vi.mock("../src/lib/db", () => ({ db }));
 vi.mock("../src/lib/config", () => ({ getWorkspace: async () => ({ defaultCapacityHrs: 30 }) }));
 
-import { ensureJiraPerson, isPlaceholderEmail, placeholderEmail, syncJiraPeople } from "../src/lib/jira-people";
+import { ensureJiraPerson, isPlaceholderEmail, mergePeople, placeholderEmail, reconcileJiraPeople, syncJiraPeople } from "../src/lib/jira-people";
 
 beforeEach(() => {
   vi.clearAllMocks();
   db.developer.findFirst.mockResolvedValue(null);
   db.developer.findUnique.mockResolvedValue(null);
+  db.developer.findMany.mockResolvedValue([]);
   db.developer.count.mockResolvedValue(0);
   db.developer.create.mockImplementation(async (a: any) => ({ id: "new", passwordHash: null, active: true, ...a.data }));
   db.developer.update.mockImplementation(async (a: any) => ({ id: a.where.id, ...a.data }));
@@ -52,5 +60,43 @@ describe("syncJiraPeople", () => {
     db.developer.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: "x", passwordHash: "h", email: "k@x.com", name: "K", jiraAccount: "k", active: true });
     const r = await syncJiraPeople([{ accountId: "a", name: "A", email: "a@x.com" }, { accountId: "k", name: "K", email: "k@x.com" }]);
     expect(r).toEqual({ added: 1, existing: 1 });
+  });
+});
+
+const real = (id: string, name: string, over: object = {}) => ({ id, name, email: `${id}@x.com`, passwordHash: "scrypt$h", jiraAccount: null, ...over });
+const fromJira = (id: string, name: string) => ({ id, name, email: `jira-${id}@users.jira.invalid`, passwordHash: null, jiraAccount: `acc-${id}` });
+
+describe("same person under two entries", () => {
+  it("a new Jira person with the full name of an existing account is linked to it, not duplicated", async () => {
+    db.developer.findMany.mockResolvedValue([real("me", "Sachin Lakshan")]);
+    await ensureJiraPerson({ accountId: "acc-9", name: "sachin  lakshan" });
+    expect(db.developer.update).toHaveBeenCalledWith({ where: { id: "me" }, data: { jiraAccount: "acc-9" } });
+    expect(db.developer.create).not.toHaveBeenCalled();
+  });
+  it("does not guess when two accounts share the name", async () => {
+    db.developer.findMany.mockResolvedValue([real("a", "Nuwan Silva"), real("b", "Nuwan Silva")]);
+    await ensureJiraPerson({ accountId: "acc-8", name: "Nuwan Silva" });
+    expect(db.developer.create).toHaveBeenCalledTimes(1);
+  });
+  it("merges tickets, time and history into the account and removes the duplicate", async () => {
+    db.developer.findUniqueOrThrow.mockImplementation(async (a: any) => (a.where.id === "dup" ? fromJira("dup", "Sachin Lakshan") : real("me", "Sachin Lakshan")));
+    db.ticket.count.mockResolvedValue(38);
+    const r = await mergePeople("dup", "me");
+    expect(db.ticket.updateMany).toHaveBeenCalledWith({ where: { assigneeId: "dup" }, data: { assigneeId: "me" } });
+    expect(db.timeEntry.updateMany).toHaveBeenCalledWith({ where: { developerId: "dup" }, data: { developerId: "me" } });
+    expect(db.meetingSpeaker.updateMany).toHaveBeenCalledWith({ where: { developerId: "dup" }, data: { developerId: "me" } });
+    expect(db.developer.delete).toHaveBeenCalledWith({ where: { id: "dup" } });
+    expect(db.developer.update).toHaveBeenCalledWith({ where: { id: "me" }, data: { jiraAccount: "acc-dup" } });
+    expect(r.tickets).toBe(38);
+  });
+  it("refuses to merge a real account away, or into someone without an account", async () => {
+    db.developer.findUniqueOrThrow.mockImplementation(async (a: any) => (a.where.id === "x" ? real("x", "A") : fromJira("y", "B")));
+    await expect(mergePeople("x", "y")).rejects.toThrow();
+    await expect(mergePeople("y", "y")).rejects.toThrow(/different/);
+  });
+  it("reconcile merges only unambiguous same-name pairs", async () => {
+    db.developer.findMany.mockResolvedValue([fromJira("j1", "Sachin Lakshan"), real("me", "Sachin Lakshan"), fromJira("j2", "Nuwan Silva"), real("n1", "Nuwan Silva"), real("n2", "Nuwan Silva")]);
+    db.developer.findUniqueOrThrow.mockImplementation(async (a: any) => [fromJira("j1", "Sachin Lakshan"), real("me", "Sachin Lakshan")].find((d) => d.id === a.where.id)!);
+    expect(await reconcileJiraPeople()).toEqual({ merged: 1 });
   });
 });

@@ -26,6 +26,7 @@ import { userMessage } from "@/lib/safe-error";
 import { rateLimit } from "@/lib/rate-limit";
 import { saveUserKey, removeUserKey, validateKey, listUserProviders, setPreferredProvider, PROVIDERS } from "@/lib/ai";
 import { norm as normSpeaker, isGenericSpeaker } from "@/lib/speakers";
+import { mergePeople } from "@/lib/jira-people";
 import { generateDevProfile, reviewEstimate, type EstimateReview } from "@/lib/insights";
 
 type Result<T = {}> = ({ ok: true } & T) | { ok: false; error: string };
@@ -705,5 +706,15 @@ export async function linkSpeakerAction(speakerName: string, developerId: string
     const r = await db.meetingSpeaker.updateMany({ where: { name: { equals: name, mode: "insensitive" } }, data: { developerId: dev.id } });
     revalidatePath("/meetings"); revalidatePath("/analytics");
     return { ok: true, linked: r.count };
+  } catch (e) { return fail(e); }
+}
+
+/** Admin: this person imported from Jira is the same human as an existing account. Moves everything across and removes the duplicate. */
+export async function mergePersonAction(fromId: string, intoId: string): Promise<Result<{ tickets: number }>> {
+  try {
+    await requireAccess("ADMIN");
+    const r = await mergePeople(id.parse(fromId), id.parse(intoId));
+    revalidatePath("/admin/users"); revalidatePath("/team"); touch();
+    return { ok: true, tickets: r.tickets };
   } catch (e) { return fail(e); }
 }

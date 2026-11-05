@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { getWorkspace } from "./config";
+import { norm } from "./speakers";
 
 export interface JiraPerson { accountId: string; name: string; email?: string; active?: boolean }
 
@@ -28,6 +29,11 @@ export async function ensureJiraPerson(p: JiraPerson) {
     return Object.keys(data).length ? db.developer.update({ where: { id: dev.id }, data }) : dev;
   }
   if (p.active === false) return null;
+  // Someone who already has a dashboard account under the same full name (but a different or hidden Jira email) is the same person.
+  if (p.name) {
+    const same = (await db.developer.findMany({ where: { passwordHash: { not: null }, jiraAccount: null } })).filter((d) => norm(d.name) === norm(p.name));
+    if (same.length === 1) return db.developer.update({ where: { id: same[0].id }, data: { jiraAccount: p.accountId } });
+  }
   return db.developer.create({
     data: {
       email: email ?? placeholderEmail(p.accountId), name: p.name || email?.split("@")[0] || "Jira user", jiraAccount: p.accountId, role: "Developer",
@@ -45,4 +51,42 @@ export async function syncJiraPeople(people: JiraPerson[]) {
     if (d) before ? existing++ : added++;
   }
   return { added, existing };
+}
+
+/**
+ * Fold a person imported from Jira into their real account: their tickets, time, votes, leave and speaking history move across,
+ * the account gets the Jira link, and the duplicate disappears.
+ */
+export async function mergePeople(fromId: string, intoId: string) {
+  if (fromId === intoId) throw new Error("Pick two different people.");
+  const [from, into] = await Promise.all([db.developer.findUniqueOrThrow({ where: { id: fromId } }), db.developer.findUniqueOrThrow({ where: { id: intoId } })]);
+  if (from.passwordHash) throw new Error("Only a person imported from Jira (who has never signed up) can be merged into an account.");
+  if (!into.passwordHash) throw new Error("Merge into a person who has an account.");
+  await db.$transaction([
+    db.estimateVote.deleteMany({ where: { developerId: from.id, ticketId: { in: (await db.estimateVote.findMany({ where: { developerId: into.id }, select: { ticketId: true } })).map((v) => v.ticketId) } } }),
+    db.estimateVote.updateMany({ where: { developerId: from.id }, data: { developerId: into.id } }),
+    db.ticket.updateMany({ where: { assigneeId: from.id }, data: { assigneeId: into.id } }),
+    db.transition.updateMany({ where: { byId: from.id }, data: { byId: into.id } }),
+    db.workSession.updateMany({ where: { developerId: from.id }, data: { developerId: into.id } }),
+    db.timeEntry.updateMany({ where: { developerId: from.id }, data: { developerId: into.id } }),
+    db.leave.updateMany({ where: { developerId: from.id }, data: { developerId: into.id } }),
+    db.meetingSpeaker.updateMany({ where: { developerId: from.id }, data: { developerId: into.id } }),
+    db.speakerAlias.updateMany({ where: { developerId: from.id }, data: { developerId: into.id } }),
+    db.developer.delete({ where: { id: from.id } }),
+    db.developer.update({ where: { id: into.id }, data: { jiraAccount: into.jiraAccount ?? from.jiraAccount } }),
+  ]);
+  return { tickets: await db.ticket.count({ where: { assigneeId: into.id } }) };
+}
+
+/** Merge every Jira-imported person who clearly is an existing account: the same full name, and exactly one account with it. */
+export async function reconcileJiraPeople() {
+  const all = await db.developer.findMany();
+  const jiraOnly = all.filter((d) => !d.passwordHash && d.jiraAccount);
+  const real = all.filter((d) => d.passwordHash && !d.jiraAccount);
+  let merged = 0;
+  for (const j of jiraOnly) {
+    const same = real.filter((r) => norm(r.name) === norm(j.name));
+    if (same.length === 1) { await mergePeople(j.id, same[0].id); merged++; real.splice(real.indexOf(same[0]), 1); }
+  }
+  return { merged };
 }

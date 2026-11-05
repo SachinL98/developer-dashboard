@@ -28,7 +28,7 @@ export default async function Users() {
           <thead className="bg-panel2 text-left text-xs text-mute"><tr><th className="p-3">User</th><th>Access</th><th>Jira</th><th>Google</th><th>Last sign-in</th><th className="pr-3 text-right">Status</th></tr></thead>
           <tbody>
             {users.map((u) => (
-              <UserRow key={u.id} self={u.id === me.id} user={{ id: u.id, name: u.name, email: u.email, access: u.access, active: u.active, hue: u.avatarHue, jiraOnly: !u.passwordHash, placeholder: isPlaceholderEmail(u.email) }}
+              <UserRow key={u.id} self={u.id === me.id} user={{ id: u.id, name: u.name, email: u.email, access: u.access, active: u.active, hue: u.avatarHue, jiraOnly: !u.passwordHash, placeholder: isPlaceholderEmail(u.email), accounts: u.passwordHash ? [] : users.filter((x) => x.passwordHash && x.id !== u.id).map((x) => ({ id: x.id, name: x.name })) }}
                 jira={u.connections.some((c) => c.provider === "JIRA")} google={u.connections.some((c) => c.provider === "GOOGLE")}
                 last={u.lastLoginAt ? `${fmtDay(u.lastLoginAt)} ${fmtTime(u.lastLoginAt)}` : "never"} />
             ))}

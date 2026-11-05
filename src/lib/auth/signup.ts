@@ -5,6 +5,7 @@ import { isValidEmail } from "../permissions";
 import { rateLimit, RateLimited } from "../rate-limit";
 import { hashPassword, passwordProblem } from "./password";
 import { LoginError } from "./identity";
+import { reconcileJiraPeople } from "../jira-people";
 
 export const MAX_PENDING = 100;
 export const REQUEST_TTL_DAYS = 14;
@@ -59,5 +60,6 @@ export async function approveSignup(requestId: string, access: "DEVELOPER" | "LE
     ? await db.developer.update({ where: { id: existing.id }, data: common }) // keeps their Jira link and every ticket already assigned to them
     : await db.developer.create({ data: { email: r.email, ...common, capacityHrs: (await getWorkspace()).defaultCapacityHrs, avatarHue: Math.floor(Math.random() * 360) } });
   await db.signupRequest.delete({ where: { id: r.id } });
+  await reconcileJiraPeople().catch(() => {}); // a Jira-imported entry under the same full name is the same person
   return user;
 }

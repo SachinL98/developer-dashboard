@@ -16,7 +16,7 @@ import { fetchTranscript, meetCodeFromUrl } from "./integrations/meet";
 import { occurrences } from "./schedule";
 import { reviewPassed, scanDiff, type ReviewItem } from "./review-template";
 import { getReviewConfig, templateFor } from "./review-config";
-import { ensureJiraPerson, syncJiraPeople } from "./jira-people";
+import { ensureJiraPerson, reconcileJiraPeople, syncJiraPeople } from "./jira-people";
 import { passes, reviewWithAI, type Finding } from "./claude-review";
 
 const warn = (where: string, e: unknown) => console.warn(`[${where}]`, e instanceof Error ? e.message : e);
@@ -278,6 +278,7 @@ export async function syncJira(opts: { sinceMinutes?: number } = {}) {
   if (!opts.sinceMinutes && project) {
     try { people = await syncJiraPeople((await jira.projectUsers(project)).map((u) => ({ accountId: u.accountId, name: u.displayName, email: u.email, active: u.active }))); }
     catch (e) { warn("jira.users", e); }
+    await reconcileJiraPeople().catch((e) => warn("jira.reconcile", e)); // fold duplicates of people who already have an account
   }
   const ctx = await syncContext();
   let created = 0, updated = 0;
