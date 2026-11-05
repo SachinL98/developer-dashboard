@@ -20,6 +20,7 @@ import { STATUS_ORDER, type StatusKey } from "@/lib/workflow";
 import type { ReviewItem } from "@/lib/review-template";
 import { redirect } from "next/navigation";
 import { createUserWithPassword } from "@/lib/auth/login";
+import { approveSignup } from "@/lib/auth/signup";
 import { generateTempPassword, hashPassword } from "@/lib/auth/password";
 import { userMessage } from "@/lib/safe-error";
 import { rateLimit } from "@/lib/rate-limit";
@@ -626,5 +627,23 @@ export async function resetPasswordAction(userId: string): Promise<Result<{ temp
     await db.authSession.deleteMany({ where: { userId: uid } });
     revalidatePath("/admin/users");
     return { ok: true, tempPassword: temp };
+  } catch (e) { return fail(e); }
+}
+
+/** Admin approves a sign-up request; the person can then sign in with the password they chose. */
+export async function approveSignupAction(requestId: string, access: "DEVELOPER" | "LEAD" | "ADMIN"): Promise<Result> {
+  try {
+    await requireAccess("ADMIN");
+    await approveSignup(id.parse(requestId), z.enum(["DEVELOPER", "LEAD", "ADMIN"]).parse(access));
+    revalidatePath("/admin/users"); revalidatePath("/", "layout");
+    return { ok: true };
+  } catch (e) { return fail(e); }
+}
+export async function rejectSignupAction(requestId: string): Promise<Result> {
+  try {
+    await requireAccess("ADMIN");
+    await db.signupRequest.deleteMany({ where: { id: id.parse(requestId) } });
+    revalidatePath("/admin/users"); revalidatePath("/", "layout");
+    return { ok: true };
   } catch (e) { return fail(e); }
 }

@@ -342,3 +342,14 @@ model AiInsight {
 
   @@index([kind, subjectId, createdAt])
 }
+
+// Self-service sign-up requests. No account exists until an admin approves; the person chose their own password.
+model SignupRequest {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  jobTitle     String   @default("Developer")
+  githubLogin  String?
+  passwordHash String
+  createdAt    DateTime @default(now())
+}

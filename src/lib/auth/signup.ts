@@ -1,0 +1,60 @@
+import { z } from "zod";
+import { db } from "../db";
+import { getWorkspace } from "../config";
+import { allowedDomain, emailAllowed } from "../permissions";
+import { rateLimit, RateLimited } from "../rate-limit";
+import { hashPassword, passwordProblem } from "./password";
+import { LoginError } from "./identity";
+
+export const MAX_PENDING = 100;
+export const REQUEST_TTL_DAYS = 14;
+
+export const signupSchema = z.object({
+  name: z.string().trim().min(2, "Enter your full name.").max(80),
+  email: z.string().trim().toLowerCase().email("Enter a valid email address.").max(120),
+  jobTitle: z.string().trim().max(60).optional().default("Developer"),
+  githubLogin: z.string().trim().max(39).regex(/^[A-Za-z0-9-]*$/, "GitHub usernames use letters, numbers and dashes.").optional(),
+  password: z.string().max(500),
+  confirm: z.string().max(500),
+});
+export type SignupInput = z.input<typeof signupSchema>;
+
+export const SIGNUP_DONE = "Request received. An admin will review it, and you can sign in once it is approved.";
+
+export const signupEnabled = () => process.env.SIGNUP_ENABLED !== "false";
+
+/**
+ * Self-service sign-up. The email can't be verified (no mail service), so nothing is created until an admin approves.
+ * The answer is identical whether or not the email is already known, so nobody can use this form to find out who has an account.
+ */
+export async function submitSignup(input: SignupInput, ip: string): Promise<string> {
+  if (!signupEnabled()) throw new LoginError("Sign-up is closed. Ask an admin to add you.");
+  try { rateLimit(`signup-ip:${ip}`, 5, 60 * 60_000); } catch (e) { if (e instanceof RateLimited) throw new LoginError("Too many requests from this network. Try again later."); throw e; }
+  const p = signupSchema.parse(input);
+  if (!emailAllowed(p.email)) throw new LoginError(`Use your @${allowedDomain()} work email address.`);
+  if (p.password !== p.confirm) throw new LoginError("The two passwords do not match.");
+  const bad = passwordProblem(p.password, { email: p.email, name: p.name });
+  if (bad) throw new LoginError(bad);
+
+  if (await db.developer.findUnique({ where: { email: p.email }, select: { id: true } })) return SIGNUP_DONE; // already has an account: say nothing
+  if ((await db.signupRequest.count()) >= MAX_PENDING) throw new LoginError("Too many requests are waiting. Ask an admin to review them.");
+  const data = { name: p.name, jobTitle: p.jobTitle || "Developer", githubLogin: p.githubLogin || null, passwordHash: await hashPassword(p.password) };
+  await db.signupRequest.upsert({ where: { email: p.email }, update: { ...data, createdAt: new Date() }, create: { email: p.email, ...data } });
+  return SIGNUP_DONE;
+}
+
+export const pruneSignupRequests = () => db.signupRequest.deleteMany({ where: { createdAt: { lt: new Date(Date.now() - REQUEST_TTL_DAYS * 86_400_000) } } });
+
+/** Admin approves: the account is created with the password the person chose. */
+export async function approveSignup(requestId: string, access: "DEVELOPER" | "LEAD" | "ADMIN") {
+  const r = await db.signupRequest.findUnique({ where: { id: requestId } });
+  if (!r) throw new Error("That request no longer exists.");
+  if (await db.developer.findUnique({ where: { email: r.email }, select: { id: true } })) { await db.signupRequest.delete({ where: { id: r.id } }); throw new Error("That person already has an account."); }
+  const github = r.githubLogin && !(await db.developer.findUnique({ where: { githubLogin: r.githubLogin }, select: { id: true } })) ? r.githubLogin : null;
+  const user = await db.developer.create({
+    data: { email: r.email, name: r.name, role: r.jobTitle, githubLogin: github, access, passwordHash: r.passwordHash, mustChangePassword: false, passwordChangedAt: new Date(),
+      capacityHrs: (await getWorkspace()).defaultCapacityHrs, avatarHue: Math.floor(Math.random() * 360) },
+  });
+  await db.signupRequest.delete({ where: { id: r.id } });
+  return user;
+}

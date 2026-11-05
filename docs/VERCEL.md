@@ -57,13 +57,13 @@ gh secret set CRON_SECRET          # same as CRON_SECRET above
 Also create an environment named **production** (Settings → Environments). Optionally add required reviewers there to approve each production deploy.
 
 ## 5. Create your first admin (2 min)
-The database starts empty and there is no self sign-up, so create the first admin from your computer, against the **production** database:
+The database starts empty and the first admin must exist before anyone can be approved, so create it from your computer, against the **production** database:
 ```bash
 neon env pull --file .env.neon --branch production --services postgres
 set -a; . ./.env.neon; set +a
 DATABASE_URL="$DATABASE_URL_UNPOOLED" npm run user:create -- --email you@yourcompany.com --name "Your Name" --access ADMIN
 ```
-Run it after the first deploy has applied the migrations (step 6). A one-time password is saved to `.credentials-<email>.txt` (never printed). Sign in with it, choose your own password, then delete the file. Add everyone else under **Admin → Users**.
+Run it after the first deploy has applied the migrations (step 6). A one-time password is saved to `.credentials-<email>.txt` (never printed). Sign in with it, choose your own password, then delete the file. Everyone else can use **Create an account** on the login page; you approve each request under **Admin → Users**.
 
 ## 6. First deploy (5 min)
 Merge your work into `main` (or open **Actions → Deploy to Vercel → Run workflow**). The workflow:
@@ -75,7 +75,7 @@ Merge your work into `main` (or open **Actions → Deploy to Vercel → Run work
 When it is green, run step 5 if you have not yet, then open your `APP_URL` and sign in with the email and one-time password.
 
 ## 7. Finish inside the app (10 min)
-Open **Settings → Setup guide**. It walks through Jira, GitHub and the webhooks with copy buttons. Add colleagues in **Admin → Users**; each gets a one-time password.
+Open **Settings → Setup guide**. It walks through Jira, GitHub and the webhooks with copy buttons. Colleagues click **Create an account** on the login page and you approve them in **Admin → Users**. You can also add people yourself there; each gets a one-time password.
 
 ## What runs automatically
 | When | What |

@@ -17,13 +17,21 @@ export async function verifyLogin(emailRaw: string, password: string, ip: string
   if (!email || !password || password.length > 500) throw new LoginError(GENERIC);
 
   const user = await db.developer.findUnique({ where: { email } });
-  if (!user || !user.passwordHash || !user.active) { await burnPasswordCheck(password); throw new LoginError(GENERIC); }
+  if (!user) {
+    // A pending sign-up request: only someone who knows the password they chose is told it is waiting.
+    const req = await db.signupRequest.findUnique({ where: { email } });
+    if (req && (await verifyPassword(password, req.passwordHash))) throw new LoginError("Your sign-up request is waiting for an admin to approve it.");
+    if (!req) await burnPasswordCheck(password);
+    throw new LoginError(GENERIC);
+  }
+  if (!user.passwordHash) { await burnPasswordCheck(password); throw new LoginError(GENERIC); }
   if (isLocked(user.lockedUntil)) { await burnPasswordCheck(password); throw new LoginError(GENERIC); }
 
   if (!(await verifyPassword(password, user.passwordHash))) {
     await db.developer.update({ where: { id: user.id }, data: afterFailure(user.failedLogins) });
     throw new LoginError(GENERIC);
   }
+  if (!user.active) throw new LoginError("Your account has been deactivated. Ask an admin.");
   return db.developer.update({ where: { id: user.id }, data: { failedLogins: 0, lockedUntil: null, lastLoginAt: new Date() } });
 }
 

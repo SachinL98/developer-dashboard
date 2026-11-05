@@ -5,6 +5,8 @@ import { atLeast, allowedDomain } from "@/lib/permissions";
 import { PageHeader, Avatar } from "@/components/ui";
 import { UserRow } from "@/components/UserRow";
 import { AddUserForm } from "@/components/AddUserForm";
+import { PendingRequests } from "@/components/PendingRequests";
+import { pruneSignupRequests } from "@/lib/auth/signup";
 import { fmtDay, fmtTime } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
@@ -12,10 +14,13 @@ export const dynamic = "force-dynamic";
 export default async function Users() {
   const me = await requireUser();
   if (!atLeast(me.access, "ADMIN")) redirect("/");
+  await pruneSignupRequests();
+  const pending = await db.signupRequest.findMany({ orderBy: { createdAt: "asc" } });
   const users = await db.developer.findMany({ orderBy: [{ active: "desc" }, { name: "asc" }], include: { connections: { select: { provider: true } } } });
   return (
     <div className="space-y-6">
       <PageHeader title="Users & roles" sub="Add people, set their role and reset passwords." />
+      <PendingRequests rows={pending.map((r) => ({ id: r.id, name: r.name, email: r.email, jobTitle: r.jobTitle, when: `${fmtDay(r.createdAt)} ${fmtTime(r.createdAt)}` }))} />
       <AddUserForm domain={allowedDomain()} />
       <div className="card overflow-x-auto">
         <table className="w-full min-w-[820px] text-sm">

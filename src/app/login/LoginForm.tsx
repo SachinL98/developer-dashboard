@@ -1,5 +1,6 @@
 "use client";
 import { useActionState, useState } from "react";
+import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
 import { loginAction, type LoginState } from "./actions";
 
@@ -23,6 +24,7 @@ export function LoginForm({ next }: { next: string }) {
       </div>
       <button className="btn-primary w-full py-2.5" disabled={pending}>{pending ? "Signing in…" : "Sign in"}</button>
       <p className="text-center text-xs text-mute">Forgot your password? Ask an admin to reset it.</p>
+      <p className="border-t border-line pt-4 text-center text-sm text-mute">New here? <Link href="/signup" className="font-medium text-neon">Create an account</Link></p>
     </form>
   );
 }

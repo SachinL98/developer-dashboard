@@ -24,6 +24,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     db.connection.findMany({ where: { userId: me.id }, select: { provider: true } }),
     db.ticket.findMany({ where: { assigneeId: me.id, status: { in: ["READY_TO_DEV", "IN_PROGRESS", "INITIAL_REVIEW", "REVIEW", "FAILED_STG"] } }, select: { id: true, key: true, title: true }, orderBy: { rank: "asc" } }),
   ]);
+  const pendingSignups = atLeast(me.access, "ADMIN") ? await db.signupRequest.count() : 0;
   const cfg = await getWorkspace(); // also applies the admin-set timezone
   const [sh, sm] = parseHHMM(cfg.workStart), [eh, em] = parseHHMM(cfg.workEnd);
   const targetHrs = Math.round(((eh * 60 + em - (sh * 60 + sm)) / 60) * 10) / 10;
@@ -53,6 +54,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="mt-auto space-y-3">{footer}</div>
       </aside>
       <main className="min-w-0 flex-1 p-4 pb-24 sm:p-6 sm:pb-24 lg:p-8 2xl:px-12">
+        {pendingSignups > 0 && (
+          <Link href="/admin/users" className="mb-4 flex items-center gap-3 rounded-lg border border-neon-amber/40 bg-neon-amber/10 px-4 py-2.5 text-sm hover:border-neon-amber">
+            {pendingSignups} {pendingSignups === 1 ? "person is" : "people are"} waiting for account approval. <span className="ml-auto text-neon-amber">Review →</span>
+          </Link>
+        )}
         {missing.length > 0 && (
           <Link href="/settings" className="mb-6 flex items-center gap-3 rounded-lg border border-neon/25 bg-neon/5 px-4 py-2.5 text-sm hover:border-neon/50">
             <Plug size={16} className="text-neon" /> Connect {missing.join(" and ")} to keep tickets and meetings in sync. <span className="ml-auto text-neon">Connect →</span>
