@@ -1,10 +1,11 @@
 name: Scheduled sync
 
 # Calls the app's sync endpoints on a schedule (replaces Vercel Cron, which needs a paid plan for frequent runs).
-# GitHub may delay scheduled runs by a few minutes.
+# GitHub may delay scheduled runs by a few minutes, and only runs schedules from the repository's default branch.
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    # Every 5 minutes on weekdays, 03:00-12:59 UTC = 08:30-18:29 Sri Lanka time. The app itself only syncs Jira 08:30-17:30.
+    - cron: "*/5 3-12 * * 1-5"
   workflow_dispatch:
 
 jobs:

@@ -32,7 +32,7 @@ Everything below is configuration; no code changes. Until it is done the app run
 ## 4. GitHub
 `GITHUB_TOKEN` (fine-grained, read pull requests + contents on the org repos), `GITHUB_ORG`, and a `pull_request` webhook to `{APP_URL}/api/webhooks/github` with `GITHUB_WEBHOOK_SECRET`.
 
-## 5. Scheduled sync (every 10 minutes)
+## 5. Scheduled sync (every 5 minutes, working hours)
 ```
 curl -fsS -H "Authorization: Bearer $CRON_SECRET" $APP_URL/api/cron/sync         # Jira sprints+issues, GitHub PRs, meeting cadence
 curl -fsS -H "Authorization: Bearer $CRON_SECRET" $APP_URL/api/cron/transcripts  # Meet transcripts → notes for ended meetings
@@ -135,6 +135,9 @@ Everything below happens without anyone typing names or pressing import.
 - **Start-of-day reminder:** if it is a working day (not a weekend, public holiday or approved leave) and nobody has started a work day or a ticket timer 30 minutes after the work day begins, the person gets a reminder to switch the timer on. The wait is set under Admin, Alerts.
 - **Channels:** email through **ZeptoMail** (`ZEPTOMAIL_TOKEN`, `EMAIL_FROM`; `ZEPTOMAIL_URL` for the EU or India region) or **Zoho Mail SMTP** (`ZOHO_SMTP_USER`, `ZOHO_SMTP_PASSWORD`, `EMAIL_FROM`), and **Discord** through a bot that direct-messages people (`DISCORD_BOT_TOKEN`) or a channel webhook (`DISCORD_WEBHOOK_URL`). Each person adds their Discord user id and can switch email or Discord off under **Settings, Alerts**.
 - **Test:** **Admin, Alerts, Send a test to me** checks the channels. The same page lists recent alerts and whether each channel worked.
-- **When it runs:** every 10 minutes from the scheduled sync (`/api/cron/notify`) and whenever someone opens Overview or Meetings. It needs the repository's default branch to be `main` for the GitHub schedule to run. Nobody gets more than one of each kind per day.
+- **When it runs:** every 5 minutes from the scheduled sync (`/api/cron/notify`) and whenever someone opens Overview or Meetings. It needs the repository's default branch to be `main` for the GitHub schedule to run. Nobody gets more than one of each kind per day.
 - **Timer:** moving a ticket into **In Progress** starts its timer (and the work day) for the person it is assigned to.
 - **Theme:** light is the default theme. People can still choose dark or system in the sidebar.
+
+
+**Jira auto-sync:** Jira is pulled in full every 5 minutes on Monday to Friday between 08:30 and 17:30 (the workspace timezone, Sri Lanka by default), by the GitHub schedule and as a fallback whenever someone opens Overview. Outside those hours it stays quiet. Open boards also poll for changes every 30 seconds.

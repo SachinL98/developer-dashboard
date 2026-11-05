@@ -19,7 +19,7 @@ export async function GET(req: Request) {
   const jiraUser = await serviceUserId("JIRA");
   await runAs(jiraUser, async () => {
     if (!(await jiraReady())) { out.jira = "skipped: no connected lead/admin and no service account"; return; }
-    try { out.jiraSprints = await svc.syncSprintsFromJira(); out.jira = await svc.syncJira(); } catch (e) { out.jira = `error: ${e instanceof Error ? e.message : e}`; }
+    try { out.jira = await svc.autoSyncJira(new Date(), { force: new URL(req.url).searchParams.get("force") === "1" }); } catch (e) { out.jira = `error: ${e instanceof Error ? e.message : e}`; }
   });
   if (githubConfigured()) { try { out.github = await svc.syncGithub(); } catch (e) { out.github = `error: ${e instanceof Error ? e.message : e}`; } }
   await runAs(await serviceUserId("GOOGLE"), async () => {

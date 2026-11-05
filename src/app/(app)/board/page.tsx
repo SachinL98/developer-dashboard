@@ -1,3 +1,4 @@
+import * as svc from "@/lib/services";
 import { atLeast } from "@/lib/permissions";
 import Link from "next/link";
 import { db } from "@/lib/db";
@@ -24,7 +25,12 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
   });
   // With Jira connected the board shows the team's real Jira columns; otherwise the 10 workflow columns.
   const live = await jiraReady();
-  const info = live ? await cachedBoardInfo() : null;
+  let info = live ? await cachedBoardInfo() : null;
+  // Connected but the board's columns were never read (an earlier read failed, or only quick updates have run): read them now and keep the reason if it fails.
+  let boardError: string | null = null;
+  if (live && !info) {
+    try { info = await svc.syncBoard(); } catch (e) { boardError = (e instanceof Error ? e.message : String(e)).slice(0, 240); }
+  }
   const columns = info ? jiraColumns(info, await loadStatusMap()) : workflowColumns();
   const site = live ? (await jiraBrowseUrl("X"))?.replace(/\/browse\/X$/, "") ?? null : null;
   const lastSync = await getSetting<string>("jira.lastSync");
@@ -42,7 +48,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
         actions={<><div className="flex gap-1 rounded-lg border border-line bg-panel p-1">{sprints.slice(0, 4).map((s) => (
           <Link key={s.id} href={`/board?sprint=${s.id}`} className={`rounded-md px-2.5 py-1 text-xs ${s.id === current?.id ? "bg-line text-ink" : "text-mute hover:text-ink"}`}>{s.name}</Link>))}</div>
           <LiveSync enabled={live} lastSync={lastSync} showStatus={atLeast(me.access, "LEAD")} /><Link href="/tickets/new" className="btn-primary lg:hidden">New ticket</Link></>} />
-      {live && !info && atLeast(me.access, "LEAD") && <div className="mb-4 rounded-lg border border-neon-amber/40 bg-neon-amber/10 px-4 py-2 text-sm text-neon-amber">Jira is connected but the real board hasn't been read yet. A lead can press <Link href="/settings" className="underline">Sync Jira</Link> to load its columns.</div>}
+      {live && !info && atLeast(me.access, "LEAD") && <div className="mb-4 rounded-lg border border-neon-amber/40 bg-neon-amber/10 px-4 py-2 text-sm text-neon-amber">Jira is connected, but its board columns could not be read{boardError ? <>: <span className="font-mono text-xs">{boardError}</span></> : "."} Check the Scrum board id in <Link href="/admin/workspace" className="underline">Workspace settings</Link>, then press <Link href="/settings" className="underline">Sync Jira</Link>.</div>}
       <Board key={`${current?.id ?? "all"}:${columns.map((c) => c.id).join("|")}`} tickets={data} columns={columns} actor={{ id: me.id, access: me.access }} />
     </div>
   );

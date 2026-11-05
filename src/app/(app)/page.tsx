@@ -16,7 +16,7 @@ import { localDate } from "@/lib/time";
 
 export default async function Overview() {
 
-  after(() => Promise.all([svc.processEndedMeetings(), autoGenerateOneOnOnes(), runNotifications()]).then(() => {}, () => {})); // notes for meetings that just ended, without anyone pressing a button
+  after(() => Promise.all([svc.processEndedMeetings(), autoGenerateOneOnOnes(), runNotifications(), svc.autoSyncJira()]).then(() => {}, () => {})); // notes for meetings that just ended, without anyone pressing a button
   const sprint = await activeSprint();
   if (!sprint) return <Empty>No sprint yet. Create one in <Link className="text-neon underline" href="/sprints">Sprints</Link>.</Empty>;
   const snap = await sprintSnapshot(sprint.id);

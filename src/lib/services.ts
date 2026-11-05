@@ -2,6 +2,7 @@ import { db } from "./db";
 import { gateError, hoursForPoints, pointsForHours, STATUS_META, type StatusKey } from "./workflow";
 import { getSetting, setSetting } from "./settings";
 import { getMeetingDefs, getWorkspace } from "./config";
+import { inSyncWindow, syncDue } from "./sync-window";
 import * as jira from "./integrations/jira";
 import * as gh from "./integrations/github";
 import { parseNotes, summariseWithClaude } from "./notes";
@@ -292,7 +293,25 @@ export async function syncJira(opts: { sinceMinutes?: number } = {}) {
 }
 
 /** Refresh the cached real board (columns and estimation unit) from Jira. */
-export async function syncBoard() { return jira.boardInfo(true); }
+export async function syncBoard() {
+  try { const b = await jira.boardInfo(true); await setSetting("jira.boardError", ""); return b; }
+  catch (e) { await setSetting("jira.boardError", (e instanceof Error ? e.message : String(e)).slice(0, 300)).catch(() => {}); throw e; }
+}
+
+/**
+ * Full Jira sync every 5 minutes on working days between 08:30 and 17:30 (team timezone). Safe to call from anywhere:
+ * the schedule, an open page, a person's request. It does nothing outside the window or when the last sync is recent.
+ */
+export async function autoSyncJira(now = new Date(), opts: { force?: boolean } = {}) {
+  if (!(await jira.jiraReady())) return { ran: false as const, reason: "Jira is not connected" };
+  const cfg = await getWorkspace();
+  if (!opts.force && !inSyncWindow(now, cfg.timezone)) return { ran: false as const, reason: "outside working hours" };
+  const last = await getSetting<string>("jira.lastSync");
+  if (!opts.force && !syncDue(last, now)) return { ran: false as const, reason: "synced recently" };
+  const sprints = await syncSprintsFromJira().catch((e) => { warn("jira.sprints", e); return null; });
+  const r = await syncJira();
+  return { ran: true as const, sprints, ...r };
+}
 
 /**
  * Poll fallback for realtime: at most one incremental pull per 15 s across all viewers. Webhooks make this
