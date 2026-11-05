@@ -21,3 +21,6 @@ jobs:
       - name: Meeting transcripts
         run: |
           curl --fail --show-error --silent --max-time 120 -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/cron/transcripts"
+      - name: Monthly 1:1 reports (does nothing outside the first week of the month)
+        run: |
+          curl --fail --show-error --silent --max-time 120 -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/cron/one-on-one"

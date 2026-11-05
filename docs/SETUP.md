@@ -121,3 +121,10 @@ Everything below happens without anyone typing names or pressing import.
 - **Engagement:** speaking time per person is rolled up by meeting, sprint and month under **Analytics → Meeting engagement** and as a slide in the sprint and month reports. Transcripts without timestamps are estimated from word counts and marked **~**.
 - **Privacy:** per-person talk times are visible to leads and admins. Everyone else sees team totals and their own numbers, and reports hide per-person times from them.
 - **Optional settings:** `OPENAI_STT_MODEL` (default `gpt-4o-transcribe-diarize`) and `GEMINI_STT_MODEL` choose the speech models.
+
+
+## 1:1 reports
+**1:1 report** (under Team) gives every person a report for their monthly 1:1 with their lead: what they did in the last two weeks, how that compares with the 30 days before (tickets and points finished, time tracked, cycle time, estimate accuracy, failed staging deploys, pull request review results, meeting participation), what improved, what needs attention, how last month's suggestions went, AI suggestions for improvement, talking points and goals for next month.
+- **Automatic:** in the first week of each month the report is created for everyone with an account. It runs when anyone opens Overview or Meetings and on the `/api/cron/one-on-one` schedule (use `?force=1` to run it outside the first week). It uses the person's own AI key if they saved one, otherwise a shared server key. Without any key the report still has the numbers and the rule-based improvements and concerns.
+- **On demand:** the person can refresh their report at any time. Leads and admins can open anyone's report from People.
+- **Privacy:** a report is visible to the person and to leads and admins only. **Print or save as PDF** uses the browser's print dialog.

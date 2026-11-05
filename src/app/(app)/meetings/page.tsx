@@ -1,4 +1,5 @@
 import { after } from "next/server";
+import { autoGenerateOneOnOnes } from "@/lib/one-on-one";
 import * as svc from "@/lib/services";
 import { db } from "@/lib/db";
 import { PageHeader, Kpi } from "@/components/ui";
@@ -22,7 +23,7 @@ const hh = (t: [number, number]) => `${String(t[0]).padStart(2, "0")}:${String(t
 
 export default async function Meetings() {
   const me = await requireUser();
-  after(() => svc.processEndedMeetings().then(() => {}, () => {})); // notes for meetings that just ended, without anyone pressing a button
+  after(() => Promise.all([svc.processEndedMeetings(), autoGenerateOneOnOnes()]).then(() => {}, () => {})); // notes for meetings that just ended, without anyone pressing a button
   const aiReady = !!(await aiKeyFor(me.id));
   const canLead = atLeast(me.access, "LEAD");
   const google = await googleReady();

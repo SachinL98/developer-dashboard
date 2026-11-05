@@ -27,6 +27,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { saveUserKey, removeUserKey, validateKey, listUserProviders, setPreferredProvider, PROVIDERS } from "@/lib/ai";
 import { norm as normSpeaker, isGenericSpeaker } from "@/lib/speakers";
 import { mergePeople } from "@/lib/jira-people";
+import { generateOneOnOne } from "@/lib/one-on-one";
 import { generateDevProfile, reviewEstimate, type EstimateReview } from "@/lib/insights";
 
 type Result<T = {}> = ({ ok: true } & T) | { ok: false; error: string };
@@ -716,5 +717,17 @@ export async function mergePersonAction(fromId: string, intoId: string): Promise
     const r = await mergePeople(id.parse(fromId), id.parse(intoId));
     revalidatePath("/admin/users"); revalidatePath("/team"); touch();
     return { ok: true, tickets: r.tickets };
+  } catch (e) { return fail(e); }
+}
+
+/** Make (or refresh) a 1:1 report. Anyone can do it for themselves; leads and admins for anyone. Uses the requester's AI key. */
+export async function generateOneOnOneAction(devId: string): Promise<Result> {
+  try {
+    const u = await me();
+    const d = id.parse(devId);
+    if (d !== u.id && !atLeast(u.access, "LEAD")) throw new Error("You can only make your own report.");
+    rateLimit(`oneonone:${u.id}`, 8, 3_600_000);
+    await generateOneOnOne(d, { keyUserId: u.id });
+    revalidatePath("/one-on-one"); return { ok: true };
   } catch (e) { return fail(e); }
 }

@@ -52,3 +52,6 @@ body { font-feature-settings: "cv11", "ss01"; -webkit-font-smoothing: antialiase
 html { -webkit-text-size-adjust: 100%; }
 .grid > *, .flex > .min-w-0 { min-width: 0; }
 code { overflow-wrap: anywhere; }
+
+/* Printing a page (for example a 1:1 report): hide the app chrome */
+@media print { aside, header, nav, .no-print { display: none !important } main { padding: 0 !important } body { background: #fff } }

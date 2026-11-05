@@ -29,7 +29,7 @@ export default async function Dev({ params }: { params: Promise<{ id: string }> 
   const profile = saved ? ({ ...(saved.content as any), stats } as DevProfile) : null;
   return (
     <div className="space-y-6">
-      <PageHeader title={s.d.name} sub={`${s.d.role} · ${s.d.email}`} actions={<Avatar name={s.d.name} hue={s.d.avatarHue} size={44} />} />
+      <PageHeader title={s.d.name} sub={`${s.d.role} · ${s.d.email}`} actions={<div className="flex items-center gap-3"><Link href={`/one-on-one?dev=${id}`} className="btn">1:1 report</Link><Avatar name={s.d.name} hue={s.d.avatarHue} size={44} /></div>} />
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
         <Kpi label="Points done" value={s.donePoints} accent="#6ee7ff" /><Kpi label="Tickets done" value={s.doneCount} accent="#a3e635" />
         <Kpi label="Avg cycle" value={s.cycleDays ? `${s.cycleDays.toFixed(1)}d` : "—"} accent="#a78bfa" />
