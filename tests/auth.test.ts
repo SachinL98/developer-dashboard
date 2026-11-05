@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { atLeast, canMoveTicket, canPatchTicket, canViewDeveloper, emailAllowed } from "../src/lib/permissions";
+import { atLeast, canMoveTicket, canPatchTicket, canViewDeveloper, isValidEmail } from "../src/lib/permissions";
 import { decrypt, encrypt, safeEqual, sha256 } from "../src/lib/crypto";
 import { LoginError, decodeJwtPayload, validateClaims } from "../src/lib/auth/identity";
 import { safeNext } from "../src/lib/auth/oauth";
@@ -36,29 +36,27 @@ describe("roles", () => {
   });
 });
 
-describe("email domain", () => {
-  beforeEach(() => { delete process.env.AUTH_ALLOWED_DOMAIN; });
-  it("accepts only the office domain", () => {
-    expect(emailAllowed("sachin.lakshan@spaceitlabs.com")).toBe(true);
-    expect(emailAllowed("SACHIN@SpaceITLabs.com")).toBe(true);
-    expect(emailAllowed("x@gmail.com")).toBe(false);
-    expect(emailAllowed("x@spaceitlabs.com.evil.io")).toBe(false);
-    expect(emailAllowed("x@evil.io@spaceitlabs.com")).toBe(false);
-    expect(emailAllowed("")).toBe(false);
+describe("email addresses", () => {
+  it("accepts any well-formed address, from any domain", () => {
+    expect(isValidEmail("sachin.lakshan@spaceitlabs.com")).toBe(true);
+    expect(isValidEmail("x@gmail.com")).toBe(true);
+    expect(isValidEmail("someone@sub.example.co.uk")).toBe(true);
+  });
+  it("rejects malformed addresses", () => {
+    for (const bad of ["", "no-at-sign", "a@b", "a b@c.com", "x@evil.io@other.com", `${"a".repeat(130)}@x.com`]) expect(isValidEmail(bad)).toBe(false);
   });
 });
 
 describe("ID token claims", () => {
   const now = Date.now();
   const ok = { iss: "https://accounts.google.com", aud: "cid", exp: Math.floor(now / 1000) + 600, sub: "123", email: "a@spaceitlabs.com", email_verified: true, hd: "spaceitlabs.com", name: "A" };
+  it("accepts any domain", () => expect(validateClaims({ ...ok, email: "a@gmail.com", hd: undefined }, "cid", now).email).toBe("a@gmail.com"));
   it("accepts a valid token", () => expect(validateClaims(ok, "cid", now)).toMatchObject({ email: "a@spaceitlabs.com", sub: "123" }));
   it.each([
     ["wrong issuer", { iss: "https://evil.example" }],
     ["wrong audience", { aud: "other" }],
     ["expired", { exp: Math.floor(now / 1000) - 5 }],
     ["unverified email", { email_verified: false }],
-    ["other domain", { email: "a@gmail.com", hd: undefined }],
-    ["mismatched hd", { hd: "evil.io" }],
     ["no email", { email: undefined }],
   ])("rejects %s", (_n, patch) => expect(() => validateClaims({ ...ok, ...patch }, "cid", now)).toThrow(LoginError));
   it("decodes the JWT payload", () => {

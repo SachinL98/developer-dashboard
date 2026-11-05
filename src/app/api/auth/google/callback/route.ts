@@ -35,7 +35,6 @@ export async function GET(req: Request) {
       const me = await currentUser();
       if (!me) return fail("/login", "Sign in first.");
       if (!atLeast(me.access, "ADMIN")) return fail("/settings", "Only an admin can connect Google Calendar & Meet.");
-      if (me.email !== who.email) throw new LoginError(`Connect the Google account ${me.email}, not ${who.email}.`);
       const granted = (t.scope ?? "").split(" ");
       if (!GOOGLE_WORK_SCOPES.every((s) => granted.includes(s))) throw new LoginError("Calendar and Meet access were not all granted. Tick every permission on the consent screen.");
       await saveConnection(me.id, "GOOGLE", t, { externalId: who.sub });

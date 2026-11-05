@@ -23,9 +23,10 @@ describe("submitSignup", () => {
     expect(arg.create.passwordHash).toMatch(/^scrypt\$/);
     expect(JSON.stringify(arg)).not.toContain("blue-Table-4-lamp");
   });
-  it("only accepts the company email domain", async () => {
-    await expect(submitSignup({ ...good, email: "someone@gmail.com" }, "1.1.1.2")).rejects.toThrow(LoginError);
-    expect(db.signupRequest.upsert).not.toHaveBeenCalled();
+  it("accepts any email domain but rejects malformed addresses", async () => {
+    expect(await submitSignup({ ...good, email: "someone@gmail.com" }, "1.1.1.2")).toBe(SIGNUP_DONE);
+    expect(db.signupRequest.upsert).toHaveBeenCalledTimes(1);
+    await expect(submitSignup({ ...good, email: "not-an-email" }, "1.1.1.2")).rejects.toThrow();
   });
   it("rejects mismatched or weak passwords", async () => {
     await expect(submitSignup({ ...good, confirm: "different-Pass-9" }, "1.1.1.3")).rejects.toThrow(/match/);

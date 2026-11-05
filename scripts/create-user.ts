@@ -9,12 +9,11 @@ import { generateTempPassword, hashPassword, passwordProblem } from "../src/lib/
 
 const arg = (n: string) => { const i = process.argv.indexOf(`--${n}`); return i > -1 ? process.argv[i + 1] : undefined; };
 const email = arg("email")?.trim().toLowerCase(), name = arg("name")?.trim(), access = (arg("access") ?? "DEVELOPER").toUpperCase();
-const domain = (process.env.AUTH_ALLOWED_DOMAIN || "spaceitlabs.com").toLowerCase();
 
 (async () => {
   if (!email || !name) throw new Error('Usage: npm run user:create -- --email a@b.com --name "Full Name" [--access ADMIN|LEAD|DEVELOPER]');
   if (!["ADMIN", "LEAD", "DEVELOPER"].includes(access)) throw new Error("--access must be ADMIN, LEAD or DEVELOPER");
-  if (!email.endsWith(`@${domain}`)) throw new Error(`Email must end with @${domain} (AUTH_ALLOWED_DOMAIN)`);
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error("Enter a valid email address.");
   const db = new PrismaClient();
   try {
     if (await db.developer.findUnique({ where: { email } })) throw new Error("A user with that email already exists.");

@@ -5,7 +5,7 @@ import { UserPlus } from "lucide-react";
 import { createUserAction } from "@/app/(app)/actions";
 import { CopyText } from "@/components/CopyText";
 
-export function AddUserForm({ domain }: { domain: string }) {
+export function AddUserForm() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(""); const [email, setEmail] = useState(""); const [access, setAccess] = useState<"DEVELOPER" | "LEAD" | "ADMIN">("DEVELOPER");
   const [err, setErr] = useState<string | null>(null);
@@ -28,7 +28,7 @@ export function AddUserForm({ domain }: { domain: string }) {
         <div className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-3">
             <div><label className="label" htmlFor="nu-name">Name</label><input id="nu-name" className="input" value={name} onChange={(e) => setName(e.target.value)} /></div>
-            <div><label className="label" htmlFor="nu-email">Work email</label><input id="nu-email" type="email" className="input" placeholder={`name@${domain}`} value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+            <div><label className="label" htmlFor="nu-email">Email</label><input id="nu-email" type="email" className="input" placeholder="name@company.com" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
             <div><label className="label" htmlFor="nu-access">Role</label><select id="nu-access" className="input" value={access} onChange={(e) => setAccess(e.target.value as typeof access)}><option value="DEVELOPER">Developer</option><option value="LEAD">Lead</option><option value="ADMIN">Admin</option></select></div>
           </div>
           {err && <p role="alert" className="text-sm text-neon-red">{err}</p>}

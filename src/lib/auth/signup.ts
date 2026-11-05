@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { db } from "../db";
 import { getWorkspace } from "../config";
-import { allowedDomain, emailAllowed } from "../permissions";
+import { isValidEmail } from "../permissions";
 import { rateLimit, RateLimited } from "../rate-limit";
 import { hashPassword, passwordProblem } from "./password";
 import { LoginError } from "./identity";
@@ -31,7 +31,7 @@ export async function submitSignup(input: SignupInput, ip: string): Promise<stri
   if (!signupEnabled()) throw new LoginError("Sign-up is closed. Ask an admin to add you.");
   try { rateLimit(`signup-ip:${ip}`, 5, 60 * 60_000); } catch (e) { if (e instanceof RateLimited) throw new LoginError("Too many requests from this network. Try again later."); throw e; }
   const p = signupSchema.parse(input);
-  if (!emailAllowed(p.email)) throw new LoginError(`Use your @${allowedDomain()} work email address.`);
+  if (!isValidEmail(p.email)) throw new LoginError("Enter a valid email address.");
   if (p.password !== p.confirm) throw new LoginError("The two passwords do not match.");
   const bad = passwordProblem(p.password, { email: p.email, name: p.name });
   if (bad) throw new LoginError(bad);

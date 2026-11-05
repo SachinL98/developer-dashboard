@@ -11,7 +11,7 @@ Everything below is configuration; no code changes. Until it is done the app run
 1. Google Cloud Console → new project → **APIs & Services → Library**: enable **Google Calendar API** and **Google Meet REST API**.
 2. **OAuth consent screen**: User type **Internal** (needs the Workspace org; avoids Google's app verification). Add scopes: `openid`, `email`, `profile`, `.../auth/calendar.events`, `.../auth/meetings.space.readonly`.
 3. **Credentials → Create OAuth client ID → Web application**. Authorised redirect URI: `{APP_URL}/api/auth/google/callback`.
-4. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (and leave `AUTH_ALLOWED_DOMAIN=spaceitlabs.com`).
+4. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
 5. Each person signs in with Google, then clicks **Connect** on *Integrations → Google Calendar & Meet* once.
 6. For the automated notes taker: Meet transcripts exist only if **Transcript** was on in the call and the Workspace plan supports it. The Meet API only returns transcripts to the meeting organiser/host, so let **one lead's account own the recurring events** (Meetings → *Create recurring Meets* while signed in as that lead) and connect Google with that account. The cron job uses a connected lead/admin.
 
@@ -45,7 +45,7 @@ curl -fsS -H "Authorization: Bearer $CRON_SECRET" $APP_URL/api/cron/transcripts 
 | Plan sprints, assign tickets, move any card (staging/prod), apply estimates, reviewer pass, sync, meetings setup | | ✔ | ✔ |
 | Manage users and roles | | | ✔ |
 
-People sign in with email and password. New people click **Create an account** on the login page (work-email addresses on `AUTH_ALLOWED_DOMAIN` only, they choose their own password) and an admin approves the request under **Admin → Users** (admins see a banner while requests are waiting; unreviewed requests expire after 14 days). Admins can also add a person directly, which gives a one-time password they must change at first sign-in. Set `SIGNUP_ENABLED=false` to close self sign-up so only admin-created accounts exist. Because email addresses are not verified (no mail service), nothing is created until an admin approves. The very first admin is created from a terminal with `npm run user:create -- --email you@company.com --name "Your Name" --access ADMIN` (uses `DATABASE_URL`; the one-time password is saved to a private `.credentials-*.txt` file). Passwords need 12+ characters with a letter and a number. Five wrong attempts lock the account for 15 minutes. If someone forgets their password, an admin resets it.
+People sign in with email and password. New people click **Create an account** on the login page (any email address; they choose their own password) and an admin approves the request under **Admin → Users** (admins see a banner while requests are waiting; unreviewed requests expire after 14 days). Admins can also add a person directly, which gives a one-time password they must change at first sign-in. Set `SIGNUP_ENABLED=false` to close self sign-up so only admin-created accounts exist. Because email addresses are not verified (no mail service), nothing is created until an admin approves. The very first admin is created from a terminal with `npm run user:create -- --email you@company.com --name "Your Name" --access ADMIN` (uses `DATABASE_URL`; the one-time password is saved to a private `.credentials-*.txt` file). Passwords need 12+ characters with a letter and a number. Five wrong attempts lock the account for 15 minutes. If someone forgets their password, an admin resets it.
 
 ## Admin settings (no redeploy needed)
 
@@ -97,7 +97,7 @@ Only a lead can override a Claude review's items; a developer re-runs it after p
 ## Production checklist
 The server refuses to start in production (`src/instrumentation.ts`) unless these are right:
 - `AUTH_SECRET`: 32+ random characters (`openssl rand -base64 48`). It encrypts every stored Jira, Google and Claude key. Changing it signs everyone out of those connections.
-- `APP_URL`: the public `https://` address. `DATABASE_URL` set. `AUTH_ALLOWED_DOMAIN` set. Create the first admin with `npm run user:create` (see Roles).
+- `APP_URL`: the public `https://` address. `DATABASE_URL` set. Create the first admin with `npm run user:create` (see Roles).
 - `CRON_SECRET`, `JIRA_WEBHOOK_SECRET` and `GITHUB_WEBHOOK_SECRET`: each endpoint is switched off until its secret exists. Jira can send the secret as `?secret=`; other callers should use the `x-webhook-secret` header.
 - Serve over HTTPS only (the app sends HSTS, a strict Content-Security-Policy, `X-Frame-Options: DENY`, and `no-store` caching on pages and API responses).
 - Run `npm run db:deploy` (applies migrations) then `npm run build` and `npm start`. Health check: `GET /api/health`.

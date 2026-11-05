@@ -28,12 +28,11 @@ export function canPatchTicket(actor: Actor, ticket: { assigneeId: string | null
 /** Emails that get the Admin role when their account is created (comma separated env). */
 export const bootstrapAdmins = () => (process.env.ADMIN_EMAILS ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
 
-export const allowedDomain = () => (process.env.AUTH_ALLOWED_DOMAIN || "spaceitlabs.com").toLowerCase();
+export const MAX_EMAIL = 120;
 
-export function emailAllowed(email: string | undefined | null): boolean {
-  if (!email) return false;
-  const m = email.toLowerCase().match(/^[^@\s]+@([^@\s]+)$/);
-  return !!m && m[1] === allowedDomain();
+/** Any well-formed email address is allowed: sign-in is not tied to a company domain. */
+export function isValidEmail(email: string | undefined | null): boolean {
+  return !!email && email.length <= MAX_EMAIL && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
 }
 
 /** Review fault patterns are personal: the developer themself and leads/admins may see them, other developers may not. */

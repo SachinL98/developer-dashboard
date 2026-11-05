@@ -1,7 +1,7 @@
 import { requireUser } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { atLeast, allowedDomain } from "@/lib/permissions";
+import { atLeast } from "@/lib/permissions";
 import { PageHeader, Avatar } from "@/components/ui";
 import { UserRow } from "@/components/UserRow";
 import { AddUserForm } from "@/components/AddUserForm";
@@ -21,7 +21,7 @@ export default async function Users() {
     <div className="space-y-6">
       <PageHeader title="Users & roles" sub="Add people, set their role and reset passwords." />
       <PendingRequests rows={pending.map((r) => ({ id: r.id, name: r.name, email: r.email, jobTitle: r.jobTitle, when: `${fmtDay(r.createdAt)} ${fmtTime(r.createdAt)}` }))} />
-      <AddUserForm domain={allowedDomain()} />
+      <AddUserForm />
       <div className="card overflow-x-auto">
         <table className="w-full min-w-[820px] text-sm">
           <thead className="bg-panel2 text-left text-xs text-mute"><tr><th className="p-3">User</th><th>Access</th><th>Jira</th><th>Google</th><th>Last sign-in</th><th className="pr-3 text-right">Status</th></tr></thead>

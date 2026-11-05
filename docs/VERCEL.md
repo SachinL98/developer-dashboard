@@ -33,7 +33,6 @@ Open `.env.vercel` and fill in these values (leave the others empty or delete th
 | `DATABASE_URL` | the **pooled** string from step 1 |
 | `APP_URL` | `https://<your-project>.vercel.app` (or your own domain) |
 | `AUTH_SECRET` | run `openssl rand -base64 48` |
-| `AUTH_ALLOWED_DOMAIN` | `spaceitlabs.com` |
 | `CRON_SECRET` | run `openssl rand -hex 32` and keep a copy |
 | `TEAM_TIMEZONE` | `Asia/Colombo` |
 
@@ -104,7 +103,7 @@ Optional previews: set the repository variable `ENABLE_PREVIEWS=true`, and give 
 |---|---|
 | Deploy fails at "Apply database migrations" | Check `DATABASE_URL_DIRECT` is the direct (non-pooler) string and the database is reachable. |
 | Site shows an error right after deploy | Open the Vercel function logs. The app refuses to start without `AUTH_SECRET` (32+ characters), and an `https://` `APP_URL`. |
-| Cannot sign in | Check the email is on `AUTH_ALLOWED_DOMAIN` and the account exists (Admin → Users). Five wrong attempts lock an account for 15 minutes; an admin can reset the password. |
+| Cannot sign in | Check the account exists (Admin → Users). Five wrong attempts lock an account for 15 minutes; an admin can reset the password. |
 | Health check fails | Check `DATABASE_URL` (pooled string with `pgbouncer=true`) and that the database allows connections from Vercel. |
 | Scheduled sync shows 401 or 503 | `CRON_SECRET` differs between GitHub and Vercel, or is missing in Vercel. |
 | Report PDF or slides fail | Look for a missing-file error in the function logs; redeploy and try again. |

@@ -3,7 +3,7 @@ import { LoginError } from "./identity";
 import { afterFailure, burnPasswordCheck, hashPassword, isLocked, passwordProblem, verifyPassword } from "./password";
 import { rateLimit, RateLimited } from "../rate-limit";
 import { getWorkspace } from "../config";
-import { allowedDomain, bootstrapAdmins, emailAllowed } from "../permissions";
+import { bootstrapAdmins, isValidEmail } from "../permissions";
 
 const GENERIC = "Incorrect email or password. After several wrong attempts the account is locked for a few minutes.";
 
@@ -40,7 +40,7 @@ export interface NewUser { name: string; email: string; access?: "DEVELOPER" | "
 /** Creates an account with a one-time password the user must change at first sign-in. Used by admins and the first-admin script. */
 export async function createUserWithPassword(u: NewUser, password: string) {
   const email = u.email.trim().toLowerCase();
-  if (!emailAllowed(email)) throw new Error(`Use an @${allowedDomain()} email address.`);
+  if (!isValidEmail(email)) throw new Error("Enter a valid email address.");
   if (u.name.trim().length < 2) throw new Error("Enter the person's name.");
   if (await db.developer.findUnique({ where: { email } })) throw new Error("A user with that email already exists.");
   const bad = passwordProblem(password, { email, name: u.name });

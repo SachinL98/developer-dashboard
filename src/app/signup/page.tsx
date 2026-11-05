@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { currentUser } from "@/lib/auth/session";
-import { allowedDomain } from "@/lib/permissions";
 import { signupEnabled } from "@/lib/auth/signup";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { SignupForm } from "./SignupForm";
@@ -19,7 +18,7 @@ export default async function Signup() {
           <div className="grid h-11 w-11 place-items-center rounded-xl bg-neon text-lg font-bold text-on-accent">S</div>
           <div><h1 className="text-xl font-semibold leading-tight">Create your account</h1><p className="text-sm text-mute">SpaceIT Delivery</p></div>
         </div>
-        {signupEnabled() ? <SignupForm domain={allowedDomain()} /> : (
+        {signupEnabled() ? <SignupForm /> : (
           <div className="space-y-4 text-center"><p className="text-sm text-mute">Sign-up is closed. Ask an admin to add you.</p><Link href="/login" className="btn w-full">Back to sign in</Link></div>
         )}
       </div>
