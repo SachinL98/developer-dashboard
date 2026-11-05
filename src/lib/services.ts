@@ -5,6 +5,7 @@ import { getMeetingDefs, getWorkspace } from "./config";
 import * as jira from "./integrations/jira";
 import * as gh from "./integrations/github";
 import { parseNotes, summariseWithClaude } from "./notes";
+import { matchPerson, parseTranscript, talkStats, type Segment } from "./transcript";
 import { aiKeyFor } from "./ai";
 import * as gcal from "./integrations/google";
 import { fetchTranscript, meetCodeFromUrl } from "./integrations/meet";
@@ -12,7 +13,7 @@ import { occurrences } from "./schedule";
 import { reviewPassed, scanDiff, type ReviewItem } from "./review-template";
 import { getReviewConfig, templateFor } from "./review-config";
 import { ensureJiraPerson, syncJiraPeople } from "./jira-people";
-import { anthropicConfigured, passes, reviewWithClaude, type Finding } from "./claude-review";
+import { passes, reviewWithAI, type Finding } from "./claude-review";
 
 const warn = (where: string, e: unknown) => console.warn(`[${where}]`, e instanceof Error ? e.message : e);
 
@@ -155,7 +156,7 @@ function prComment(t: { key: string; title: string }, r: { passed: boolean; summ
  * team + project checklist; the result (items, findings, summary, pass/fail) is saved on the ticket. Without the key a heuristic diff
  * scan is used; without GitHub access the checklist is left for a human. A failing review blocks the move to Review.
  */
-export async function runInitialReview(ticketId: string, trigger: "move" | "manual" | "push" = "manual") {
+export async function runInitialReview(ticketId: string, trigger: "move" | "manual" | "push" = "manual", userId?: string | null) {
   const t = await db.ticket.findUniqueOrThrow({ where: { id: ticketId }, include: { project: true } });
   const cfg = await getReviewConfig();
   const { items: template, guidance } = templateFor(cfg, t.project.key);
@@ -177,15 +178,16 @@ export async function runInitialReview(ticketId: string, trigger: "move" | "manu
   }
   try {
     let result: { items: ReviewItem[]; findings: Finding[]; summary: string; model: string | null; truncated: boolean; source: string };
-    if (anthropicConfigured()) {
+    const ai = await aiKeyFor(userId);
+    if (ai) {
       const pull = await gh.getPullRequest(pr.repo, pr.number).catch(() => null);
-      const r = await reviewWithClaude({ key: t.key, title: t.title, description: t.description, prTitle: pull?.title, diff, items: template, guidance });
+      const r = await reviewWithAI(ai, { key: t.key, title: t.title, description: t.description, prTitle: pull?.title, diff, items: template, guidance });
       result = { ...r, source: "claude" };
     } else {
       // Heuristic scan fills in what it can prove; project points stay unchecked for a human.
       const scanned = scanDiff(diff);
       const items = template.map((i) => { const s = scanned.find((x) => x.id === i.id); return s ? { ...i, checked: s.checked, note: s.note, auto: true } : i; });
-      result = { items, findings: [], summary: "Heuristic diff scan (set ANTHROPIC_API_KEY for a full Claude review).", model: null, truncated: false, source: "diff scan" };
+      result = { items, findings: [], summary: "Heuristic diff scan. Add an AI key (Claude, Gemini or OpenAI) in Settings for a full AI review.", model: null, truncated: false, source: "diff scan" };
     }
     const passed = passes(result.items, result.findings);
     const done = await finish({ status: "DONE", items: result.items as any, findings: result.findings as any, summary: result.summary, model: result.model, truncated: result.truncated, source: result.source, passed });
@@ -362,19 +364,32 @@ export async function syncGithub() {
 
 // ---------- Meeting notes ----------
 
-export async function generateNotes(meetingId: string, transcript: string, userId?: string | null) {
-  const names = (await db.developer.findMany()).map((d) => d.name);
-  const parsed = await summariseWithClaude(transcript, parseNotes(transcript, names), await aiKeyFor(userId));
+export interface NotesExtra { segments?: Segment[]; durationSec?: number; source?: "meet" | "upload" | "live" | "paste" }
+
+export async function generateNotes(meetingId: string, transcript: string, userId?: string | null, extra: NotesExtra = {}) {
+  const [people, meeting] = await Promise.all([db.developer.findMany({ where: { active: true }, select: { id: true, name: true, email: true } }), db.meeting.findUniqueOrThrow({ where: { id: meetingId } })]);
+  const names = people.map((d) => d.name);
+  const parsed0 = extra.segments ? { segments: extra.segments, hasTimes: extra.segments.some((s) => s.start != null), durationSec: extra.durationSec } : parseTranscript(transcript);
+  const durationSec = extra.durationSec ?? parsed0.durationSec ?? null;
+  const attendees = meeting.attendees.length ? meeting.attendees : names;
+  const parsed = await summariseWithClaude(transcript, parseNotes(transcript, names), await aiKeyFor(userId), { title: meeting.title, kind: meeting.kind, attendees, durationSec: durationSec ?? undefined });
+
+  // Who spoke and for how long: the basis of the engagement metrics.
+  const stats = talkStats(parsed0.segments);
+  const speakerRows = stats.map((x) => ({ meetingId, name: x.name, developerId: matchPerson(x.name, people)?.id ?? null, talkSec: x.talkSec, words: x.words, turns: x.turns, estimated: x.estimated }));
+
   await db.$transaction([
-    db.meeting.update({ where: { id: meetingId }, data: { transcript, summary: parsed.summary, decisions: parsed.decisions } }),
+    db.meeting.update({ where: { id: meetingId }, data: { transcript, summary: parsed.summary, decisions: parsed.decisions, richNotes: (parsed.rich ?? null) as any, durationSec, transcriptSource: extra.source ?? "paste" } }),
     db.actionItem.deleteMany({ where: { meetingId } }),
     ...parsed.actionItems.map((a) => db.actionItem.create({ data: { meetingId, text: a.text, owner: a.owner } })),
+    db.meetingSpeaker.deleteMany({ where: { meetingId } }),
+    db.meetingSpeaker.createMany({ data: speakerRows }),
   ]);
   for (const a of parsed.actionItems.filter((x) => x.ticketKey)) {
     const t = await db.ticket.findUnique({ where: { key: a.ticketKey! } });
     if (t) await db.actionItem.updateMany({ where: { meetingId, text: a.text }, data: { ticketId: t.id } });
   }
-  return parsed;
+  return { ...parsed, speakers: stats.length };
 }
 
 /** Pull the real Meet transcript for an ended meeting and turn it into notes. Returns null if none is available yet. */
@@ -385,7 +400,7 @@ export async function importMeetTranscript(meetingId: string, userId?: string | 
   if (m.endsAt > new Date()) throw new Error("The meeting hasn't finished yet.");
   const t = await fetchTranscript(code, m.startsAt, m.endsAt);
   if (!t) return null;
-  const parsed = await generateNotes(meetingId, t.text, userId);
+  const parsed = await generateNotes(meetingId, t.text, userId, { segments: t.segments, durationSec: t.durationSec, source: "meet" });
   return { parsed, chars: t.text.length };
 }
 

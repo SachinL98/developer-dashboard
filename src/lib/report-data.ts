@@ -8,6 +8,8 @@ import { fillFor } from "./report-plan";
 import { capacityDevs, teamAvailability } from "./leave";
 import { localDate } from "./time";
 import { addDays } from "./capacity";
+import { aggregate, toneForBalance } from "./engagement";
+import { loadMeetingStats } from "./engagement-data";
 import { buildSlides, previousPeriod, resolvePeriod, type CarryRow, type DevRow, type DeliveredRow, type Period, type PeriodStats, type ReportFacts, type ReportKind, type SprintLite } from "./report";
 
 const DAY = 86_400_000;
@@ -48,7 +50,8 @@ async function statsFor(p: Period, now: Date): Promise<{ stats: PeriodStats; del
   };
 }
 
-export async function loadReport(kind: ReportKind, ref?: string, now = new Date()) {
+/** `includePeople`: per-person talk times are sensitive, so only leads and admins get them in a report. */
+export async function loadReport(kind: ReportKind, ref?: string, now = new Date(), opts: { includePeople?: boolean } = {}) {
   const cfg = await getWorkspace(); // applies the team timezone
   const tz = cfg.timezone;
   const sprintRows = await db.sprint.findMany({ orderBy: { startDate: "asc" } });
@@ -124,11 +127,19 @@ export async function loadReport(kind: ReportKind, ref?: string, now = new Date(
   const ta = await teamAvailability(await capacityDevs(), lr.start, lr.end);
   const leave = { days: ta.leaveDays, holidays: ta.perDev[0]?.av.holidayDays ?? 0 };
   void addDays;
+  const inPeriod = (await loadMeetingStats(period.start, period.end)).filter((m) => m.startsAt >= period.start && m.startsAt < period.end);
+  const agg = aggregate(period.label, inPeriod);
+  const prevAgg = prevP ? aggregate(prevP.label, await loadMeetingStats(prevP.start, prevP.end)) : null;
+  const engagement = agg.meetings ? {
+    meetings: agg.meetings, totalTalkSec: agg.totalTalkSec, avgSpeakers: agg.avgSpeakers, balancePct: agg.avgBalance == null ? null : Math.round(agg.avgBalance * 100), balanceLabel: toneForBalance(agg.avgBalance),
+    silentAttendees: agg.silentAttendees, prevBalancePct: prevAgg?.avgBalance == null ? null : Math.round(prevAgg.avgBalance * 100), prevLabel: prevP?.label ?? null,
+    people: opts.includePeople ? agg.people.map((x) => ({ name: x.name, talkMin: x.talkSec / 60, sharePct: x.avgSharePct, spokeInPct: x.participationPct, estimated: x.estimated })) : null,
+  } : null;
   const notes = await getReportNotes(period.key);
   const facts: ReportFacts = {
     period, now, tz, stats: cur.stats, prev: prev?.stats ?? null, prevLabel: prevP?.label ?? null, committedPts: cur.committed,
     buckets, bucketUnit: weekly ? "week" : "day", velocity, delivered, devs, carry, estimateAccuracy: acc.length ? { avg: avg(acc)!, n: acc.length } : null,
-    stale, reviewBlocked, decisions, openActions, nextSprint: plan.nextSprint, nextMonth: plan.nextMonth, leave, notes,
+    stale, reviewBlocked, decisions, openActions, nextSprint: plan.nextSprint, nextMonth: plan.nextMonth, leave, engagement, notes,
   };
   void zonedParts;
   return { facts, slides: buildSlides(facts) };

@@ -26,8 +26,10 @@ export function setupChecklist(): { group: string; items: EnvCheck[] }[] {
       { name: "JIRA_BOARD_ID", ok: has("JIRA_BOARD_ID"), hint: "Scrum board id, for sprint create/start/close." },
       { name: "JIRA_WEBHOOK_SECRET", ok: has("JIRA_WEBHOOK_SECRET"), hint: "Shared secret on the Jira webhook URL." },
     ] },
-    { group: "Claude PR review", items: [
-      { name: "ANTHROPIC_API_KEY", ok: has("ANTHROPIC_API_KEY"), hint: "Optional shared key: PR diff reviews, and a fallback for AI features when someone has not added their own key in Settings." },
+    { group: "AI (optional server-wide keys)", items: [
+      { name: "ANTHROPIC_API_KEY", ok: has("ANTHROPIC_API_KEY"), hint: "Optional shared Claude key, used when someone has not added their own key in Settings." },
+      { name: "OPENAI_API_KEY", ok: has("OPENAI_API_KEY"), hint: "Optional shared OpenAI key (same fallback)." },
+      { name: "GEMINI_API_KEY", ok: has("GEMINI_API_KEY"), hint: "Optional shared Google Gemini key (same fallback)." },
     ] },
     { group: "GitHub", items: [
       { name: "GITHUB_TOKEN", ok: githubConfigured(), hint: "Fine-grained token (read pull requests and contents) for the org repos." },
@@ -87,8 +89,8 @@ export function setupGuide(origin: string): SetupStep[] {
       "In your scheduler, call the two addresses below every 10 minutes with the header Authorization: Bearer <CRON_SECRET>.",
       "In Jira, add a webhook with the Jira webhook URL below (replace the end with your secret).",
     ] },
-    { id: "claude", title: "Claude for the whole team", summary: "Optional. People can also add their own key.", optional: true, done: has("ANTHROPIC_API_KEY"), vars: [v("ANTHROPIC_API_KEY")], steps: [
-      "Create a key at console.anthropic.com and set ANTHROPIC_API_KEY. It runs pull request reviews and is used for AI features by anyone who has not added their own key.",
+    { id: "ai", title: "AI for the whole team", summary: "Optional. Each person can add their own Claude, Gemini or OpenAI key in Settings.", optional: true, done: has("ANTHROPIC_API_KEY") || has("OPENAI_API_KEY") || has("GEMINI_API_KEY"), vars: [v("ANTHROPIC_API_KEY"), v("OPENAI_API_KEY"), v("GEMINI_API_KEY")], steps: [
+      "Create a key with Claude (console.anthropic.com), OpenAI (platform.openai.com) or Gemini (aistudio.google.com) and set the matching setting. It is used for AI features, including pull request reviews, by anyone who has not added their own key.",
     ] },
   ];
 }

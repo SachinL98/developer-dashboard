@@ -1,13 +1,12 @@
 import { z } from "zod";
 import type { ReviewItem } from "./review-template";
 import { CATEGORIES } from "./patterns";
+import { askAI, type AiKey } from "./ai";
 
 export interface Finding { severity: "critical" | "important" | "minor"; title: string; detail: string; file?: string; line?: number; category?: string }
 const CATEGORY_IDS = CATEGORIES.map((c) => c.id);
 export interface ClaudeReview { items: ReviewItem[]; findings: Finding[]; summary: string; model: string; truncated: boolean }
 
-export const anthropicConfigured = () => !!process.env.ANTHROPIC_API_KEY;
-export const reviewModel = () => process.env.ANTHROPIC_REVIEW_MODEL || process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5";
 const MAX_DIFF_CHARS = 150_000;
 
 const ToolInput = z.object({
@@ -55,35 +54,19 @@ export function applyVerdicts(template: ReviewItem[], raw: unknown): { items: Re
 export const passes = (items: ReviewItem[], findings: Finding[]) =>
   items.filter((i) => i.severity === "critical").every((i) => i.checked) && !findings.some((f) => f.severity === "critical");
 
-export async function reviewWithClaude(p: Parameters<typeof buildPrompt>[0]): Promise<ClaudeReview> {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error("ANTHROPIC_API_KEY is not set");
+export async function reviewWithAI(ai: AiKey, p: Parameters<typeof buildPrompt>[0]): Promise<ClaudeReview> {
   const { system, user, truncated } = buildPrompt(p);
-  const model = reviewModel();
-  const res = await fetch(`${(process.env.ANTHROPIC_API_URL || "https://api.anthropic.com").replace(/\/$/, "")}/v1/messages`, {
-    method: "POST", signal: AbortSignal.timeout(150_000), cache: "no-store",
-    headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({
-      model, max_tokens: 4000, system,
-      tools: [{
-        name: "submit_review", description: "Submit the completed review.",
-        input_schema: {
-          type: "object", required: ["summary", "items", "findings"],
-          properties: {
-            summary: { type: "string", description: "2-4 sentences: what the PR does and whether it is safe to merge" },
-            items: { type: "array", items: { type: "object", required: ["id", "verdict"], properties: { id: { type: "string" }, verdict: { enum: ["pass", "fail", "unclear"] }, note: { type: "string", description: "Short evidence for fail/unclear" } } } },
-            findings: { type: "array", items: { type: "object", required: ["severity", "title", "detail"], properties: { severity: { enum: ["critical", "important", "minor"] }, title: { type: "string" }, detail: { type: "string" }, file: { type: "string" }, line: { type: "integer" }, category: { enum: CATEGORY_IDS, description: "Kind of problem, used to spot recurring patterns" } } } },
-          },
-        },
-      }],
-      tool_choice: { type: "tool", name: "submit_review" },
-      messages: [{ role: "user", content: user }],
-    }),
+  const { input, model } = await askAI(ai, {
+    system, user, tool: "submit_review", description: "Submit the completed review.", maxTokens: 4000,
+    schema: {
+      type: "object", required: ["summary", "items", "findings"],
+      properties: {
+        summary: { type: "string", description: "2-4 sentences: what the PR does and whether it is safe to merge" },
+        items: { type: "array", items: { type: "object", required: ["id", "verdict"], properties: { id: { type: "string" }, verdict: { enum: ["pass", "fail", "unclear"] }, note: { type: "string", description: "Short evidence for fail/unclear" } } } },
+        findings: { type: "array", items: { type: "object", required: ["severity", "title", "detail"], properties: { severity: { enum: ["critical", "important", "minor"] }, title: { type: "string" }, detail: { type: "string" }, file: { type: "string" }, line: { type: "integer" }, category: { enum: CATEGORY_IDS, description: "Kind of problem, used to spot recurring patterns" } } } },
+      },
+    },
   });
-  if (!res.ok) throw new Error(`Claude API ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  const data: any = await res.json();
-  const block = (data.content ?? []).find((b: any) => b.type === "tool_use" && b.name === "submit_review");
-  if (!block) throw new Error("Claude did not return a review");
-  const { items, findings, summary } = applyVerdicts(p.items, block.input);
-  return { items, findings, summary, model: data.model ?? model, truncated };
+  const { items, findings, summary } = applyVerdicts(p.items, input);
+  return { items, findings, summary, model, truncated };
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/auth/session";
+import { atLeast } from "@/lib/permissions";
 import { loadReport } from "@/lib/report-data";
 import { reportFileName, toPdf, toPptx } from "@/lib/report-export";
 import type { ReportKind } from "@/lib/report";
@@ -15,7 +16,7 @@ export async function GET(req: Request) {
   const kind = q.get("kind") as ReportKind;
   const format = q.get("format");
   if (!["week", "sprint", "month"].includes(kind) || !["pdf", "pptx"].includes(format ?? "")) return NextResponse.json({ error: "kind must be week, sprint or month and format pdf or pptx" }, { status: 400 });
-  const report = await loadReport(kind, q.get("ref") || undefined);
+  const report = await loadReport(kind, q.get("ref") || undefined, new Date(), { includePeople: atLeast(user.access, "LEAD") });
   if (!report) return NextResponse.json({ error: "No data for that period yet (no sprint found)" }, { status: 404 });
   const title = `${report.slides[0].title}`;
   const buf = format === "pdf" ? await toPdf(report.slides, title) : await toPptx(report.slides, title);

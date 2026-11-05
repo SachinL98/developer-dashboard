@@ -21,11 +21,11 @@ export function EstimateReview({ ticketId, ready, initial, onUse, canApply }: { 
   return (
     <div className="card-pad">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <span className="h-section flex items-center gap-2"><Sparkles size={14} className="text-neon" /> Claude estimate review</span>
+        <span className="h-section flex items-center gap-2"><Sparkles size={14} className="text-neon" /> AI estimate review</span>
         <button className="btn" disabled={pending || !ready} onClick={ask}>{pending ? <><Loader2 size={14} className="animate-spin" /> Reviewing…</> : res ? "Review again" : "Review estimate"}</button>
       </div>
-      {!ready && <p className="text-sm text-mute">Add your Claude API key in <Link href="/settings" className="text-neon">Settings</Link> to get an AI review of this estimate.</p>}
-      {ready && !res && !err && <p className="text-sm text-mute">Claude compares this estimate with similar finished tickets and explains whether it looks too low or too high.</p>}
+      {!ready && <p className="text-sm text-mute">Add an AI key (Claude, Gemini or OpenAI) in <Link href="/settings" className="text-neon">Settings</Link> to get an AI review of this estimate.</p>}
+      {ready && !res && !err && <p className="text-sm text-mute">The AI compares this estimate with similar finished tickets and explains whether it looks too low or too high.</p>}
       {err && <p className="text-sm text-neon-red">{err}</p>}
       {res && (
         <div className="space-y-3">

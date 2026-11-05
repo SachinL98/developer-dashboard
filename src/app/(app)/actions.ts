@@ -24,7 +24,7 @@ import { approveSignup } from "@/lib/auth/signup";
 import { generateTempPassword, hashPassword } from "@/lib/auth/password";
 import { userMessage } from "@/lib/safe-error";
 import { rateLimit } from "@/lib/rate-limit";
-import { saveUserKey, removeUserKey, validateKey } from "@/lib/ai";
+import { saveUserKey, removeUserKey, validateKey, listUserProviders, setPreferredProvider, PROVIDERS } from "@/lib/ai";
 import { generateDevProfile, reviewEstimate, type EstimateReview } from "@/lib/insights";
 
 type Result<T = {}> = ({ ok: true } & T) | { ok: false; error: string };
@@ -70,7 +70,7 @@ export async function moveTicketAction(ticketId: string, to: StatusKey): Promise
       return { ok: false, error: atLeast(user.access, "LEAD") ? "Not allowed" : "You can move your own cards up to Review. Staging and production steps are done by a lead." };
     const r = await svc.moveTicket(ticketId, to, user.id);
     // Entering Initial Review kicks off the Claude review of the linked PR (in the background: it can take a minute).
-    if (r.ok && to === "INITIAL_REVIEW" && t.prUrl && (await getReviewConfig()).autoRun) after(async () => { await svc.runInitialReview(ticketId, "move").catch(() => {}); });
+    if (r.ok && to === "INITIAL_REVIEW" && t.prUrl && (await getReviewConfig()).autoRun) after(async () => { await svc.runInitialReview(ticketId, "move", user.id).catch(() => {}); });
     touch(); revalidatePath(`/tickets/${ticketId}`);
     return r.ok ? { ok: true, label: r.label, syncError: r.syncError } : { ok: false, error: r.error };
   } catch (e) { return fail(e); }
@@ -122,7 +122,7 @@ export async function runReviewAction(ticketId: string): Promise<Result> {
     const tk = await db.ticket.findUniqueOrThrow({ where: { id: tid }, select: { assigneeId: true } });
     if (!atLeast(u.access, "LEAD") && tk.assigneeId !== u.id) return { ok: false, error: "Only the assignee or a lead can run the review." };
     rateLimit(`review:${u.id}`, 20, 3_600_000);
-    after(async () => { await svc.runInitialReview(tid, "manual").catch(() => {}); revalidatePath(`/tickets/${tid}`); });
+    after(async () => { await svc.runInitialReview(tid, "manual", u.id).catch(() => {}); revalidatePath(`/tickets/${tid}`); });
     return { ok: true };
   } catch (e) { return fail(e); }
 }
@@ -247,11 +247,11 @@ export async function closeSprintAction(sprintId: string): Promise<Result<{ carr
 }
 
 // ----- meetings & notes -----
-export async function saveNotesAction(meetingId: string, transcript: string): Promise<Result<{ actions: number; ai: boolean; aiError?: string }>> {
+export async function saveNotesAction(meetingId: string, transcript: string, source: "upload" | "live" | "paste" = "paste"): Promise<Result<{ actions: number; ai: boolean; aiError?: string }>> {
   try {
     const u = await me();
     rateLimit(`ai:${u.id}`, 30, 3_600_000);
-    const parsed = await svc.generateNotes(id.parse(meetingId), z.string().min(1).max(200_000).parse(transcript), u.id);
+    const parsed = await svc.generateNotes(id.parse(meetingId), z.string().min(1).max(400_000).parse(transcript), u.id, { source: z.enum(["upload", "live", "paste"]).parse(source) });
     revalidatePath("/meetings"); return { ok: true, actions: parsed.actionItems.length, ai: parsed.ai, aiError: parsed.aiError };
   } catch (e) { return fail(e); }
 }
@@ -585,18 +585,32 @@ export async function saveHolidaysAction(list: { date: string; name: string }[])
 void requestDays;
 
 
-// ----- Claude (AI features, billed to the user's own Anthropic key) -----
-export async function saveClaudeKeyAction(key: string): Promise<Result> {
+// ----- AI keys (Claude, Gemini or OpenAI; billed to the person's own account) -----
+const providerSchema = z.enum(["anthropic", "openai", "gemini"]);
+export async function saveAiKeyAction(input: { provider: "anthropic" | "openai" | "gemini"; key: string; model?: string }): Promise<Result> {
   try {
     const u = await me();
-    const k = z.string().trim().min(20, "That doesn't look like an API key").max(300).startsWith("sk-ant-", "Anthropic API keys start with sk-ant-").parse(key);
+    const provider = providerSchema.parse(input.provider);
+    const meta = PROVIDERS.find((p) => p.id === provider)!;
+    const key = z.string().trim().min(20, "That doesn't look like an API key").max(400).parse(input.key);
+    if (!meta.keyPattern.test(key)) return { ok: false, error: `${meta.label} keys look like ${meta.keyHint}` };
+    const model = z.string().trim().max(80).regex(/^[A-Za-z0-9._:\/-]*$/, "That model name has odd characters").optional().parse(input.model);
     rateLimit(`key:${u.id}`, 10, 600_000);
-    await validateKey(k);
-    await saveUserKey(u.id, k);
+    await validateKey(provider, key);
+    await saveUserKey(u.id, provider, key, model);
     revalidatePath("/settings"); return { ok: true };
   } catch (e) { return fail(e); }
 }
-export async function removeClaudeKeyAction(): Promise<Result> { try { const u = await me(); await removeUserKey(u.id); revalidatePath("/settings"); return { ok: true }; } catch (e) { return fail(e); } }
+export async function removeAiKeyAction(provider: "anthropic" | "openai" | "gemini"): Promise<Result> { try { const u = await me(); await removeUserKey(u.id, providerSchema.parse(provider)); revalidatePath("/settings"); return { ok: true }; } catch (e) { return fail(e); } }
+export async function setAiProviderAction(provider: "anthropic" | "openai" | "gemini"): Promise<Result> {
+  try {
+    const u = await me();
+    const p = providerSchema.parse(provider);
+    if (!(await listUserProviders(u.id)).saved.some((s) => s.provider === p)) return { ok: false, error: "Save a key for that provider first." };
+    await setPreferredProvider(u.id, p);
+    revalidatePath("/settings"); return { ok: true };
+  } catch (e) { return fail(e); }
+}
 
 export async function generateProfileAction(devId: string): Promise<Result> {
   try {

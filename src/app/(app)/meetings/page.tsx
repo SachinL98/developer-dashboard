@@ -1,7 +1,10 @@
 import { db } from "@/lib/db";
 import { PageHeader, Kpi } from "@/components/ui";
 import { getMeetingDefs } from "@/lib/config";
-import { NotesTaker, type MeetingView } from "@/components/NotesTaker";
+import { NotesTaker, type MeetingView, type EngagementView } from "@/components/NotesTaker";
+import { engagementOf } from "@/lib/transcript";
+import { toneForBalance } from "@/lib/engagement";
+import type { RichNotes } from "@/lib/notes";
 import { SyncButtons } from "@/components/SyncButtons";
 import { fmtDay, fmtTime } from "@/lib/time";
 import { googleReady } from "@/lib/integrations/google";
@@ -22,12 +25,25 @@ export default async function Meetings() {
   const defs = (await getMeetingDefs()).filter((d) => d.enabled);
   const now = new Date();
   const [past, upcoming, projects] = await Promise.all([
-    db.meeting.findMany({ where: { endsAt: { lt: now } }, orderBy: { startsAt: "desc" }, take: 8, include: { actionItems: { include: { ticket: true } } } }),
+    db.meeting.findMany({ where: { endsAt: { lt: now } }, orderBy: { startsAt: "desc" }, take: 8, include: { actionItems: { include: { ticket: true } }, speakers: true } }),
     db.meeting.findMany({ where: { endsAt: { gte: now } }, orderBy: { startsAt: "asc" }, take: 8, include: { actionItems: { include: { ticket: true } } } }),
     db.project.findMany({ take: 1 }),
   ]);
   const openActions = await db.actionItem.count({ where: { done: false } });
-  const view = (m: (typeof past)[0]): MeetingView => ({ id: m.id, title: m.title, kind: m.kind, startsAt: m.startsAt.toISOString(), transcript: m.transcript, summary: m.summary, decisions: m.decisions, actions: m.actionItems.map((a) => ({ id: a.id, text: a.text, owner: a.owner, done: a.done, ticketKey: a.ticket?.key ?? null })) });
+  const peopleList = await db.developer.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } });
+  /** Per-person talk times are for leads and admins; everyone else sees the meeting's overall picture and their own row. */
+  const engagementFor = (m: (typeof past)[0]): EngagementView | null => {
+    if (!m.speakers.length) return null;
+    const e = engagementOf(m.speakers.map((x) => ({ name: x.name, talkSec: x.talkSec, words: x.words, turns: x.turns, estimated: x.estimated })), m.attendees.filter((a) => !a.includes("@")));
+    const mine = new Set(m.speakers.filter((x) => x.developerId === me.id).map((x) => x.name));
+    const rows = e.rows.map((r) => ({ ...r, self: mine.has(r.name) })).filter((r) => canLead || r.self);
+    return { totalTalkSec: e.totalTalkSec, speakers: e.speakers, balance: e.balance, dominantShare: e.dominantShare, label: toneForBalance(e.balance), durationSec: m.durationSec, rows, hiddenRows: e.rows.length - rows.length, silent: canLead ? e.silent : [], source: m.transcriptSource };
+  };
+  const view = (m: (typeof past)[0]): MeetingView => ({
+    id: m.id, title: m.title, kind: m.kind, startsAt: m.startsAt.toISOString(), transcript: m.transcript, summary: m.summary, decisions: m.decisions, meetUrl: m.meetUrl,
+    actions: m.actionItems.map((a) => ({ id: a.id, text: a.text, owner: a.owner, done: a.done, ticketKey: a.ticket?.key ?? null })),
+    rich: (m.richNotes as RichNotes | null) ?? null, engagement: engagementFor(m),
+  });
 
   return (
     <div className="space-y-6">
@@ -71,7 +87,7 @@ export default async function Meetings() {
                 <div><div className="font-medium">{m.title}</div><div className="text-xs text-mute">{fmtDay(m.startsAt)} · {fmtTime(m.startsAt)}</div></div>
                 <span className={`chip ${m.summary ? "border-neon-lime/40 text-neon-lime" : ""}`}>{m.summary ? "notes ready" : "no notes"}</span>
               </summary>
-              <div className="mt-4"><NotesTaker m={view(m)} projectId={projects[0]?.id ?? ""} canEdit hasMeet={!!m.meetUrl} aiReady={aiReady} /></div>
+              <div className="mt-4"><NotesTaker m={view(m)} projectId={projects[0]?.id ?? ""} canEdit hasMeet={!!m.meetUrl} aiReady={aiReady} people={peopleList.map((p) => p.name)} /></div>
             </details>))}
         </div>
       </div>

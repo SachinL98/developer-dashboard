@@ -1,10 +1,11 @@
 import { googleFetch } from "./google";
+import type { Segment } from "../transcript";
 
 const BASE = "https://meet.googleapis.com/v2";
 
 export const meetCodeFromUrl = (url: string | null | undefined) => url?.match(/meet\.google\.com\/([a-z]{3}-[a-z]{4}-[a-z]{3})/i)?.[1]?.toLowerCase() ?? null;
 
-export interface Entry { participant?: string; text?: string; startTime?: string }
+export interface Entry { participant?: string; text?: string; startTime?: string; endTime?: string }
 
 /** "Name: text" lines in speaking order; consecutive turns by one speaker are merged. Pure, so it is unit tested. */
 export function formatTranscript(entries: Entry[], names: Record<string, string>): string {
@@ -31,7 +32,15 @@ async function paged<T>(url: string, key: string): Promise<T[]> {
   return out;
 }
 
-export interface TranscriptResult { text: string; record: string }
+export interface TranscriptResult { text: string; record: string; segments: Segment[]; durationSec: number }
+
+/** Speaker turns with seconds from the start of the conference, from Meet's timestamped entries. Pure, so it is unit tested. */
+export function entriesToSegments(entries: Entry[], names: Record<string, string>, startedAt: string): Segment[] {
+  const t0 = new Date(startedAt).getTime();
+  const sec = (iso?: string) => (iso ? Math.max(0, (new Date(iso).getTime() - t0) / 1000) : undefined);
+  return [...entries].filter((e) => e.text?.trim()).sort((a, b) => (a.startTime ?? "").localeCompare(b.startTime ?? ""))
+    .map((e) => ({ speaker: (e.participant && names[e.participant]) || "Speaker", text: e.text!.trim(), start: sec(e.startTime), end: sec(e.endTime) }));
+}
 
 /**
  * Real Meet transcript for the meeting that used `code` around [start, end].
@@ -63,5 +72,8 @@ export async function fetchTranscript(code: string, start: Date, end: Date): Pro
       names[id] = p.signedinUser?.displayName ?? p.anonymousUser?.displayName ?? p.phoneUser?.displayName ?? "Guest";
     } catch { names[id] = "Guest"; }
   }
-  return { text: formatTranscript(entries, names), record: rec.name };
+  const segments = entriesToSegments(entries, names, rec.startTime);
+  const ends = segments.map((x) => x.end ?? x.start ?? 0);
+  const durationSec = Math.round(rec.endTime ? (new Date(rec.endTime).getTime() - new Date(rec.startTime).getTime()) / 1000 : Math.max(0, ...ends));
+  return { text: formatTranscript(entries, names), record: rec.name, segments, durationSec };
 }

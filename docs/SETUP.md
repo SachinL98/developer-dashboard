@@ -106,3 +106,13 @@ The server refuses to start in production (`src/instrumentation.ts`) unless thes
 
 ## Who connects Jira and Google
 Only admins see and can use the Jira and Google Calendar & Meet connection cards in Settings (the connect, callback and disconnect endpoints refuse everyone else). An admin connects once for the whole team: when someone without their own connection moves a ticket or creates a meeting link, the app uses the newest active admin connection. Actions in Jira and Google therefore appear under that admin's account. Connections made by other people before this change keep working until an admin replaces them.
+
+
+## AI assistant (Claude, Gemini or OpenAI)
+Every AI feature (meeting notes, developer insights, estimate review, pull request review) works with any of the three providers. Each person adds their own API key under **Settings → AI assistant**, picks which provider their buttons use, and is billed by that provider. An admin can also set `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `GEMINI_API_KEY` as a shared fallback, used when someone has no key of their own (and for automatic pull request reviews). Optional `*_MODEL` settings override the default models.
+
+## Meetings, notes and engagement
+- **Capture:** on **Meetings**, open a past meeting and use **Import from Meet** (exact speaking times; needs Google connected and a recorded Meet transcript), **Upload file** (`.txt`, `.vtt`, `.srt`), **Live capture** (browser microphone; click who is speaking so times are attributed), or paste a transcript. Google Meet itself cannot be embedded in another page, so **Open Meet** opens it in its own tab.
+- **Notes:** with an AI key the notes include a summary, key points, topics, decisions, action items, risks, open questions and per-person updates. Without one, a basic summary is used.
+- **Engagement:** speaking time per person is stored for each meeting and rolled up by meeting, sprint and month under **Analytics → Meeting engagement**, and as a slide in the sprint and month reports. Times from transcripts without timestamps are estimated from word counts and marked **~**.
+- **Privacy:** per-person talk times are visible to leads and admins. Everyone else sees team totals and their own numbers, and reports hide per-person times from them.

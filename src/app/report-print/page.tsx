@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
+import { atLeast } from "@/lib/permissions";
 import { loadReport } from "@/lib/report-data";
 import { SlideView } from "@/components/SlideView";
 import { PrintBar } from "@/components/PrintBar";
@@ -10,10 +11,10 @@ export const metadata = { title: "Report" };
 
 /** Printable report: one slide per landscape page, always in the light theme so it prints cleanly. Use the browser's Save as PDF. */
 export default async function PrintReport({ searchParams }: { searchParams: Promise<{ kind?: string; ref?: string }> }) {
-  await requireUser();
+  const me = await requireUser();
   const sp = await searchParams;
   const kind = (["week", "sprint", "month"].includes(sp.kind ?? "") ? sp.kind : "week") as ReportKind;
-  const report = await loadReport(kind, sp.ref);
+  const report = await loadReport(kind, sp.ref, new Date(), { includePeople: atLeast(me.access, "LEAD") });
   if (!report) notFound();
   return (
     <div className="force-light min-h-screen bg-bg text-ink">

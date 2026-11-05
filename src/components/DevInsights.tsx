@@ -19,11 +19,11 @@ export function DevInsights({ devId, name, stats, profile, ready, canGenerate }:
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><div className="h-section flex items-center gap-2"><Sparkles size={14} className="text-neon" /> Skills and growth insights</div>
           <p className="mt-1 text-sm text-mute">Based on finished tickets and logged time across {stats.sprintsCovered} sprint(s). Needs at least {stats.minSprints} sprints of data.</p></div>
-        {canGenerate && stats.eligible && ready && <button className="btn" disabled={pending} onClick={run}>{pending ? <><Loader2 size={14} className="animate-spin" /> Analysing…</> : profile ? "Refresh analysis" : "Analyse with Claude"}</button>}
+        {canGenerate && stats.eligible && ready && <button className="btn" disabled={pending} onClick={run}>{pending ? <><Loader2 size={14} className="animate-spin" /> Analysing…</> : profile ? "Refresh analysis" : "Analyse with AI"}</button>}
       </div>
 
       {!stats.eligible && <p className="rounded-lg border border-dashed border-line p-4 text-sm text-mute">Not enough data yet for {name.split(" ")[0]}: {stats.ticketsConsidered} finished ticket(s) with logged time across {stats.sprintsCovered} sprint(s). Insights appear once there are finished tickets from at least {stats.minSprints} sprints.</p>}
-      {stats.eligible && !ready && <p className="text-sm text-mute">Add your Claude API key in <Link href="/settings" className="text-neon">Settings</Link> to generate the written analysis. The numbers below are always available.</p>}
+      {stats.eligible && !ready && <p className="text-sm text-mute">Add an AI key (Claude, Gemini or OpenAI) in <Link href="/settings" className="text-neon">Settings</Link> to generate the written analysis. The numbers below are always available.</p>}
       {stats.eligible && !canGenerate && !profile && <p className="text-sm text-mute">Only leads and admins can generate analyses for other developers.</p>}
       {err && <p className="text-sm text-neon-red">{err}</p>}
 

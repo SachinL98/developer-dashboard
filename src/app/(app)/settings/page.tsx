@@ -12,7 +12,8 @@ import { ProfileForm } from "@/components/ProfileForm";
 import { headers } from "next/headers";
 import { CheckCircle2, CircleDashed, Link2 } from "lucide-react";
 import { GOOGLE_WORK_SCOPES } from "@/lib/auth/scopes";
-import { ClaudeKeyCard } from "@/components/ClaudeKeyCard";
+import { AiProviderCard } from "@/components/AiProviderCard";
+import { listUserProviders } from "@/lib/ai";
 import { StatusMapEditor } from "@/components/StatusMapEditor";
 import { cachedBoardInfo, jiraReady, loadStatusMap, statusFromJira } from "@/lib/integrations/jira";
 
@@ -46,7 +47,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Settings" sub={isAdmin ? "Connect Jira and Google for the team, add your Claude key, and manage your profile and password." : "Add your Claude key, and manage your profile and password."}
+      <PageHeader title="Settings" sub={isAdmin ? "Connect Jira and Google for the team, add your AI key, and manage your profile and password." : "Add your AI key, and manage your profile and password."}
         actions={atLeast(me.access, "LEAD") ? <SyncButtons what="jira" /> : undefined} />
       {isAdmin && sp.connected && <div className="rounded-lg border border-neon-lime/40 bg-neon-lime/10 px-4 py-2 text-sm text-neon-lime">{sp.connected === "jira" ? "Jira" : "Google"} connected.</div>}
       {sp.error && <div role="alert" className="rounded-lg border border-neon-red/40 bg-neon-red/10 px-4 py-2 text-sm text-neon-red">{NOTES[sp.error] ?? sp.error}</div>}
@@ -67,7 +68,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
         ))}
       </div>}
 
-      <ClaudeKeyCard connected={!!get("CLAUDE")} serverFallback={!!process.env.ANTHROPIC_API_KEY} />
+      <AiProviderCard {...(await listUserProviders(me.id))} />
 
       <div className="card-pad">
         <div className="h-section mb-3">Change password</div>

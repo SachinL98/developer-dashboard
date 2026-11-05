@@ -79,6 +79,7 @@ model Developer {
   passwordChangedAt   DateTime?
   failedLogins        Int       @default(0)
   lockedUntil         DateTime?
+  aiProvider          String? // anthropic | openai | gemini: which saved AI key this person's AI buttons use
   authSessions AuthSession[]
   connections Connection[]
   tickets     Ticket[]       @relation("Assignee")
@@ -253,8 +254,12 @@ model Meeting {
   transcript  String?
   summary     String?
   decisions   String[]    @default([])
+  richNotes   Json? // AI notes: key points, topics, risks, open questions, per-person updates
+  durationSec Int? // real length of the call, from Meet or the last timestamp in the transcript
+  transcriptSource String? // meet | upload | live | paste
   createdAt   DateTime    @default(now())
   actionItems ActionItem[]
+  speakers    MeetingSpeaker[]
 
   @@index([startsAt])
 }
@@ -352,4 +357,20 @@ model SignupRequest {
   githubLogin  String?
   passwordHash String
   createdAt    DateTime @default(now())
+}
+
+// Who spoke and for how long in a meeting: the basis of the engagement metrics.
+model MeetingSpeaker {
+  id          String   @id @default(cuid())
+  meeting     Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  meetingId   String
+  name        String
+  developerId String? // matched person, when the speaker's name matches someone in the app
+  talkSec     Int
+  words       Int
+  turns       Int
+  estimated   Boolean  @default(false) // true when the transcript had no timestamps and talk time was estimated from words
+
+  @@index([meetingId])
+  @@index([developerId])
 }

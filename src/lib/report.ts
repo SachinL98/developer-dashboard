@@ -58,6 +58,12 @@ export interface PlanRow { key: string; title: string; priority: string; points:
 export interface SprintPlan { name: string; goal: string | null; start: Date; end: Date; state: string; rows: PlanRow[]; committedHrs: number; capacityHrs: number; loadPct: number; unestimated: number; unassigned: number; leaveHrs?: number }
 export interface MonthPlan { label: string; capacityHrs: number; candidates: PlanRow[]; plannedHrs: number; plannedPts: number; backlogCount: number; carryPts: number; leaveHrs?: number }
 
+export interface ReportEngagement {
+  meetings: number; totalTalkSec: number; avgSpeakers: number; balancePct: number | null; balanceLabel: string; silentAttendees: number;
+  prevBalancePct: number | null; prevLabel: string | null;
+  people: { name: string; talkMin: number; sharePct: number; spokeInPct: number; estimated: boolean }[] | null; // null = per-person numbers are hidden from this reader
+}
+
 export interface ReportFacts {
   period: Period; now: Date; tz?: string;
   stats: PeriodStats; prev: PeriodStats | null; prevLabel: string | null;
@@ -71,6 +77,7 @@ export interface ReportFacts {
   decisions: string[]; openActions: { text: string; owner: string | null }[];
   nextSprint: SprintPlan | null; nextMonth: MonthPlan;
   leave?: { days: number; holidays: number };
+  engagement?: ReportEngagement | null;
   notes: Record<string, string>;
 }
 
@@ -159,6 +166,15 @@ export function buildSlides(f: ReportFacts): Slide[] {
 
   add({ id: "people", layout: "table", title: "Developer highlights", columns: ["Developer", "Points", "Tickets", "Hours", "Bugs fixed", "Cycle"],
     rows: f.devs.map((d) => [d.name, String(d.points), String(d.tickets), r1(d.hours) + "h", String(d.bugs), d.cycleDays != null ? r1(d.cycleDays) + "d" : "-"]) });
+
+  const en = f.engagement;
+  if (en && en.meetings > 0) {
+    const dBal = en.balancePct != null && en.prevBalancePct != null ? en.balancePct - en.prevBalancePct : null;
+    add({ id: "engagement", layout: "table", title: "Meeting engagement", columns: en.people ? ["Person", "Talk time", "Share", "Spoke in"] : ["Measure", "Value", "", ""],
+      rows: en.people ? en.people.slice(0, 10).map((x) => [x.name + (x.estimated ? " ~" : ""), `${r1(x.talkMin)} min`, `${r1(x.sharePct)}%`, `${x.spokeInPct}%`])
+        : [["Meetings analysed", String(en.meetings), "", ""], ["Average speakers", String(en.avgSpeakers), "", ""], ["Balance of talk time", `${en.balancePct ?? "n/a"}%`, en.balanceLabel, ""]],
+      caption: `${en.meetings} meeting(s) analysed, ${Math.round(en.totalTalkSec / 60)} min of talk, ${en.avgSpeakers} speakers on average. Balance ${en.balancePct ?? "n/a"}% (${en.balanceLabel})${dBal != null && en.prevLabel ? `, ${dBal === 0 ? "level with" : `${Math.abs(dBal)} points ${dBal > 0 ? "up on" : "down on"}`} ${en.prevLabel}` : ""}.${en.silentAttendees ? ` ${en.silentAttendees} invited attendee(s) did not speak.` : ""}${en.people?.some((x) => x.estimated) ? " ~ = estimated from word counts." : ""}` });
+  }
 
   add({ id: "quality", layout: "kpis", title: "Quality and flow", bullets: [
     stats.stgDeploys ? `${stats.stgFailures} of ${stats.stgDeploys} staging deploys failed (${Math.round((stats.stgFailures / stats.stgDeploys) * 100)}%).` : "No staging deploys in this period.",

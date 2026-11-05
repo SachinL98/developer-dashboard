@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { db } from "./db";
-import { aiKeyFor, askClaude, saveInsight, AiUnavailable } from "./ai";
+import { aiKeyFor, askAI, saveInsight, AiUnavailable } from "./ai";
 import { DONE_STATES } from "./workflow";
 import { sumEntries } from "./analytics";
 import { hours } from "./time";
@@ -38,7 +38,7 @@ export async function generateDevProfile(devId: string, userId: string): Promise
   const dev = await db.developer.findUniqueOrThrow({ where: { id: devId } });
   const stats = profileStats(devId, await loadDoneTickets());
   if (!stats.eligible) throw new Error(`Needs finished tickets from at least ${stats.minSprints} sprints (and 3+ tickets with logged time). ${dev.name} has ${stats.ticketsConsidered} ticket(s) across ${stats.sprintsCovered} sprint(s).`);
-  const { input, model } = await askClaude(ai, {
+  const { input, model } = await askAI(ai, {
     system: PROFILE_SYSTEM, tool: "submit_profile", description: "Submit the developer profile.", maxTokens: 1800,
     user: JSON.stringify({ developer: dev.name, role: dev.role, sprintsCovered: stats.sprintsCovered, ticketsConsidered: stats.ticketsConsidered, overall: { accuracy: stats.overallAccuracy, hrsPerPoint: stats.overallHrsPerPoint }, topics: stats.topics }),
     schema: {
@@ -94,7 +94,7 @@ export async function reviewEstimate(ticketId: string, userId: string): Promise<
   const base = suggestEstimate({ type: t.type, points: t.storyPoints, complicated: t.complicated }, history);
   const current = t.estimateHrs ?? (poker.count ? poker.median : null);
 
-  const { input, model } = await askClaude(ai, {
+  const { input, model } = await askAI(ai, {
     system: ESTIMATE_SYSTEM, tool: "submit_estimate_review", description: "Submit the estimate review.", maxTokens: 1200,
     user: JSON.stringify({
       ticket: { key: t.key, title: t.title, type: t.type, points: t.storyPoints, complicated: t.complicated, labels: t.labels, topics: topics.map(topicLabel), description: t.description.slice(0, 5000) },

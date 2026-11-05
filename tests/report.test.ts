@@ -57,3 +57,25 @@ describe("report slides", () => {
     expect(r).toMatch(/Only 50% of the committed 40/); expect(r).toMatch(/over capacity by 20h/); expect(r).toMatch(/2 card\(s\) in S2 still have no estimate/);
   });
 });
+
+describe("meeting engagement slide", () => {
+  const eng = { meetings: 4, totalTalkSec: 3600, avgSpeakers: 3.5, balancePct: 72, balanceLabel: "Somewhat uneven", silentAttendees: 2, prevBalancePct: 64, prevLabel: "last week",
+    people: [{ name: "Amaya Perera", talkMin: 30, sharePct: 50, spokeInPct: 100, estimated: false }, { name: "Nuwan Silva", talkMin: 12, sharePct: 20, spokeInPct: 75, estimated: true }] };
+  it("shows per-person talk time to readers who may see it", () => {
+    const slide = buildSlides(facts({ engagement: eng })).find((x) => x.id === "engagement")!;
+    expect(slide.layout).toBe("table");
+    const t = slide as Extract<typeof slide, { layout: "table" }>;
+    expect(t.columns).toEqual(["Person", "Talk time", "Share", "Spoke in"]);
+    expect(t.rows[0]).toEqual(["Amaya Perera", "30 min", "50%", "100%"]);
+    expect(t.rows[1][0]).toBe("Nuwan Silva ~");
+    expect(t.caption).toMatch(/up on last week/);
+  });
+  it("shows only team-level numbers when per-person data is hidden", () => {
+    const t = buildSlides(facts({ engagement: { ...eng, people: null } })).find((x) => x.id === "engagement") as any;
+    expect(t.rows.flat().join(" ")).not.toMatch(/Amaya|Nuwan/);
+    expect(t.rows[0]).toEqual(["Meetings analysed", "4", "", ""]);
+  });
+  it("is left out when no meeting has speaker data", () => {
+    expect(buildSlides(facts({ engagement: null })).some((x) => x.id === "engagement")).toBe(false);
+  });
+});

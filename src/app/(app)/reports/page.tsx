@@ -13,7 +13,7 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
   const me = await requireUser();
   const sp = await searchParams;
   const kind = (["week", "sprint", "month"].includes(sp.kind ?? "") ? sp.kind : "week") as ReportKind;
-  const [report, options] = await Promise.all([loadReport(kind, sp.ref), periodOptions()]);
+  const [report, options] = await Promise.all([loadReport(kind, sp.ref, new Date(), { includePeople: atLeast(me.access, "LEAD") }), periodOptions()]);
   const q = (k: ReportKind, ref?: string) => `kind=${k}${ref ? `&ref=${encodeURIComponent(ref)}` : ""}`;
   const here = q(kind, sp.ref);
   const meta = REPORT_KINDS.find((k) => k.kind === kind)!;

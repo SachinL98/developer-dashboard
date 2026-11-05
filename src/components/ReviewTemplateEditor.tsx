@@ -42,7 +42,7 @@ export function ReviewTemplateEditor({ initial, projects, status }: { initial: R
       <div className="card-pad space-y-4">
         <div className="h-section">How reviews run</div>
         <ul className="space-y-1.5">
-          <Status ok={status.claude} label="ANTHROPIC_API_KEY" hint={status.claude ? `Claude (${status.model}) reviews the diff` : "without it only a heuristic diff scan runs, not an AI review"} />
+          <Status ok={status.claude} label="AI key" hint={status.claude ? `${status.model} reviews the diff` : "add a Claude, Gemini or OpenAI key in Settings, otherwise only a heuristic diff scan runs"} />
           <Status ok={status.github} label="GITHUB_TOKEN" hint="needed to read the PR diff (and to comment on the PR if enabled)" />
         </ul>
         <label className="flex items-start gap-3 text-sm"><input type="checkbox" className="mt-0.5 h-5 w-5 accent-[rgb(var(--neon))]" checked={cfg.autoRun} onChange={(e) => setCfg({ ...cfg, autoRun: e.target.checked })} /><span>Run automatically when a card with a PR moves to Initial Review, and again when new commits are pushed to that PR.<span className="block text-xs text-mute">Push re-runs need the GitHub webhook (pull_request events). A failing review blocks the move to Review either way.</span></span></label>
