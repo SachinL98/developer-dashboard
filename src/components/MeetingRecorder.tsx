@@ -12,14 +12,14 @@ const pickMime = () => ["audio/webm;codecs=opus", "audio/mp4", "audio/webm", "au
  * transcription with speaker detection, and hands the finished transcript back. Nobody has to say who is speaking.
  * "Include a browser tab" also records the other participants of an online call (Chrome and Edge can share a tab's audio).
  */
-export function MeetingRecorder({ meetingId, getText, onLines, onFinished, disabled }: {
-  meetingId: string; getText: () => string; onLines: (lines: string) => void; onFinished: () => void; disabled?: boolean;
+export function MeetingRecorder({ meetingId, getText, onLines, onFinished, disabled, live }: {
+  live?: boolean; meetingId: string; getText: () => string; onLines: (lines: string) => void; onFinished: () => void; disabled?: boolean;
 }) {
   const [on, setOn] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [clips, setClips] = useState({ sent: 0, done: 0 });
   const [err, setErr] = useState<string | null>(null);
-  const [tab, setTab] = useState(false);
+  const [tab, setTab] = useState(!!live); // during an online call the other people are only heard through the shared tab
   const [info, setInfo] = useState<string | null>(null);
   const st = useRef<{ stream?: MediaStream; ctx?: AudioContext; owned: MediaStream[]; rec?: MediaRecorder; timer?: ReturnType<typeof setTimeout>; t0: number; offset: number; stopping: boolean; queue: Promise<void>; pending: number; lock?: any }>({ owned: [], t0: 0, offset: 0, stopping: false, queue: Promise.resolve(), pending: 0 });
   const canTab = typeof navigator !== "undefined" && !!navigator.mediaDevices?.getDisplayMedia;

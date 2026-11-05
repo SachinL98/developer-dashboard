@@ -30,7 +30,7 @@ export default async function Meetings() {
   const now = new Date();
   const [past, upcoming, projects] = await Promise.all([
     db.meeting.findMany({ where: { endsAt: { lt: now } }, orderBy: { startsAt: "desc" }, take: 8, include: { actionItems: { include: { ticket: true } }, speakers: true } }),
-    db.meeting.findMany({ where: { endsAt: { gte: now } }, orderBy: { startsAt: "asc" }, take: 8, include: { actionItems: { include: { ticket: true } } } }),
+    db.meeting.findMany({ where: { endsAt: { gte: now } }, orderBy: { startsAt: "asc" }, take: 8, include: { actionItems: { include: { ticket: true } }, speakers: true } }),
     db.project.findMany({ take: 1 }),
   ]);
   const openActions = await db.actionItem.count({ where: { done: false } });
@@ -76,13 +76,17 @@ export default async function Meetings() {
       <div className="grid gap-6 xl:grid-cols-2">
         <div className="space-y-3">
           <div className="h-section">Upcoming</div>
-          {upcoming.map((m) => (
-            <div key={m.id} id={m.id} className="card-pad">
-              <div className="flex items-center justify-between gap-3">
-                <div><div className="font-medium">{m.title}</div><div className="text-xs text-mute">{fmtDay(m.startsAt)} · {fmtTime(m.startsAt)}–{fmtTime(m.endsAt)} · {defs.find((d) => d.kind === m.kind)?.blurb}</div></div>
-                {m.meetUrl && <a href={m.meetUrl} target="_blank" className="btn-primary"><Video size={14} /> Join</a>}
-              </div>
-            </div>))}
+          {upcoming.map((m) => {
+            const liveNow = now.getTime() >= m.startsAt.getTime() - 15 * 60_000 && now.getTime() <= m.endsAt.getTime() + 20 * 60_000;
+            return (
+              <div key={m.id} id={m.id} className={`card-pad ${liveNow ? "border-neon/50" : ""}`}>
+                <div className="flex items-center justify-between gap-3">
+                  <div><div className="flex items-center gap-2 font-medium">{m.title}{liveNow && <span className="chip border-neon/40 text-neon">Happening now</span>}</div><div className="text-xs text-mute">{fmtDay(m.startsAt)} · {fmtTime(m.startsAt)}–{fmtTime(m.endsAt)} · {defs.find((d) => d.kind === m.kind)?.blurb}</div></div>
+                  {m.meetUrl && <a href={m.meetUrl} target="_blank" rel="noreferrer" className="btn-primary"><Video size={14} /> Join</a>}
+                </div>
+                {liveNow && <div className="mt-4"><NotesTaker m={view(m)} projectId={projects[0]?.id ?? ""} canEdit hasMeet={!!m.meetUrl} aiReady={aiReady} people={peopleList.map((p) => p.name)} everyone={peopleList.map((p) => ({ id: p.id, name: p.name }))} canLink={canLead} live /></div>}
+              </div>);
+          })}
         </div>
         <div className="space-y-3">
           <div className="h-section">Recent · notes</div>

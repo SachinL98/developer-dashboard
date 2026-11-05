@@ -21,7 +21,7 @@ export interface MeetingView {
 
 const mmss = (ms: number) => { const s = Math.floor(ms / 1000); return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; };
 
-export function NotesTaker({ m, projectId, canEdit, hasMeet, aiReady = false, people = [], everyone = [], canLink = false }: { m: MeetingView; projectId: string; canEdit: boolean; hasMeet: boolean; aiReady?: boolean; people?: string[]; everyone?: { id: string; name: string }[]; canLink?: boolean }) {
+export function NotesTaker({ m, projectId, canEdit, hasMeet, aiReady = false, people = [], everyone = [], canLink = false, live = false }: { m: MeetingView; projectId: string; canEdit: boolean; hasMeet: boolean; aiReady?: boolean; people?: string[]; everyone?: { id: string; name: string }[]; canLink?: boolean; live?: boolean }) {
   const [text, setText] = useState(m.transcript ?? "");
   const [source, setSource] = useState<"upload" | "live" | "paste">("paste");
   const [pending, start] = useTransition();
@@ -55,12 +55,22 @@ export function NotesTaker({ m, projectId, canEdit, hasMeet, aiReady = false, pe
     <div className="space-y-4">
       {canEdit && (
         <div className="space-y-2">
+          {live && (
+            <div className="rounded-lg border border-neon/30 bg-neon/5 p-3 text-sm">
+              <div className="font-medium">Recording this meeting</div>
+              <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-xs text-mute">
+                <li>Join the call with the Join button (it opens in its own tab).</li>
+                <li>Come back to this page and press <b className="text-ink">Record meeting</b>. In the sharing window choose the Meet tab and tick <b className="text-ink">Share tab audio</b>.</li>
+                <li>Keep this page open during the call. Press Stop at the end and the notes are written for you.</li>
+              </ol>
+            </div>
+          )}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <label className="label !mb-0" htmlFor={`tr-${m.id}`}>Transcript</label>
             <div className="flex flex-wrap items-center gap-2">
               {m.meetUrl && <a href={m.meetUrl} target="_blank" rel="noreferrer" className="btn px-2 py-1" title="Google Meet cannot be shown inside another page, so it opens in its own tab. Capture or import the transcript here."><Video size={13} /> Open Meet</a>}
               <label className="btn cursor-pointer px-2 py-1"><Upload size={13} /> Upload file<input type="file" accept=".txt,.vtt,.srt,.md,text/plain,text/vtt" className="sr-only" onChange={(ev) => onFile(ev.target.files?.[0])} /></label>
-              <MeetingRecorder meetingId={m.id} getText={() => textRef.current} onLines={addLines} onFinished={finished} disabled={pending} />
+              <MeetingRecorder live={live} meetingId={m.id} getText={() => textRef.current} onLines={addLines} onFinished={finished} disabled={pending} />
             </div>
           </div>
           <textarea id={`tr-${m.id}`} className="input min-h-[140px] font-mono text-[13px]" value={text} onChange={(ev) => { setText(ev.target.value); if (source !== "upload") setSource("paste"); }}
