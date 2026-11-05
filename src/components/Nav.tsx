@@ -32,13 +32,13 @@ export function Nav({ isAdmin }: { isAdmin?: boolean }) {
     <nav className="flex flex-col gap-4">
       {all.map((g, i) => (
         <div key={i} className="flex flex-col gap-0.5">
-          {g.title && <div className="px-3 pb-1 text-xs font-medium text-mute">{g.title}</div>}
+          {g.title && <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-mute/80">{g.title}</div>}
           {g.items.map(({ href, label, icon: Icon }) => {
             const active = href === "/" ? path === "/" : path.startsWith(href);
             return (
-              <Link key={href} href={href} className={clsx("flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition",
-                active ? "bg-neon/10 text-neon" : "text-mute hover:bg-panel2 hover:text-ink")}>
-                <Icon size={17} />{label}
+              <Link key={href} href={href} aria-current={active ? "page" : undefined} className={clsx("relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition",
+                active ? "bg-neon/10 text-neon before:absolute before:-left-1 before:top-2 before:bottom-2 before:w-[3px] before:rounded-full before:bg-neon" : "text-mute hover:bg-panel2 hover:text-ink")}>
+                <Icon size={17} strokeWidth={active ? 2.25 : 1.9} />{label}
               </Link>
             );
           })}

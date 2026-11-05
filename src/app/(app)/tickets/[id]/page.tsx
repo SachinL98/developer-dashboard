@@ -54,7 +54,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t.title} sub={<span className="flex flex-wrap items-center gap-3"><span className="font-mono">{t.key}</span><span style={{ color: fg(t.project.color) }}>{t.project.name}</span><TypeDot type={t.type} /><PriorityTag p={t.priority} />{t.sprint && <span>{t.sprint.name}</span>}</span>}
+      <PageHeader back={{ href: "/board", label: "Board" }} title={t.title} sub={<span className="flex flex-wrap items-center gap-3"><span className="font-mono">{t.key}</span><span style={{ color: fg(t.project.color) }}>{t.project.name}</span><TypeDot type={t.type} /><PriorityTag p={t.priority} />{t.sprint && <span>{t.sprint.name}</span>}</span>}
         actions={<>{jiraHref && <a className="btn" href={jiraHref} target="_blank" rel="noreferrer">Jira <ExternalLink size={13} /></a>}{t.prUrl && <a className="btn" href={t.prUrl} target="_blank"><GitPullRequest size={14} /> PR #{t.prNumber} <ExternalLink size={13} /></a>}</>} />
 
       <div className="card-pad overflow-x-auto">

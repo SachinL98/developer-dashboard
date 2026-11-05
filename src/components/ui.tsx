@@ -1,14 +1,17 @@
 import clsx from "clsx";
+import Link from "next/link";
+import { ChevronLeft } from "lucide-react";
 import type { ReactNode } from "react";
 import { fg, tint } from "@/lib/theme";
 import { STATUS_META, TYPE_META, PRIORITY_META, type StatusKey } from "@/lib/workflow";
 
-export function PageHeader({ title, sub, actions }: { title: string; sub?: ReactNode; actions?: ReactNode }) {
+export function PageHeader({ title, sub, actions, back }: { title: string; sub?: ReactNode; actions?: ReactNode; back?: { href: string; label: string } }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-line/70 pb-5">
       <div className="min-w-0">
-        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{title}</h1>
-        {sub && <p className="mt-1 text-sm text-mute">{sub}</p>}
+        {back && <Link href={back.href} className="mb-1.5 inline-flex items-center gap-0.5 text-xs font-medium text-mute hover:text-ink"><ChevronLeft size={14} />{back.label}</Link>}
+        <h1 className="text-xl font-semibold tracking-tight text-ink sm:text-[26px] sm:leading-8">{title}</h1>
+        {sub && <p className="mt-1 max-w-3xl text-sm text-mute">{sub}</p>}
       </div>
       <div className="flex max-w-full flex-wrap items-center gap-2">{actions}</div>
     </div>
@@ -51,7 +54,7 @@ export const PriorityTag = ({ p }: { p: string }) => {
 export function Avatar({ name, hue, size = 28 }: { name: string; hue: number; size?: number }) {
   const initials = name.split(" ").map((p) => p[0]).slice(0, 2).join("");
   return (
-    <span title={name} className="inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-[#07090f]"
+    <span title={name} className="inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-[#07090f] ring-2 ring-panel"
       style={{ width: size, height: size, fontSize: size * 0.38, background: `linear-gradient(135deg, hsl(${hue} 85% 70%), hsl(${(hue + 50) % 360} 80% 62%))` }}>{initials}</span>
   );
 }
@@ -64,4 +67,10 @@ export function Progress({ pct, color = "#2563eb", className }: { pct: number; c
   );
 }
 
-export const Empty = ({ children }: { children: ReactNode }) => <div className="rounded-lg border border-dashed border-line p-8 text-center text-sm text-mute">{children}</div>;
+export const Empty = ({ children, icon, action }: { children: ReactNode; icon?: ReactNode; action?: ReactNode }) => (
+  <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-line bg-panel2/30 p-8 text-center text-sm text-mute">
+    {icon && <span className="grid h-10 w-10 place-items-center rounded-full bg-panel2 text-mute">{icon}</span>}
+    <div className="max-w-md">{children}</div>
+    {action && <div className="mt-1">{action}</div>}
+  </div>
+);
