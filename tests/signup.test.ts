@@ -32,8 +32,13 @@ describe("submitSignup", () => {
     await expect(submitSignup({ ...good, confirm: "different-Pass-9" }, "1.1.1.3")).rejects.toThrow(/match/);
     await expect(submitSignup({ ...good, password: "short1", confirm: "short1" }, "1.1.1.3")).rejects.toThrow(/12/);
   });
+  it("lets a person who only exists from Jira (no password) register", async () => {
+    db.developer.findUnique.mockResolvedValue({ passwordHash: null });
+    expect(await submitSignup(good, "1.1.1.7")).toBe(SIGNUP_DONE);
+    expect(db.signupRequest.upsert).toHaveBeenCalledTimes(1);
+  });
   it("answers the same for an email that already has an account, and creates nothing", async () => {
-    db.developer.findUnique.mockResolvedValue({ id: "x" });
+    db.developer.findUnique.mockResolvedValue({ id: "x", passwordHash: "scrypt$h" });
     expect(await submitSignup(good, "1.1.1.4")).toBe(SIGNUP_DONE);
     expect(db.signupRequest.upsert).not.toHaveBeenCalled();
   });

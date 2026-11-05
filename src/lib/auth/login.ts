@@ -42,10 +42,13 @@ export async function createUserWithPassword(u: NewUser, password: string) {
   const email = u.email.trim().toLowerCase();
   if (!isValidEmail(email)) throw new Error("Enter a valid email address.");
   if (u.name.trim().length < 2) throw new Error("Enter the person's name.");
-  if (await db.developer.findUnique({ where: { email } })) throw new Error("A user with that email already exists.");
+  const existing = await db.developer.findUnique({ where: { email } });
+  if (existing?.passwordHash) throw new Error("A user with that email already exists.");
   const bad = passwordProblem(password, { email, name: u.name });
   if (bad) throw new Error(bad);
   const access = u.access ?? (bootstrapAdmins().includes(email) ? "ADMIN" : "DEVELOPER");
+  // Already imported from Jira (no password yet): give that person a login instead of creating a duplicate.
+  if (existing) return db.developer.update({ where: { id: existing.id }, data: { name: u.name.trim(), access, passwordHash: await hashPassword(password), mustChangePassword: true, active: true } });
   return db.developer.create({
     data: {
       email, name: u.name.trim(), access, passwordHash: await hashPassword(password), mustChangePassword: true,

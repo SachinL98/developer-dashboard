@@ -36,7 +36,9 @@ export async function submitSignup(input: SignupInput, ip: string): Promise<stri
   const bad = passwordProblem(p.password, { email: p.email, name: p.name });
   if (bad) throw new LoginError(bad);
 
-  if (await db.developer.findUnique({ where: { email: p.email }, select: { id: true } })) return SIGNUP_DONE; // already has an account: say nothing
+  // Someone who already has a working account gets the same answer and nothing happens. A person who only exists from the Jira sync (no password yet) may register.
+  const known = await db.developer.findUnique({ where: { email: p.email }, select: { passwordHash: true } });
+  if (known?.passwordHash) return SIGNUP_DONE;
   if ((await db.signupRequest.count()) >= MAX_PENDING) throw new LoginError("Too many requests are waiting. Ask an admin to review them.");
   const data = { name: p.name, jobTitle: p.jobTitle || "Developer", githubLogin: p.githubLogin || null, passwordHash: await hashPassword(p.password) };
   await db.signupRequest.upsert({ where: { email: p.email }, update: { ...data, createdAt: new Date() }, create: { email: p.email, ...data } });
@@ -45,16 +47,17 @@ export async function submitSignup(input: SignupInput, ip: string): Promise<stri
 
 export const pruneSignupRequests = () => db.signupRequest.deleteMany({ where: { createdAt: { lt: new Date(Date.now() - REQUEST_TTL_DAYS * 86_400_000) } } });
 
-/** Admin approves: the account is created with the password the person chose. */
+/** Admin approves: the account is created with the password the person chose. A person already imported from Jira is linked instead of duplicated. */
 export async function approveSignup(requestId: string, access: "DEVELOPER" | "LEAD" | "ADMIN") {
   const r = await db.signupRequest.findUnique({ where: { id: requestId } });
   if (!r) throw new Error("That request no longer exists.");
-  if (await db.developer.findUnique({ where: { email: r.email }, select: { id: true } })) { await db.signupRequest.delete({ where: { id: r.id } }); throw new Error("That person already has an account."); }
-  const github = r.githubLogin && !(await db.developer.findUnique({ where: { githubLogin: r.githubLogin }, select: { id: true } })) ? r.githubLogin : null;
-  const user = await db.developer.create({
-    data: { email: r.email, name: r.name, role: r.jobTitle, githubLogin: github, access, passwordHash: r.passwordHash, mustChangePassword: false, passwordChangedAt: new Date(),
-      capacityHrs: (await getWorkspace()).defaultCapacityHrs, avatarHue: Math.floor(Math.random() * 360) },
-  });
+  const existing = await db.developer.findUnique({ where: { email: r.email } });
+  if (existing?.passwordHash) { await db.signupRequest.delete({ where: { id: r.id } }); throw new Error("That person already has an account."); }
+  const github = r.githubLogin && !(await db.developer.findFirst({ where: { githubLogin: r.githubLogin, ...(existing ? { id: { not: existing.id } } : {}) }, select: { id: true } })) ? r.githubLogin : null;
+  const common = { name: r.name, role: r.jobTitle, githubLogin: github, access, passwordHash: r.passwordHash, mustChangePassword: false, passwordChangedAt: new Date(), active: true };
+  const user = existing
+    ? await db.developer.update({ where: { id: existing.id }, data: common }) // keeps their Jira link and every ticket already assigned to them
+    : await db.developer.create({ data: { email: r.email, ...common, capacityHrs: (await getWorkspace()).defaultCapacityHrs, avatarHue: Math.floor(Math.random() * 360) } });
   await db.signupRequest.delete({ where: { id: r.id } });
   return user;
 }

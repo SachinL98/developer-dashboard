@@ -5,6 +5,7 @@ import { atLeast } from "@/lib/permissions";
 import { PageHeader, Avatar } from "@/components/ui";
 import { UserRow } from "@/components/UserRow";
 import { AddUserForm } from "@/components/AddUserForm";
+import { isPlaceholderEmail } from "@/lib/jira-people";
 import { PendingRequests } from "@/components/PendingRequests";
 import { pruneSignupRequests } from "@/lib/auth/signup";
 import { fmtDay, fmtTime } from "@/lib/time";
@@ -19,7 +20,7 @@ export default async function Users() {
   const users = await db.developer.findMany({ orderBy: [{ active: "desc" }, { name: "asc" }], include: { connections: { select: { provider: true } } } });
   return (
     <div className="space-y-6">
-      <PageHeader title="Users & roles" sub="Add people, set their role and reset passwords." />
+      <PageHeader title="Users & roles" sub="Everyone on your Jira project appears here, even before they sign in. Add people, set roles and reset passwords." />
       <PendingRequests rows={pending.map((r) => ({ id: r.id, name: r.name, email: r.email, jobTitle: r.jobTitle, when: `${fmtDay(r.createdAt)} ${fmtTime(r.createdAt)}` }))} />
       <AddUserForm />
       <div className="card overflow-x-auto">
@@ -27,7 +28,7 @@ export default async function Users() {
           <thead className="bg-panel2 text-left text-xs text-mute"><tr><th className="p-3">User</th><th>Access</th><th>Jira</th><th>Google</th><th>Last sign-in</th><th className="pr-3 text-right">Status</th></tr></thead>
           <tbody>
             {users.map((u) => (
-              <UserRow key={u.id} self={u.id === me.id} user={{ id: u.id, name: u.name, email: u.email, access: u.access, active: u.active, hue: u.avatarHue }}
+              <UserRow key={u.id} self={u.id === me.id} user={{ id: u.id, name: u.name, email: u.email, access: u.access, active: u.active, hue: u.avatarHue, jiraOnly: !u.passwordHash, placeholder: isPlaceholderEmail(u.email) }}
                 jira={u.connections.some((c) => c.provider === "JIRA")} google={u.connections.some((c) => c.provider === "GOOGLE")}
                 last={u.lastLoginAt ? `${fmtDay(u.lastLoginAt)} ${fmtTime(u.lastLoginAt)}` : "never"} />
             ))}

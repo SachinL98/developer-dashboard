@@ -11,6 +11,7 @@ import { fetchTranscript, meetCodeFromUrl } from "./integrations/meet";
 import { occurrences } from "./schedule";
 import { reviewPassed, scanDiff, type ReviewItem } from "./review-template";
 import { getReviewConfig, templateFor } from "./review-config";
+import { ensureJiraPerson, syncJiraPeople } from "./jira-people";
 import { anthropicConfigured, passes, reviewWithClaude, type Finding } from "./claude-review";
 
 const warn = (where: string, e: unknown) => console.warn(`[${where}]`, e instanceof Error ? e.message : e);
@@ -230,7 +231,12 @@ export async function applyJiraIssue(i: jira.JiraIssue, c?: Awaited<ReturnType<t
   let project = ctx.projects.find((p) => p.key === prefix);
   if (!project) { project = await ensureProject(prefix); ctx.projects.push(project); }
   const status = jira.statusFromJira(i.status, ctx.map, i.statusCategory) ?? "BACKLOG";
-  const dev = ctx.devs.find((d) => (i.assigneeEmail && d.email === i.assigneeEmail) || (i.assigneeId && d.jiraAccount === i.assigneeId));
+  let dev = ctx.devs.find((d) => (i.assigneeId && d.jiraAccount === i.assigneeId) || (i.assigneeEmail && d.email === i.assigneeEmail.toLowerCase()));
+  if (!dev && i.assigneeId) {
+    // Assigned to someone we have not seen yet (for example a webhook for a new teammate): add them as a person.
+    const created = await ensureJiraPerson({ accountId: i.assigneeId, name: i.assigneeName ?? "", email: i.assigneeEmail });
+    if (created) { dev = created; ctx.devs.push(created); }
+  }
   const sprint = i.sprintId ? await db.sprint.findFirst({ where: { jiraId: i.sprintId } }) : null;
   const existing = await db.ticket.findUnique({ where: { key: i.key } });
   const points = i.points != null ? Math.round(i.points) : existing?.storyPoints ?? null;
@@ -261,12 +267,18 @@ export async function applyJiraIssue(i: jira.JiraIssue, c?: Awaited<ReturnType<t
 export async function syncJira(opts: { sinceMinutes?: number } = {}) {
   const project = (await getWorkspace()).jira.projectKey;
   const issues = await jira.searchIssues(opts.sinceMinutes ? `project = ${project} AND updated >= -${Math.max(1, Math.ceil(opts.sinceMinutes))}m ORDER BY Rank ASC` : undefined);
+  // A full sync also brings in the project's whole team, so people show up before they ever sign in.
+  let people = { added: 0, existing: 0 };
+  if (!opts.sinceMinutes && project) {
+    try { people = await syncJiraPeople((await jira.projectUsers(project)).map((u) => ({ accountId: u.accountId, name: u.displayName, email: u.email, active: u.active }))); }
+    catch (e) { warn("jira.users", e); }
+  }
   const ctx = await syncContext();
   let created = 0, updated = 0;
   for (const i of issues) (await applyJiraIssue(i, ctx)) === "created" ? created++ : updated++;
   if (!opts.sinceMinutes) await syncBoard().catch((e) => warn("jira.board", e));
   await setSetting("jira.lastSync", new Date().toISOString());
-  return { created, updated, total: issues.length };
+  return { created, updated, total: issues.length, people };
 }
 
 /** Refresh the cached real board (columns and estimation unit) from Jira. */

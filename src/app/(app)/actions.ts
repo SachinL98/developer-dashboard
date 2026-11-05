@@ -307,7 +307,7 @@ export async function createRecurringMeetEventsAction(): Promise<Result<{ create
 
 // ----- integrations -----
 export async function syncJiraAction(): Promise<Result<{ summary: string }>> {
-  try { await requireAccess("LEAD"); const s = await svc.syncSprintsFromJira(); const r = await svc.syncJira(); touch(); return { ok: true, summary: `${s} sprints, ${r.total} issues (${r.created} new, ${r.updated} updated)` }; } catch (e) { return fail(e); }
+  try { await requireAccess("LEAD"); const s = await svc.syncSprintsFromJira(); const r = await svc.syncJira(); touch(); return { ok: true, summary: `${s} sprints, ${r.total} issues (${r.created} new, ${r.updated} updated), ${r.people.added} people added from Jira (${r.people.existing} already known)` }; } catch (e) { return fail(e); }
 }
 export async function syncGithubAction(): Promise<Result<{ summary: string }>> {
   try { await requireAccess("LEAD"); const r = await svc.syncGithub(); touch(); return { ok: true, summary: `${r.linked} pull requests linked to tickets` }; } catch (e) { return fail(e); }
@@ -660,6 +660,20 @@ export async function rejectSignupAction(requestId: string): Promise<Result> {
     await requireAccess("ADMIN");
     await db.signupRequest.deleteMany({ where: { id: id.parse(requestId) } });
     revalidatePath("/admin/users"); revalidatePath("/", "layout");
+    return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
+/** Admin: set the real email of a person imported from Jira whose address Jira hides, so they can later sign up and be linked. */
+export async function setPersonEmailAction(userId: string, email: string): Promise<Result> {
+  try {
+    await requireAccess("ADMIN");
+    const e = z.string().trim().toLowerCase().email().max(120).parse(email);
+    const u = await db.developer.findUniqueOrThrow({ where: { id: id.parse(userId) } });
+    if (u.passwordHash) return { ok: false, error: "This person already has an account." };
+    if (await db.developer.findUnique({ where: { email: e } })) return { ok: false, error: "That email already belongs to someone else." };
+    await db.developer.update({ where: { id: u.id }, data: { email: e } });
+    revalidatePath("/admin/users");
     return { ok: true };
   } catch (e) { return fail(e); }
 }
