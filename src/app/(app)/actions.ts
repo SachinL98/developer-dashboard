@@ -33,6 +33,7 @@ import { validDiscordId } from "@/lib/notify/discord";
 import { generateDevProfile, reviewEstimate, type EstimateReview } from "@/lib/insights";
 import { generateQualityInsight } from "@/lib/quality";
 import { audit } from "@/lib/audit";
+import { canEditMeeting, resolveOwner } from "@/lib/meeting-access";
 import { notifyInbox } from "@/lib/inbox";
 
 type Result<T = {}> = ({ ok: true } & T) | { ok: false; error: string };
@@ -258,10 +259,37 @@ export async function closeSprintAction(sprintId: string): Promise<Result<{ carr
 }
 
 // ----- meetings & notes -----
+/** Only people who attended a meeting (and leads and admins) may change its notes. */
+async function assertMeetingEditor(u: { access: "DEVELOPER" | "LEAD" | "ADMIN"; email: string; name: string }, meetingId: string) {
+  const m = await db.meeting.findUnique({ where: { id: meetingId }, select: { attendees: true } });
+  if (!m) throw new Error("Meeting not found.");
+  if (!canEditMeeting(u, m.attendees)) throw new Error("Only people who attended this meeting, and leads and admins, can change its notes.");
+}
+
+/** Turn every open action item of a meeting into a backlog ticket (not pushed to Jira), owner matched to a person when it is clear. Leads and admins. */
+export async function actionsToTicketsAction(meetingId: string, projectId: string): Promise<Result<{ created: number; assigned: number }>> {
+  try {
+    await requireAccess("LEAD");
+    const items = await db.actionItem.findMany({ where: { meetingId: id.parse(meetingId), done: false, ticketId: null } });
+    if (!items.length) throw new Error("No open action items without a ticket.");
+    const people = await db.developer.findMany({ where: { active: true }, select: { id: true, name: true, email: true } });
+    const m = await db.meeting.findUniqueOrThrow({ where: { id: meetingId }, select: { title: true } });
+    let assigned = 0;
+    for (const a of items) {
+      const owner = resolveOwner(a.owner, people);
+      const { ticket } = await svc.createTicket({ projectId: id.parse(projectId), title: a.text.slice(0, 120), description: `Draft from the meeting "${m.title}".\nOwner mentioned: ${a.owner ?? "nobody"}`, type: "TASK", priority: "MEDIUM", labels: ["from-meeting"], assigneeId: owner, pushToJira: false });
+      await db.actionItem.update({ where: { id: a.id }, data: { ticketId: ticket.id } });
+      if (owner) assigned++;
+    }
+    touch(); revalidatePath("/meetings"); return { ok: true, created: items.length, assigned };
+  } catch (e) { return fail(e); }
+}
+
 export async function saveNotesAction(meetingId: string, transcript: string, source: "upload" | "live" | "paste" = "paste"): Promise<Result<{ actions: number; ai: boolean; aiError?: string }>> {
   try {
     const u = await me();
     await rateLimitShared(`ai:${u.id}`, 30, 3_600_000);
+    await assertMeetingEditor(u, id.parse(meetingId));
     const parsed = await svc.generateNotes(id.parse(meetingId), z.string().min(1).max(400_000).parse(transcript), u.id, { source: z.enum(["upload", "live", "paste"]).parse(source) });
     revalidatePath("/meetings"); return { ok: true, actions: parsed.actionItems.length, ai: parsed.ai, aiError: parsed.aiError };
   } catch (e) { return fail(e); }
@@ -272,18 +300,20 @@ export async function importTranscriptAction(meetingId: string): Promise<Result<
   try {
     const u = await me();
     await rateLimitShared(`ai:${u.id}`, 30, 3_600_000);
+    await assertMeetingEditor(u, id.parse(meetingId));
     const r = await svc.importMeetTranscript(id.parse(meetingId), u.id);
     if (!r) return { ok: false, error: "No transcript yet. Meet publishes it a few minutes after the call, and only if Transcript was turned on in the meeting." };
     revalidatePath("/meetings"); return { ok: true, actions: r.parsed.actionItems.length, chars: r.chars, ai: r.parsed.ai, aiError: r.parsed.aiError };
   } catch (e) { return fail(e); }
 }
 
-export async function toggleActionAction(actionId: string, done: boolean): Promise<Result> { try { await me(); await db.actionItem.update({ where: { id: id.parse(actionId) }, data: { done } }); revalidatePath("/meetings"); return { ok: true }; } catch (e) { return fail(e); } }
+export async function toggleActionAction(actionId: string, done: boolean): Promise<Result> { try { const u = await me(); const ai = await db.actionItem.findUniqueOrThrow({ where: { id: id.parse(actionId) }, select: { meetingId: true } }); await assertMeetingEditor(u, ai.meetingId); await db.actionItem.update({ where: { id: id.parse(actionId) }, data: { done } }); revalidatePath("/meetings"); return { ok: true }; } catch (e) { return fail(e); } }
 
 export async function actionToTicketAction(actionId: string, projectId: string): Promise<Result<{ key: string }>> {
   try {
-    await me();
+    const u = await me();
     const a = await db.actionItem.findUniqueOrThrow({ where: { id: id.parse(actionId) } });
+    await assertMeetingEditor(u, a.meetingId);
     const { ticket } = await svc.createTicket({ projectId: id.parse(projectId), title: a.text.slice(0, 120), description: `Created from meeting action item.\nOwner: ${a.owner ?? "unassigned"}`, type: "TASK", priority: "MEDIUM" });
     await db.actionItem.update({ where: { id: actionId }, data: { ticketId: ticket.id } });
     touch(); return { ok: true, key: ticket.key };

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Sun, LayoutDashboard, KanbanSquare, Rocket, Timer, Calculator, Video, BarChart3, FileText, CalendarDays, Settings, Users, ShieldCheck, Shield } from "lucide-react";
+import { ScrollText, Sun, LayoutDashboard, KanbanSquare, Rocket, Timer, Calculator, Video, BarChart3, FileText, CalendarDays, Settings, Users, ShieldCheck, Shield } from "lucide-react";
 import clsx from "clsx";
 
 const groups = [
@@ -16,6 +16,7 @@ const groups = [
     { href: "/team", label: "People", icon: Users },
     { href: "/leave", label: "Leave", icon: CalendarDays },
     { href: "/meetings", label: "Meetings", icon: Video },
+    { href: "/decisions", label: "Decisions", icon: ScrollText },
   ] },
   { title: "Insights", items: [
     { href: "/analytics", label: "Analytics", icon: BarChart3 },

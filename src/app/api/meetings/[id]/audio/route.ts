@@ -4,6 +4,7 @@ import { currentUser } from "@/lib/auth/session";
 import { aiKeyFor } from "@/lib/ai";
 import { AudioUnsupported, mergeStreams, nameSpeakers, segmentsToText, transcribeAudio } from "@/lib/stt";
 import { rateLimitShared, RateLimited } from "@/lib/rate-limit";
+import { canEditMeeting } from "@/lib/meeting-access";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -19,6 +20,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const { id } = await ctx.params;
   const meeting = await db.meeting.findUnique({ where: { id }, select: { id: true, attendees: true } });
   if (!meeting) return NextResponse.json({ ok: false, error: "Meeting not found." }, { status: 404 });
+  if (!canEditMeeting(user, meeting.attendees)) return NextResponse.json({ ok: false, error: "Only people who attended this meeting can record it." }, { status: 403 });
 
   let form: FormData;
   try { form = await req.formData(); } catch { return NextResponse.json({ ok: false, error: "Could not read the recording." }, { status: 400 }); }

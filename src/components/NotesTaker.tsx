@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { Wand2, ListTodo, Check, Download, Upload, Video } from "lucide-react";
 import { MeetingRecorder } from "@/components/MeetingRecorder";
 import clsx from "clsx";
-import { actionToTicketAction, importTranscriptAction, linkSpeakerAction, saveNotesAction, toggleActionAction } from "@/app/(app)/actions";
+import { actionsToTicketsAction, actionToTicketAction, importTranscriptAction, linkSpeakerAction, saveNotesAction, toggleActionAction } from "@/app/(app)/actions";
 import { fmtTalk } from "@/lib/transcript";
 import type { RichNotes } from "@/lib/notes";
 
@@ -90,7 +90,7 @@ export function NotesTaker({ m, projectId, canEdit, hasMeet, aiReady = false, pe
           <Block title="Key points" items={rich?.keyPoints ?? []} />
           {rich && rich.topics.length > 0 && <div><div className="h-section mb-1 mt-4">What was discussed</div><ol className="space-y-1.5 text-sm">{rich.topics.map((t, i) => <li key={i}><span className="font-medium">{t.title}.</span> <span className="text-mute">{t.summary}</span></li>)}</ol></div>}
           <Block title="Decisions" items={m.decisions} />
-          {m.actions.length > 0 && <><div className="h-section mb-2 mt-4">Action items</div>
+          {m.actions.length > 0 && <><div className="mb-2 mt-4 flex items-center justify-between gap-2"><div className="h-section">Action items</div>{canLink && m.actions.some((a) => !a.done && !a.ticketKey) && <button className="btn h-7 px-2 text-xs" disabled={pending} title="Creates backlog tickets (not sent to Jira) with the owner filled in when it is clear" onClick={() => start(async () => { const r = await actionsToTicketsAction(m.id, projectId); setMsg(r.ok ? `Created ${r.created} draft ticket(s), ${r.assigned} with an owner` : r.error); router.refresh(); })}>Create tickets for all</button>}</div>
             <ul className="space-y-1.5">{m.actions.map((a) => (
               <li key={a.id} className="flex items-center gap-2 text-sm">
                 <button aria-label={a.done ? "Mark as not done" : "Mark as done"} onClick={() => start(async () => { await toggleActionAction(a.id, !a.done); router.refresh(); })} className={clsx("grid h-5 w-5 shrink-0 place-items-center rounded border", a.done ? "border-neon-lime bg-neon-lime/20 text-neon-lime" : "border-line")}>{a.done && <Check size={12} />}</button>

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 
 const GO: Record<string, [string, string]> = {
   d: ["/my-day", "My day"], o: ["/", "Team overview"], b: ["/board", "Board"], s: ["/sprints", "Sprints"], e: ["/estimation", "Estimates"], t: ["/time", "Time"],
-  p: ["/team", "People"], l: ["/leave", "Leave"], m: ["/meetings", "Meetings"], a: ["/analytics", "Analytics"], q: ["/quality", "Quality"], r: ["/reports", "Reports"],
+  p: ["/team", "People"], x: ["/decisions", "Decisions"], l: ["/leave", "Leave"], m: ["/meetings", "Meetings"], a: ["/analytics", "Analytics"], q: ["/quality", "Quality"], r: ["/reports", "Reports"],
 };
 
 /** Keyboard shortcuts: "g" then a letter to go somewhere, "n" for a new ticket, "?" for this list. Ignored while typing in a field. */
