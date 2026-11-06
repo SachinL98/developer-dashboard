@@ -54,28 +54,63 @@ export async function syncJiraPeople(people: JiraPerson[]) {
 }
 
 /**
- * Fold a person imported from Jira into their real account: their tickets, time, votes, leave and speaking history move across,
- * the account gets the Jira link, and the duplicate disappears.
+ * Fold a duplicate person into the one to keep: their tickets, time, votes, leave, notifications, photo, connections and
+ * speaking history move across, any Jira/GitHub/Google/Discord link the kept one lacks is carried over, and the duplicate is removed.
+ * The record the HR app owns always survives: it carries the email people sign in with.
  */
 export async function mergePeople(fromId: string, intoId: string) {
   if (fromId === intoId) throw new Error("Pick two different people.");
   const [from, into] = await Promise.all([db.developer.findUniqueOrThrow({ where: { id: fromId } }), db.developer.findUniqueOrThrow({ where: { id: intoId } })]);
-  if (from.passwordHash) throw new Error("Only a person imported from Jira (who has never signed up) can be merged into an account.");
-  if (!into.passwordHash) throw new Error("Merge into a person who has an account.");
-  await db.$transaction([
-    db.estimateVote.deleteMany({ where: { developerId: from.id, ticketId: { in: (await db.estimateVote.findMany({ where: { developerId: into.id }, select: { ticketId: true } })).map((v) => v.ticketId) } } }),
-    db.estimateVote.updateMany({ where: { developerId: from.id }, data: { developerId: into.id } }),
-    db.ticket.updateMany({ where: { assigneeId: from.id }, data: { assigneeId: into.id } }),
-    db.transition.updateMany({ where: { byId: from.id }, data: { byId: into.id } }),
-    db.workSession.updateMany({ where: { developerId: from.id }, data: { developerId: into.id } }),
-    db.timeEntry.updateMany({ where: { developerId: from.id }, data: { developerId: into.id } }),
-    db.leave.updateMany({ where: { developerId: from.id }, data: { developerId: into.id } }),
-    db.meetingSpeaker.updateMany({ where: { developerId: from.id }, data: { developerId: into.id } }),
-    db.speakerAlias.updateMany({ where: { developerId: from.id }, data: { developerId: into.id } }),
-    db.developer.delete({ where: { id: from.id } }),
-    db.developer.update({ where: { id: into.id }, data: { jiraAccount: into.jiraAccount ?? from.jiraAccount } }),
-  ]);
+  if (from.hrManaged) throw new Error(into.hrManaged ? "Both are people in the HR app, so they are different people." : `"${from.name}" is owned by the HR app. Merge the other entry into it instead.`);
+
+  await db.$transaction(async (tx) => {
+    const voted = (await tx.estimateVote.findMany({ where: { developerId: into.id }, select: { ticketId: true } })).map((v) => v.ticketId);
+    await tx.estimateVote.deleteMany({ where: { developerId: from.id, ticketId: { in: voted } } });
+    await tx.estimateVote.updateMany({ where: { developerId: from.id }, data: { developerId: into.id } });
+    await tx.ticket.updateMany({ where: { assigneeId: from.id }, data: { assigneeId: into.id } });
+    await tx.transition.updateMany({ where: { byId: from.id }, data: { byId: into.id } });
+    await tx.workSession.updateMany({ where: { developerId: from.id }, data: { developerId: into.id } });
+    await tx.timeEntry.updateMany({ where: { developerId: from.id }, data: { developerId: into.id } });
+    await tx.leave.updateMany({ where: { developerId: from.id }, data: { developerId: into.id } });
+    await tx.leave.updateMany({ where: { decidedById: from.id }, data: { decidedById: into.id } });
+    await tx.meetingSpeaker.updateMany({ where: { developerId: from.id }, data: { developerId: into.id } });
+    await tx.speakerAlias.updateMany({ where: { developerId: from.id }, data: { developerId: into.id } });
+    await tx.notification.updateMany({ where: { userId: from.id }, data: { userId: into.id } });
+    await tx.notificationLog.deleteMany({ where: { userId: from.id } }); // one-per-day markers: the kept person's own are enough
+    await tx.auditLog.updateMany({ where: { actorId: from.id }, data: { actorId: into.id } });
+    await tx.aiInsight.updateMany({ where: { createdById: from.id }, data: { createdById: into.id } });
+    await tx.bugOrigin.updateMany({ where: { confirmedById: from.id }, data: { confirmedById: into.id } });
+    // Connections (Jira, Google, ...): keep the kept person's, hand over the providers they do not have.
+    const have = new Set((await tx.connection.findMany({ where: { userId: into.id }, select: { provider: true } })).map((c) => c.provider));
+    for (const c of await tx.connection.findMany({ where: { userId: from.id } })) if (!have.has(c.provider)) await tx.connection.update({ where: { id: c.id }, data: { userId: into.id } });
+    // Photo: keep the kept person's; otherwise take the duplicate's.
+    const photo = await tx.avatarImage.findUnique({ where: { developerId: into.id } });
+    const theirs = await tx.avatarImage.findUnique({ where: { developerId: from.id } });
+    const takePhoto = !photo && !!theirs;
+    if (takePhoto) await tx.avatarImage.update({ where: { developerId: from.id }, data: { developerId: into.id } });
+    // Unique links must be freed on the duplicate before the kept person takes them, so delete it first.
+    await tx.developer.delete({ where: { id: from.id } });
+    await tx.developer.update({
+      where: { id: into.id },
+      data: {
+        jiraAccount: into.jiraAccount ?? from.jiraAccount, githubLogin: into.githubLogin ?? from.githubLogin, googleSub: into.googleSub ?? from.googleSub,
+        discordId: into.discordId ?? from.discordId, picture: into.picture ?? from.picture, ...(takePhoto ? { avatarVer: { increment: 1 } } : {}),
+      },
+    });
+  });
   return { tickets: await db.ticket.count({ where: { assigneeId: into.id } }) };
+}
+
+/**
+ * Which of two records of the same person is kept. The HR-owned one always is; two HR people are different people.
+ * With neither owned by HR, a Jira-only entry (no password) folds into the real account, and two real accounts are left for an admin.
+ */
+export function planMerge(account: Person, jiraLinked: Person): { from: Person; into: Person } | null {
+  if (account.hrManaged && jiraLinked.hrManaged) return null;
+  if (jiraLinked.hrManaged) return { from: account, into: jiraLinked };
+  if (account.hrManaged) return { from: jiraLinked, into: account };
+  if (!jiraLinked.passwordHash) return { from: jiraLinked, into: account };
+  return null;
 }
 
 type Person = Awaited<ReturnType<typeof db.developer.findMany>>[number];
@@ -96,29 +131,32 @@ export function pickJiraTwin(account: Person, jiraOnly: Person[], accounts: Pers
   return null;
 }
 
-/** Fold every Jira-imported person into their real account when it is clear they are the same person. */
+/** Fold every duplicate of the same person (a Jira-linked entry and a plain account) together when it is clear and unambiguous. */
 export async function reconcileJiraPeople() {
-  const all = await db.developer.findMany();
-  let jiraOnly = all.filter((d) => !d.passwordHash && d.jiraAccount);
-  const accounts = all.filter((d) => d.passwordHash && !d.jiraAccount);
+  let all = await db.developer.findMany();
   let merged = 0;
-  for (const acct of accounts) {
-    const twin = pickJiraTwin(acct, jiraOnly, accounts);
-    if (!twin) continue;
-    await mergePeople(twin.id, acct.id);
-    jiraOnly = jiraOnly.filter((j) => j.id !== twin.id);
+  for (const acct of all.filter((d) => d.passwordHash && !d.jiraAccount)) {
+    if (!all.some((d) => d.id === acct.id)) continue; // already folded into something earlier in this pass
+    const linked = all.filter((d) => d.jiraAccount && d.id !== acct.id);
+    const plain = all.filter((d) => d.passwordHash && !d.jiraAccount);
+    const twin = pickJiraTwin(acct, linked, plain);
+    const plan = twin ? planMerge(acct, twin) : null;
+    if (!plan) continue;
+    await mergePeople(plan.from.id, plan.into.id);
     merged++;
+    all = await db.developer.findMany();
   }
   return { merged };
 }
 
-/** Called when someone signs in: if they are not linked to Jira yet, try to find their Jira person. Never throws. */
+/** Called when someone signs in: if they are not linked to Jira yet, try to find their Jira entry. Never throws. */
 export async function linkToJiraOnSignIn(userId: string) {
   try {
-    const me = await db.developer.findUnique({ where: { id: userId } });
-    if (!me || me.jiraAccount || !me.passwordHash) return;
     const all = await db.developer.findMany();
-    const twin = pickJiraTwin(me, all.filter((d) => !d.passwordHash && d.jiraAccount), all.filter((d) => d.passwordHash && !d.jiraAccount));
-    if (twin) await mergePeople(twin.id, me.id);
+    const me = all.find((d) => d.id === userId);
+    if (!me || me.jiraAccount || !me.passwordHash) return;
+    const twin = pickJiraTwin(me, all.filter((d) => d.jiraAccount && d.id !== me.id), all.filter((d) => d.passwordHash && !d.jiraAccount));
+    const plan = twin ? planMerge(me, twin) : null;
+    if (plan) await mergePeople(plan.from.id, plan.into.id);
   } catch { /* matching is a convenience; signing in must never fail because of it */ }
 }

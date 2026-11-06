@@ -5,7 +5,10 @@ const db = vi.hoisted(() => {
   return {
   developer: { findFirst: vi.fn(), findUnique: vi.fn(), findUniqueOrThrow: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), count: vi.fn() },
   estimateVote: m(), ticket: m(), transition: m(), workSession: m(), timeEntry: m(), leave: m(), meetingSpeaker: m(), speakerAlias: m(),
-  $transaction: vi.fn(async (ops: unknown[]) => ops),
+  notification: m(), notificationLog: m(), auditLog: m(), aiInsight: m(), bugOrigin: m(),
+  connection: { findMany: vi.fn().mockResolvedValue([]), update: vi.fn() },
+  avatarImage: { findUnique: vi.fn().mockResolvedValue(null), update: vi.fn() },
+  $transaction: vi.fn(async (arg: unknown) => (typeof arg === "function" ? (arg as (t: unknown) => unknown)(db) : arg)),
   };
 });
 vi.mock("../src/lib/db", () => ({ db }));
@@ -86,13 +89,22 @@ describe("same person under two entries", () => {
     expect(db.timeEntry.updateMany).toHaveBeenCalledWith({ where: { developerId: "dup" }, data: { developerId: "me" } });
     expect(db.meetingSpeaker.updateMany).toHaveBeenCalledWith({ where: { developerId: "dup" }, data: { developerId: "me" } });
     expect(db.developer.delete).toHaveBeenCalledWith({ where: { id: "dup" } });
-    expect(db.developer.update).toHaveBeenCalledWith({ where: { id: "me" }, data: { jiraAccount: "acc-dup" } });
+    expect(db.developer.update).toHaveBeenCalledWith({ where: { id: "me" }, data: expect.objectContaining({ jiraAccount: "acc-dup" }) });
     expect(r.tickets).toBe(38);
   });
-  it("refuses to merge a real account away, or into someone without an account", async () => {
-    db.developer.findUniqueOrThrow.mockImplementation(async (a: any) => (a.where.id === "x" ? real("x", "A") : fromJira("y", "B")));
-    await expect(mergePeople("x", "y")).rejects.toThrow();
+  it("never merges away a person the HR app owns, or two HR people, or a person into themself", async () => {
+    db.developer.findUniqueOrThrow.mockImplementation(async (a: any) => (a.where.id === "x" ? real("x", "A", { hrManaged: true }) : real("y", "B", { hrManaged: a.where.id === "z" })));
+    await expect(mergePeople("x", "y")).rejects.toThrow(/owned by the HR app/);
+    db.developer.findUniqueOrThrow.mockImplementation(async (a: any) => real(a.where.id, "N", { hrManaged: true }));
+    await expect(mergePeople("x", "y")).rejects.toThrow(/different people/);
     await expect(mergePeople("y", "y")).rejects.toThrow(/different/);
+  });
+  it("can merge one ordinary account into another, carrying over links the kept one lacks", async () => {
+    db.developer.findUniqueOrThrow.mockImplementation(async (a: any) => (a.where.id === "dup" ? real("dup", "ishara", { githubLogin: "ish", jiraAccount: null }) : real("keep", "Ishara Sandaruwan", { jiraAccount: "acc-k", hrManaged: true })));
+    db.ticket.count.mockResolvedValue(3);
+    await mergePeople("dup", "keep");
+    expect(db.developer.delete).toHaveBeenCalledWith({ where: { id: "dup" } });
+    expect(db.developer.update).toHaveBeenCalledWith({ where: { id: "keep" }, data: expect.objectContaining({ jiraAccount: "acc-k", githubLogin: "ish" }) });
   });
   it("reconcile merges only unambiguous same-name pairs", async () => {
     db.developer.findMany.mockResolvedValue([fromJira("j1", "Sachin Lakshan"), real("me", "Sachin Lakshan"), fromJira("j2", "Nuwan Silva"), real("n1", "Nuwan Silva"), real("n2", "Nuwan Silva")]);

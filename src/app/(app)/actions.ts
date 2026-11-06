@@ -889,6 +889,7 @@ export async function linkSpeakerAction(speakerName: string, developerId: string
 export async function mergePersonAction(fromId: string, intoId: string): Promise<Result<{ tickets: number }>> {
   try {
     const adminUser = await requireAccess("ADMIN");
+    if (id.parse(fromId) === adminUser.id) throw new Error("That is your own entry. Sign in as the one you want to keep, or merge the other entry into this one.");
     const r = await mergePeople(id.parse(fromId), id.parse(intoId));
     revalidatePath("/admin/users"); revalidatePath("/team"); touch();
     await audit(adminUser, "mergePerson", fromId);
@@ -935,5 +936,17 @@ export async function saveNotifyPrefsAction(input: { notifyEmail: boolean; notif
     if (v.discordId && !validDiscordId(v.discordId)) return { ok: false, error: "A Discord user id is 17 to 20 digits. In Discord turn on Developer Mode (Settings, Advanced), then right-click your name and choose Copy User ID." };
     await db.developer.update({ where: { id: u.id }, data: { notifyEmail: v.notifyEmail, notifyDiscord: v.notifyDiscord, discordId: v.discordId || null } });
     revalidatePath("/settings"); return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
+/** Find people who exist twice (for example a Jira entry and a sign-up for the same person) and merge the clear cases. */
+export async function reconcilePeopleAction(): Promise<Result<{ merged: number }>> {
+  try {
+    const adminUser = await requireAccess("ADMIN");
+    const { reconcileJiraPeople } = await import("@/lib/jira-people");
+    const r = await reconcileJiraPeople();
+    if (r.merged) await audit(adminUser, "reconcilePeople", String(r.merged));
+    revalidatePath("/admin/users"); revalidatePath("/team"); touch();
+    return { ok: true, merged: r.merged };
   } catch (e) { return fail(e); }
 }
