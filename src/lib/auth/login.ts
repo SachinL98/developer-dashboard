@@ -1,3 +1,4 @@
+import { linkToJiraOnSignIn } from "../jira-people";
 import { db } from "../db";
 import { LoginError } from "./identity";
 import { afterFailure, burnPasswordCheck, hashPassword, isLocked, passwordProblem, verifyPassword } from "./password";
@@ -32,7 +33,9 @@ export async function verifyLogin(emailRaw: string, password: string, ip: string
     throw new LoginError(GENERIC);
   }
   if (!user.active) throw new LoginError("Your account has been deactivated. Ask an admin.");
-  return db.developer.update({ where: { id: user.id }, data: { failedLogins: 0, lockedUntil: null, lastLoginAt: new Date() } });
+  const signedIn = await db.developer.update({ where: { id: user.id }, data: { failedLogins: 0, lockedUntil: null, lastLoginAt: new Date() } });
+  await linkToJiraOnSignIn(user.id); // a Jira person who is clearly this account gets folded in, so there are never two of them
+  return signedIn;
 }
 
 export interface NewUser { name: string; email: string; access?: "DEVELOPER" | "LEAD" | "ADMIN" }

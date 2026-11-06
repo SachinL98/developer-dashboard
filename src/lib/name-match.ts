@@ -24,3 +24,16 @@ export function uniqueMatch<T extends { name: string }>(name: string, candidates
   const hits = candidates.filter((c) => sameName(name, c.name));
   return hits.length === 1 ? hits[0] : null;
 }
+
+/**
+ * A one-word account name ("ishara") that is the first name of a longer Jira name ("Ishara Sandaruwan").
+ * Weaker than sameName, so callers only use it when nothing stronger matched and exactly one person fits on both sides.
+ */
+export function firstNameOnly(accountName: string, jiraName: string): boolean {
+  const a = tokens(accountName), j = tokens(jiraName);
+  return a.length === 1 && j.length >= 2 && a[0].length >= 3 && j[0] === a[0];
+}
+
+export type NameMatch = "full" | "first";
+/** How strongly two people's names match, or null. */
+export const matchKind = (accountName: string, jiraName: string): NameMatch | null => (sameName(accountName, jiraName) ? "full" : firstNameOnly(accountName, jiraName) ? "first" : null);

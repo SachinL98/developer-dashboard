@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { getWorkspace } from "./config";
-import { uniqueMatch } from "./name-match";
+import { matchKind, uniqueMatch } from "./name-match";
 
 export interface JiraPerson { accountId: string; name: string; email?: string; active?: boolean }
 
@@ -78,15 +78,47 @@ export async function mergePeople(fromId: string, intoId: string) {
   return { tickets: await db.ticket.count({ where: { assigneeId: into.id } }) };
 }
 
-/** Merge every Jira-imported person who clearly is an existing account: the same person by name (see name-match.ts), and exactly one account matching. */
+type Person = Awaited<ReturnType<typeof db.developer.findMany>>[number];
+
+/**
+ * The Jira-imported person this account should be folded into, or null. Never guesses: the account must have exactly one
+ * candidate at the strongest level that matches, and that candidate must not fit any other account at that level.
+ * Full-name matches win; a first-name-only account ("ishara") matches only when no full-name match exists.
+ */
+export function pickJiraTwin(account: Person, jiraOnly: Person[], accounts: Person[]): Person | null {
+  for (const kind of ["full", "first"] as const) {
+    const hits = jiraOnly.filter((j) => matchKind(account.name, j.name) === kind);
+    if (hits.length === 0) continue;
+    if (hits.length > 1) return null;
+    const rivals = accounts.filter((a) => a.id !== account.id && matchKind(a.name, hits[0].name) === kind);
+    return rivals.length ? null : hits[0];
+  }
+  return null;
+}
+
+/** Fold every Jira-imported person into their real account when it is clear they are the same person. */
 export async function reconcileJiraPeople() {
   const all = await db.developer.findMany();
-  const jiraOnly = all.filter((d) => !d.passwordHash && d.jiraAccount);
-  const real = all.filter((d) => d.passwordHash && !d.jiraAccount);
+  let jiraOnly = all.filter((d) => !d.passwordHash && d.jiraAccount);
+  const accounts = all.filter((d) => d.passwordHash && !d.jiraAccount);
   let merged = 0;
-  for (const j of jiraOnly) {
-    const same = uniqueMatch(j.name, real);
-    if (same) { await mergePeople(j.id, same.id); merged++; real.splice(real.indexOf(same), 1); }
+  for (const acct of accounts) {
+    const twin = pickJiraTwin(acct, jiraOnly, accounts);
+    if (!twin) continue;
+    await mergePeople(twin.id, acct.id);
+    jiraOnly = jiraOnly.filter((j) => j.id !== twin.id);
+    merged++;
   }
   return { merged };
+}
+
+/** Called when someone signs in: if they are not linked to Jira yet, try to find their Jira person. Never throws. */
+export async function linkToJiraOnSignIn(userId: string) {
+  try {
+    const me = await db.developer.findUnique({ where: { id: userId } });
+    if (!me || me.jiraAccount || !me.passwordHash) return;
+    const all = await db.developer.findMany();
+    const twin = pickJiraTwin(me, all.filter((d) => !d.passwordHash && d.jiraAccount), all.filter((d) => d.passwordHash && !d.jiraAccount));
+    if (twin) await mergePeople(twin.id, me.id);
+  } catch { /* matching is a convenience; signing in must never fail because of it */ }
 }
