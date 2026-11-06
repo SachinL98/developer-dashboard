@@ -84,7 +84,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
       <div className="card-pad">
         <div className="h-section mb-4">My profile</div>
         <div className="mb-5"><ProfilePhoto id={me.id} name={me.name} hue={me.avatarHue} ver={me.avatarVer} /></div>
-        <ProfileForm userId={me.id} role={me.role} capacityHrs={me.capacityHrs} githubLogin={me.githubLogin ?? ""} email={me.email} access={me.access} />
+        <ProfileForm userId={me.id} role={me.role} capacityHrs={me.capacityHrs} githubLogin={me.githubLogin ?? ""} email={me.email} access={me.access} hrManaged={me.hrManaged} />
       </div>
 
       {boardError && (

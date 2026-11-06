@@ -21,6 +21,7 @@ import type { ReviewItem } from "@/lib/review-template";
 import { redirect } from "next/navigation";
 import { createUserWithPassword } from "@/lib/auth/login";
 import { approveSignup } from "@/lib/auth/signup";
+import { pushPhotoToHr, removePhotoInHr } from "@/lib/hr-identity";
 import { generateTempPassword, hashPassword } from "@/lib/auth/password";
 import { userMessage } from "@/lib/safe-error";
 import { rateLimitShared } from "@/lib/rate-limit";
@@ -408,6 +409,8 @@ export async function updateProfileAction(userId: string, patch: { capacityHrs?:
     const user = await me();
     if (userId !== user.id && !atLeast(user.access, "ADMIN")) return { ok: false, error: "You can only edit your own profile." };
     const p = z.object({ capacityHrs: z.number().min(0).max(80), role: z.string().trim().max(60), githubLogin: z.string().trim().max(60).nullable() }).partial().strict().parse(patch);
+    const target = await db.developer.findUnique({ where: { id: id.parse(userId) }, select: { hrManaged: true } });
+    if (target?.hrManaged) delete p.role; // the job title is set in the HR app and would be overwritten at the next sign-in
     await db.developer.update({ where: { id: id.parse(userId) }, data: { ...p, githubLogin: p.githubLogin === "" ? null : p.githubLogin } });
     revalidatePath("/admin/users"); revalidatePath("/settings"); return { ok: true };
   } catch (e) { return fail(e); }
@@ -570,6 +573,8 @@ export async function uploadAvatarAction(form: FormData): Promise<Result> {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const mime = sniff(bytes);
     if (!mime) throw new Error("Use a JPG, PNG or WebP photo.");
+    // When the HR app owns profiles, the photo is saved there first so both apps show the same picture.
+    if (u.hrManaged && !(await pushPhotoToHr(u.email, bytes))) throw new Error("Could not save the photo to the HR app. Please try again.");
     await db.$transaction([
       db.avatarImage.upsert({ where: { developerId: u.id }, update: { mime, data: bytes }, create: { developerId: u.id, mime, data: bytes } }),
       db.developer.update({ where: { id: u.id }, data: { avatarVer: { increment: 1 } } }),
@@ -580,6 +585,7 @@ export async function uploadAvatarAction(form: FormData): Promise<Result> {
 export async function removeAvatarAction(): Promise<Result> {
   try {
     const u = await me();
+    if (u.hrManaged && !(await removePhotoInHr(u.email))) throw new Error("Could not remove the photo in the HR app. Please try again.");
     await db.$transaction([db.avatarImage.deleteMany({ where: { developerId: u.id } }), db.developer.update({ where: { id: u.id }, data: { avatarVer: 0 } })]);
     revalidatePath("/", "layout"); return { ok: true };
   } catch (e) { return fail(e); }
