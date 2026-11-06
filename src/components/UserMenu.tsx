@@ -1,13 +1,13 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { LogOut, Settings } from "lucide-react";
+import { ArrowLeftRight, LogOut, Settings } from "lucide-react";
 import { Avatar } from "./ui";
 import { ThemeToggle } from "./ThemeToggle";
 import type { ThemeChoice } from "@/lib/theme";
 
 /** Avatar button in the top bar: opens a small menu with the person, theme, settings and sign out. */
-export function UserMenu({ id, ver, name, role, hue, theme, logout }: { id: string; ver: number; name: string; role: string; hue: number; theme: ThemeChoice; logout: () => Promise<void> }) {
+export function UserMenu({ id, ver, name, role, hue, theme, logout, hrApp }: { id: string; ver: number; name: string; role: string; hue: number; theme: ThemeChoice; logout: () => Promise<void>; hrApp?: boolean }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -26,6 +26,8 @@ export function UserMenu({ id, ver, name, role, hue, theme, logout }: { id: stri
           <div className="flex items-center gap-3 px-3 py-3"><Avatar name={name} hue={hue} id={id} ver={ver} size={36} /><div className="min-w-0"><div className="truncate text-sm font-semibold">{name}</div><div className="text-xs capitalize text-mute">{role}</div></div></div>
           <div className="border-t border-line px-3 py-3"><div className="eyebrow mb-2">Theme</div><ThemeToggle saved={theme} /></div>
           <div className="border-t border-line pt-1">
+            {/* A plain link on purpose: this route mints a one-minute sign-in token, which a prefetch must not trigger. */}
+            {hrApp && <a href="/api/sso/hr" role="menuitem" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-panel2"><ArrowLeftRight size={15} className="text-mute" />Switch to HR app</a>}
             <Link href="/settings" role="menuitem" onClick={() => setOpen(false)} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-panel2"><Settings size={15} className="text-mute" />Settings</Link>
             <form action={logout}><button role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-panel2"><LogOut size={15} className="text-mute" />Sign out</button></form>
           </div>

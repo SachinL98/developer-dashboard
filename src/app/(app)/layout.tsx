@@ -74,7 +74,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="ml-auto flex items-center gap-3">
             <Link href="/tickets/new" className="btn-primary">+ New ticket</Link>
             <NotificationBell items={bell} />
-            <UserMenu id={me.id} ver={me.avatarVer} name={me.name} role={me.access.toLowerCase()} hue={me.avatarHue} theme={me.theme as ThemeChoice} logout={logoutAction} />
+            <UserMenu id={me.id} ver={me.avatarVer} name={me.name} role={me.access.toLowerCase()} hue={me.avatarHue} theme={me.theme as ThemeChoice} logout={logoutAction} hrApp={!!process.env.HR_WEB_URL && !!process.env.SSO_SECRET} />
           </div>
         </header>
       <main id="main" tabIndex={-1} className="min-w-0 flex-1 p-4 pb-24 sm:p-6 sm:pb-24 lg:px-8 lg:py-8 2xl:px-12">

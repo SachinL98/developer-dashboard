@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { getWorkspace } from "./config";
-import { norm } from "./speakers";
+import { uniqueMatch } from "./name-match";
 
 export interface JiraPerson { accountId: string; name: string; email?: string; active?: boolean }
 
@@ -31,8 +31,8 @@ export async function ensureJiraPerson(p: JiraPerson) {
   if (p.active === false) return null;
   // Someone who already has a dashboard account under the same full name (but a different or hidden Jira email) is the same person.
   if (p.name) {
-    const same = (await db.developer.findMany({ where: { passwordHash: { not: null }, jiraAccount: null } })).filter((d) => norm(d.name) === norm(p.name));
-    if (same.length === 1) return db.developer.update({ where: { id: same[0].id }, data: { jiraAccount: p.accountId } });
+    const same = uniqueMatch(p.name, await db.developer.findMany({ where: { passwordHash: { not: null }, jiraAccount: null } }));
+    if (same) return db.developer.update({ where: { id: same.id }, data: { jiraAccount: p.accountId } });
   }
   return db.developer.create({
     data: {
@@ -78,15 +78,15 @@ export async function mergePeople(fromId: string, intoId: string) {
   return { tickets: await db.ticket.count({ where: { assigneeId: into.id } }) };
 }
 
-/** Merge every Jira-imported person who clearly is an existing account: the same full name, and exactly one account with it. */
+/** Merge every Jira-imported person who clearly is an existing account: the same person by name (see name-match.ts), and exactly one account matching. */
 export async function reconcileJiraPeople() {
   const all = await db.developer.findMany();
   const jiraOnly = all.filter((d) => !d.passwordHash && d.jiraAccount);
   const real = all.filter((d) => d.passwordHash && !d.jiraAccount);
   let merged = 0;
   for (const j of jiraOnly) {
-    const same = real.filter((r) => norm(r.name) === norm(j.name));
-    if (same.length === 1) { await mergePeople(j.id, same[0].id); merged++; real.splice(real.indexOf(same[0]), 1); }
+    const same = uniqueMatch(j.name, real);
+    if (same) { await mergePeople(j.id, same.id); merged++; real.splice(real.indexOf(same), 1); }
   }
   return { merged };
 }

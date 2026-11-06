@@ -11,12 +11,15 @@ import { addDays, eachDay, LEAVE_TYPES, requestDays, weekday } from "@/lib/capac
 import { getHolidays } from "@/lib/leave";
 import { getWorkspace } from "@/lib/config";
 import { localDate } from "@/lib/time";
+import { hrConfigured } from "@/lib/hr-feed";
+import { HrManaged } from "@/components/HrManaged";
 
 const typeLabel = (t: string) => LEAVE_TYPES.find((x) => x.id === t)?.label ?? t;
 const fmt = (s: string) => new Date(s + "T00:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 
 export default async function LeavePage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
   const me = await requireUser();
+  if (hrConfigured()) return <HrManaged title="Leave" what="Leave and work from home requests" path="/leave" />;
   await getWorkspace(); // applies the team timezone
   const sp = await searchParams;
   const today = localDate(new Date());

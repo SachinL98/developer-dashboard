@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 // Cheap gate: anything without a session cookie goes to /login. Real validation happens server-side (currentUser()).
-const PUBLIC = [/^\/login/, /^\/signup/, /^\/api\/auth\//, /^\/api\/webhooks\//, /^\/api\/cron\//, /^\/api\/health/, /^\/_next\//, /^\/(icon|apple-icon|favicon|manifest)/, /^\/icon-\d+\.png$/];
+const PUBLIC = [/^\/login/, /^\/signup/, /^\/api\/auth\//, /^\/api\/sso\/enter/, /^\/api\/webhooks\//, /^\/api\/cron\//, /^\/api\/health/, /^\/_next\//, /^\/(icon|apple-icon|favicon|manifest)/, /^\/icon-\d+\.png$/];
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

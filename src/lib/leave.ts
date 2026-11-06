@@ -5,12 +5,29 @@ import { runAs } from "./context";
 import { googleFetch } from "./integrations/google";
 import { availability, type Availability, type Holiday, type LeaveLite } from "./capacity";
 import { localDate } from "./time";
+import { feedToHolidays, feedToLeave, fetchHrFeed, hrConfigured } from "./hr-feed";
 
-export const getHolidays = async (): Promise<Holiday[]> => ((await getSetting<Holiday[]>("holidays")) ?? []).sort((a, b) => a.date.localeCompare(b.date));
+const YEAR = 86_400_000 * 366;
+/** The HR app is the source of truth when connected; if it is unreachable we fall back to the local tables rather than break planning. */
+async function fromHr<T>(from: string, to: string, pick: (feed: Awaited<ReturnType<typeof fetchHrFeed>>) => Promise<T> | T): Promise<T | null> {
+  if (!hrConfigured()) return null;
+  try { return await pick(await fetchHrFeed(from, to)); } catch (e) { console.error("HR feed unavailable, using local leave data:", e instanceof Error ? e.message : e); return null; }
+}
+
+export const getHolidays = async (): Promise<Holiday[]> => {
+  const now = Date.now();
+  const hr = await fromHr(localDate(new Date(now - YEAR / 2)), localDate(new Date(now + YEAR)), feedToHolidays);
+  return hr ?? ((await getSetting<Holiday[]>("holidays")) ?? []).sort((a, b) => a.date.localeCompare(b.date));
+};
 export const saveHolidays = (list: Holiday[]) => setSetting("holidays", list);
 
 /** Approved leave overlapping [start, end]. */
 export async function approvedLeave(start: string, end: string): Promise<LeaveLite[]> {
+  const hr = await fromHr(start, end, async (feed) => {
+    const devs = await db.developer.findMany({ select: { id: true, email: true } });
+    return feedToLeave(feed, new Map(devs.map((d) => [d.email.toLowerCase(), d.id])));
+  });
+  if (hr) return hr;
   const rows = await db.leave.findMany({ where: { status: "APPROVED", startDate: { lte: end }, endDate: { gte: start } } });
   return rows.map((l) => ({ developerId: l.developerId, start: l.startDate, end: l.endDate, portion: l.portion as "FULL" | "HALF" }));
 }
