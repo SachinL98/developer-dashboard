@@ -6,6 +6,7 @@ import { jiraReady } from "@/lib/integrations/jira";
 import { githubConfigured } from "@/lib/integrations/github";
 import * as svc from "@/lib/services";
 import { pruneSessions } from "@/lib/auth/session";
+import { refreshSecurityFeed } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -21,6 +22,7 @@ export async function GET(req: Request) {
     if (!(await jiraReady())) { out.jira = "skipped: no connected lead/admin and no service account"; return; }
     try { out.jira = await svc.autoSyncJira(new Date(), { force: new URL(req.url).searchParams.get("force") === "1" }); } catch (e) { out.jira = `error: ${e instanceof Error ? e.message : e}`; }
   });
+  try { out.security = await refreshSecurityFeed(); } catch (e) { out.security = `error: ${e instanceof Error ? e.message : e}`; }
   if (githubConfigured()) { try { out.github = await svc.syncGithub(); } catch (e) { out.github = `error: ${e instanceof Error ? e.message : e}`; } }
   await runAs(await serviceUserId("GOOGLE"), async () => {
     try { out.meetings = await svc.syncMeetingCadence(14); } catch (e) { out.meetings = `error: ${e instanceof Error ? e.message : e}`; }

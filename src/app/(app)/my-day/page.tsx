@@ -1,4 +1,8 @@
 import Link from "next/link";
+import { after } from "next/server";
+import { loadSecurityBoard, refreshSecurityFeed } from "@/lib/security";
+import { aiKeyFor } from "@/lib/ai";
+import { SecurityBoard } from "@/components/SecurityBoard";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
 import { atLeast } from "@/lib/permissions";
@@ -15,6 +19,7 @@ const OPEN = ["READY_TO_DEV", "IN_PROGRESS", "INITIAL_REVIEW", "REVIEW", "FAILED
 
 export default async function MyDay() {
   const me = await requireUser();
+  after(() => refreshSecurityFeed().then(() => {}, () => {})); // keeps the notice board fresh (at most every 6 hours)
   const now = new Date();
   const hour = Number(new Intl.DateTimeFormat("en-US", { timeZone: TZ, hourCycle: "h23", hour: "numeric" }).format(now));
   const hello = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
@@ -28,6 +33,7 @@ export default async function MyDay() {
     approvedLeave(today, today),
     atLeast(me.access, "LEAD") ? db.ticket.findMany({ where: { status: { in: ["INITIAL_REVIEW", "REVIEW"] }, NOT: { assigneeId: me.id } }, select: { id: true, key: true, title: true }, take: 6 }) : Promise.resolve([]),
   ]);
+  const [board, ai, firstProject] = await Promise.all([loadSecurityBoard(), aiKeyFor(me.id), db.project.findFirst({ orderBy: { key: "asc" }, select: { id: true } })]);
   const onLeave = leaves.some((l) => l.developerId === me.id);
   const overdue = mine.filter((t) => t.dueDate && t.dueDate < now);
   const blocked = mine.filter((t) => t.blocked);
@@ -50,6 +56,10 @@ export default async function MyDay() {
               <div className="min-w-0"><div className="text-xs text-mute">Timer running</div><div className="truncate font-medium"><span className="font-mono text-sm text-mute">{timer.ticket.key}</span> {timer.ticket.title}</div></div>
               <Clock size={18} className="ml-auto text-mute" />
             </Link>)}
+
+          <SecurityBoard items={board.items.map((a) => ({ id: a.id, cve: a.cve, title: a.title, summary: a.summary, severity: a.severity, cvss: a.cvss, exploited: a.exploited, ransomware: !!a.ransomware, source: a.source, published: a.published, url: a.url, why: a.why, action: a.action ?? null, packages: a.packages }))}
+            brief={board.brief ? { summary: board.brief.summary, topActions: board.brief.topActions, generatedAt: board.brief.generatedAt, model: board.brief.model, items: Object.fromEntries(board.brief.items.map((x) => [x.id, { meaning: x.meaning, affects: x.affects, fixSteps: x.fixSteps, urgency: x.urgency }])) } : null}
+            fetchedAt={board.fetchedAt} errors={board.errors} aiReady={!!ai} canLead={atLeast(me.access, "LEAD")} isAdmin={atLeast(me.access, "ADMIN")} projectId={firstProject?.id ?? null} cfg={board.cfg} />
 
           <section className="card-pad">
             <h2 className="mb-3 text-sm font-semibold">Your cards</h2>

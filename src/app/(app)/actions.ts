@@ -35,6 +35,7 @@ import { generateQualityInsight } from "@/lib/quality";
 import { audit } from "@/lib/audit";
 import { canEditMeeting, resolveOwner } from "@/lib/meeting-access";
 import { notifyInbox } from "@/lib/inbox";
+import { generateSecurityBrief, refreshSecurityFeed, saveSecurityConfig, loadSecurityBoard } from "@/lib/security";
 
 type Result<T = {}> = ({ ok: true } & T) | { ok: false; error: string };
 const fail = (e: unknown): { ok: false; error: string } => ({ ok: false, error: e instanceof z.ZodError ? "Invalid input: " + e.issues[0]?.message : userMessage(e) });
@@ -705,6 +706,48 @@ export async function generateProfileAction(devId: string): Promise<Result> {
 }
 
 /** Bug origin analysis for the team. Anyone signed in can run it; what they see afterwards is limited to their own work unless they are a lead or admin. */
+/** Pull the latest notices now. Anyone can ask; it is rate limited. */
+export async function refreshSecurityAction(): Promise<Result<{ errors: string[] }>> {
+  try {
+    const u = await me();
+    await rateLimitShared(`security-refresh:${u.id}`, 6, 3_600_000);
+    const r = await refreshSecurityFeed({ force: true });
+    revalidatePath("/my-day"); return { ok: true, errors: r.ran ? r.errors : [] };
+  } catch (e) { return fail(e); }
+}
+export async function generateSecurityBriefAction(): Promise<Result> {
+  try {
+    const u = await me();
+    await rateLimitShared(`security-brief:${u.id}`, 6, 3_600_000);
+    await generateSecurityBrief(u.id);
+    revalidatePath("/my-day"); return { ok: true };
+  } catch (e) { return fail(e); }
+}
+export async function saveSecurityConfigAction(input: { ecosystems: string[]; keywords: string[] }): Promise<Result> {
+  try {
+    const adminUser = await requireAccess("ADMIN");
+    const v = z.object({ ecosystems: z.array(z.string().max(20)).max(10), keywords: z.array(z.string().max(40)).max(40) }).parse(input);
+    await saveSecurityConfig(v);
+    await audit(adminUser, "saveSecurityConfig", undefined, { ecosystems: v.ecosystems.length, keywords: v.keywords.length });
+    revalidatePath("/my-day"); return { ok: true };
+  } catch (e) { return fail(e); }
+}
+/** Turn a security notice into a backlog ticket with the fix steps filled in. Leads and admins. */
+export async function securityToTicketAction(advisoryId: string, projectId: string): Promise<Result<{ key: string }>> {
+  try {
+    await requireAccess("LEAD");
+    const board = await loadSecurityBoard();
+    const a = board.items.find((x) => x.id === z.string().max(60).parse(advisoryId));
+    if (!a) throw new Error("That notice is no longer on the board. Refresh and try again.");
+    const steps = board.brief?.items.find((x) => x.id === a.id)?.fixSteps ?? ["Check the advisory and whether we use the affected package or product.", "Upgrade to the fixed version, then run composer audit or npm audit.", "Review exposure and monitor logs."];
+    const { ticket } = await svc.createTicket({
+      projectId: id.parse(projectId), title: `Security: ${a.title}`.slice(0, 120), type: "TASK", priority: a.exploited || a.severity === "critical" ? "CRITICAL" : a.severity === "high" ? "HIGH" : "MEDIUM", labels: ["security"], pushToJira: false,
+      description: `${a.exploited ? "Exploited in the wild. " : ""}Severity: ${a.severity}${a.cvss ? ` (CVSS ${a.cvss})` : ""}. ${a.cve ?? a.id}\n${a.url}\n\nAffected: ${a.packages.map((p) => `${p.name}${p.range ? ` ${p.range}` : ""}${p.fixedIn ? ` (fixed in ${p.fixedIn})` : ""}`).join("; ") || "see advisory"}\n\nSteps:\n${steps.map((s) => `- ${s}`).join("\n")}`,
+    });
+    touch(); return { ok: true, key: ticket.key };
+  } catch (e) { return fail(e); }
+}
+
 /** Say which ticket a bug came from (or clear the answer with an empty key). Leads, admins and whoever owns the bug can answer. */
 export async function confirmBugOriginAction(bugKey: string, originKey: string): Promise<Result> {
   try {
