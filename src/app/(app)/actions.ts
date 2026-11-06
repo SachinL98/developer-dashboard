@@ -31,6 +31,7 @@ import { generateOneOnOne } from "@/lib/one-on-one";
 import { saveNotifyConfig, sendTest as sendNotifyTest } from "@/lib/notify/run";
 import { validDiscordId } from "@/lib/notify/discord";
 import { generateDevProfile, reviewEstimate, type EstimateReview } from "@/lib/insights";
+import { generateQualityInsight } from "@/lib/quality";
 
 type Result<T = {}> = ({ ok: true } & T) | { ok: false; error: string };
 const fail = (e: unknown): { ok: false; error: string } => ({ ok: false, error: e instanceof z.ZodError ? "Invalid input: " + e.issues[0]?.message : userMessage(e) });
@@ -657,6 +658,16 @@ export async function generateProfileAction(devId: string): Promise<Result> {
     rateLimit(`ai:${u.id}`, 30, 3_600_000);
     await generateDevProfile(d, u.id);
     revalidatePath(`/team/${d}`); return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
+/** Bug origin analysis for the team. Anyone signed in can run it; what they see afterwards is limited to their own work unless they are a lead or admin. */
+export async function generateQualityAction(): Promise<Result> {
+  try {
+    const u = await me();
+    rateLimit(`quality:${u.id}`, 6, 3_600_000);
+    await generateQualityInsight(u.id);
+    revalidatePath("/quality"); return { ok: true };
   } catch (e) { return fail(e); }
 }
 

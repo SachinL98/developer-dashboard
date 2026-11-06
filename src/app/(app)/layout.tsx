@@ -36,7 +36,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/tickets/new", label: "New ticket", hint: "Create" }, { href: "/", label: "Overview" }, { href: "/board", label: "Board", hint: "Kanban" }, { href: "/sprints", label: "Sprints" },
     { href: "/estimation", label: "Estimates", hint: "Planning poker" }, { href: "/time", label: "Time", hint: "Timer, check-ins" }, { href: "/team", label: "People" },
     { href: "/reports?kind=oneonone", label: "1:1 report", hint: "Reports" }, { href: "/leave", label: "Leave" }, { href: "/meetings", label: "Meetings", hint: "Notes, recorder" },
-    { href: "/analytics", label: "Analytics" }, { href: "/reports", label: "Reports" }, { href: "/settings", label: "Settings", hint: "Profile, AI, alerts" },
+    { href: "/analytics", label: "Analytics" }, { href: "/quality", label: "Quality", hint: "Bug origins" }, { href: "/reports", label: "Reports" }, { href: "/settings", label: "Settings", hint: "Profile, AI, alerts" },
     ...(atLeast(me.access, "ADMIN") ? [{ href: "/admin", label: "Admin", hint: "Users, integrations" }, { href: "/admin/notifications", label: "Alerts", hint: "Email, Discord" }] : []),
   ];
   const footer = (
