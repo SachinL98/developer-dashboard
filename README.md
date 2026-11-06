@@ -1,5 +1,7 @@
 # Dev Dashboard
 
+> **Product catalog:** every feature, with screenshots, in [docs/catalog/Dev-Dashboard-Catalog.html](docs/catalog/Dev-Dashboard-Catalog.html) (also as a [PDF](docs/catalog/Dev-Dashboard-Catalog.pdf)).
+
 One place for the whole sprint workflow of the SpaceIT Labs dev team: backlog → sprint plan → estimate → board → review → staging → production, with time tracking, a meeting notes taker and analytics on top.
 
 Stack: Next.js 15 (App Router, server actions) · TypeScript · Tailwind · PostgreSQL via Prisma · Recharts.
