@@ -5,8 +5,9 @@ export interface QTicket {
   key: string; title: string; description: string; type: string; priority: string; labels: string[];
   projectId: string; sprintId: string | null; sprintName: string | null; sprintOrder: number | null; // sprintOrder: 0 = oldest
   assigneeId: string | null; createdAt: Date; doneAt: Date | null;
+  links?: { type: string; direction: "in" | "out"; key: string }[];
 }
-export interface Signal { kind: "mentioned" | "labels" | "wording" | "topic"; detail: string }
+export interface Signal { kind: "confirmed" | "linked" | "mentioned" | "labels" | "wording" | "topic"; detail: string }
 export interface Candidate { origin: QTicket; score: number; confidence: "likely" | "possible"; signals: Signal[]; gapDays: number }
 export interface BugLink { bug: QTicket; candidates: Candidate[] }
 
@@ -30,14 +31,15 @@ function similarity(a: string[], b: string[], idf: Map<string, number>): { score
   return { score: na && nb ? dot / Math.sqrt(na * nb) : 0, shared };
 }
 
-export interface LinkOptions { maxPerBug?: number; minScore?: number; likelyScore?: number; maxGapDays?: number }
+export interface LinkOptions { maxPerBug?: number; minScore?: number; likelyScore?: number; maxGapDays?: number; confirmed?: Map<string, string> /* bugKey -> originKey, answered by a person */ }
 
 /**
  * For every bug, rank earlier, finished, non-bug tickets in the same project that it probably comes from.
  * Signals: the bug names the ticket's key, they share labels, they share distinctive words, or fall in the same topic.
  */
 export function linkBugs(tickets: QTicket[], opts: LinkOptions = {}): BugLink[] {
-  const { maxPerBug = 3, minScore = 0.35, likelyScore = 0.6, maxGapDays = 180 } = opts;
+  const { maxPerBug = 3, minScore = 0.35, likelyScore = 0.6, maxGapDays = 180, confirmed } = opts;
+  const byKey = new Map(tickets.map((t) => [t.key, t]));
   const bugs = tickets.filter((t) => t.type === "BUG");
   const pool = tickets.filter((t) => t.type !== "BUG" && t.doneAt && t.assigneeId);
   const bodies = new Map(pool.map((t) => [t.key, tokens(`${t.title} ${t.title} ${t.description}`)]));
@@ -46,6 +48,10 @@ export function linkBugs(tickets: QTicket[], opts: LinkOptions = {}): BugLink[] 
   const idf = new Map([...df].map(([w, n]) => [w, Math.log(1 + pool.length / n)]));
 
   return bugs.map((bug) => {
+    const sure = confirmed?.get(bug.key); const sureTicket = sure ? byKey.get(sure) : undefined;
+    if (sureTicket && sureTicket.assigneeId) {
+      return { bug, candidates: [{ origin: sureTicket, score: 1, confidence: "likely" as const, signals: [{ kind: "confirmed" as const, detail: "confirmed by a person" }], gapDays: sureTicket.doneAt ? Math.max(0, Math.round((bug.createdAt.getTime() - sureTicket.doneAt.getTime()) / DAY)) : 0 }] };
+    }
     const bugText = `${bug.title} ${bug.description}`;
     const bugToks = tokens(`${bug.title} ${bug.title} ${bug.description}`);
     const bugTopics = new Set(topicsOf({ title: bugText, labels: bug.labels }));
@@ -56,6 +62,8 @@ export function linkBugs(tickets: QTicket[], opts: LinkOptions = {}): BugLink[] 
       const gapDays = Math.round((bug.createdAt.getTime() - o.doneAt!.getTime()) / DAY);
       if (gapDays > maxGapDays) continue;
       const signals: Signal[] = []; let score = 0;
+      const jl = [...(bug.links ?? []).filter((l) => l.key === o.key), ...(o.links ?? []).filter((l) => l.key === bug.key)];
+      if (jl.length) { const causal = jl.some((l) => /caus|regress|introduc|break/i.test(l.type)); score += causal ? 0.75 : 0.45; signals.push({ kind: "linked", detail: `linked in Jira (${jl[0].type})` }); }
       if (new RegExp(`\\b${o.key.replace(/[-]/g, "\\-")}\\b`, "i").test(bugText)) { score += 0.6; signals.push({ kind: "mentioned", detail: `the bug mentions ${o.key}` }); }
       const sharedLabels = o.labels.filter((l) => bug.labels.includes(l) && !GENERIC_LABELS.has(l.toLowerCase()));
       if (sharedLabels.length) { score += Math.min(0.3, 0.15 * sharedLabels.length); signals.push({ kind: "labels", detail: `shared label${sharedLabels.length > 1 ? "s" : ""}: ${sharedLabels.join(", ")}` }); }

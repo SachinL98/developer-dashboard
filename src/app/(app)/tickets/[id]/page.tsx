@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
+import { originFor } from "@/lib/quality";
+import { OriginPicker } from "@/components/OriginPicker";
 import { atLeast } from "@/lib/permissions";
 import { STATUS_META, STATUS_ORDER, type StatusKey } from "@/lib/workflow";
 import { PageHeader, StatusBadge, TypeDot, PriorityTag, Avatar, Progress } from "@/components/ui";
@@ -52,10 +54,19 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
   const idx = STATUS_ORDER.indexOf(t.status as StatusKey);
   const visited = new Set([t.status, ...t.transitions.map((x) => x.to), ...t.transitions.map((x) => x.from)]);
 
+  const origin = t.type === "BUG" ? await originFor(t.key) : null;
+  const canAnswerOrigin = !!origin && (atLeast(me.access, "LEAD") || t.assigneeId === me.id);
   return (
     <div className="space-y-6">
       <PageHeader back={{ href: "/board", label: "Board" }} title={t.title} sub={<span className="flex flex-wrap items-center gap-3"><span className="font-mono">{t.key}</span><span style={{ color: fg(t.project.color) }}>{t.project.name}</span><TypeDot type={t.type} /><PriorityTag p={t.priority} />{t.sprint && <span>{t.sprint.name}</span>}</span>}
         actions={<>{jiraHref && <a className="btn" href={jiraHref} target="_blank" rel="noreferrer">Jira <ExternalLink size={13} /></a>}{t.prUrl && <a className="btn" href={t.prUrl} target="_blank"><GitPullRequest size={14} /> PR #{t.prNumber} <ExternalLink size={13} /></a>}</>} />
+
+      {origin && canAnswerOrigin && (
+        <div className="card-pad">
+          <div className="h-section mb-1">Which ticket caused this bug?</div>
+          <p className="mb-3 text-xs text-mute">Your answer replaces the automatic guess and feeds the Quality page. It helps the team see where bugs come from, not who to blame.</p>
+          <OriginPicker bugKey={t.key} confirmed={origin.confirmed} suggestions={origin.candidates.slice(0, 3).map((x) => ({ key: x.origin.key, title: x.origin.title }))} />
+        </div>)}
 
       <div className="card-pad overflow-x-auto">
         <div className="flex min-w-[820px] items-center">

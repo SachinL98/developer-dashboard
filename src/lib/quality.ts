@@ -11,18 +11,23 @@ export async function loadQualityTickets(): Promise<QTicket[]> {
   const sprints = (await db.sprint.findMany({ orderBy: { startDate: "desc" }, take: QUALITY_SPRINTS })).reverse();
   const order = new Map(sprints.map((s, i) => [s.id, i]));
   const rows = await db.ticket.findMany({ where: { sprintId: { in: sprints.map((s) => s.id) } } });
+  // A confirmed origin may sit outside the recent sprints: bring those tickets in too.
+  const confirmedKeys = (await db.bugOrigin.findMany({ select: { originKey: true } })).map((b) => b.originKey).filter((k) => !rows.some((r) => r.key === k));
+  if (confirmedKeys.length) rows.push(...(await db.ticket.findMany({ where: { key: { in: confirmedKeys } } })));
   const names = new Map(sprints.map((s) => [s.id, s.name]));
   return rows.map((t) => ({
     key: t.key, title: t.title, description: t.description.slice(0, 1200), type: t.type, priority: t.priority, labels: t.labels, projectId: t.projectId,
     sprintId: t.sprintId, sprintName: t.sprintId ? names.get(t.sprintId) ?? null : null, sprintOrder: t.sprintId ? order.get(t.sprintId) ?? null : null,
+    links: Array.isArray(t.links) ? (t.links as unknown as QTicket["links"]) : undefined,
     assigneeId: t.assigneeId, createdAt: t.createdAt, doneAt: t.doneAt ?? (DONE_STATES.includes(t.status as never) ? t.updatedAt : null),
   }));
 }
 
 export async function loadQuality() {
   const tickets = await loadQualityTickets();
-  const links = linkBugs(tickets);
-  return { tickets, links, stats: qualityStats(tickets, links) };
+  const confirmed = new Map((await db.bugOrigin.findMany()).map((b) => [b.bugKey, b.originKey]));
+  const links = linkBugs(tickets, { confirmed });
+  return { tickets, links, stats: qualityStats(tickets, links), confirmed };
 }
 
 // ---------- AI: judge the matches and write blame-free insights ----------
@@ -86,6 +91,13 @@ export async function generateQualityInsight(userId: string): Promise<QualityIns
   const result: QualityInsight = { ...out, people: out.people.filter((p) => known.has(p.developerId)), generatedAt: new Date().toISOString(), model, stats };
   await saveInsight("QUALITY", "team", result, model, userId);
   return result;
+}
+
+/** The best guesses for one bug and the answer a person gave, for the ticket page. */
+export async function originFor(bugKey: string) {
+  const { links, confirmed } = await loadQuality();
+  const l = links.find((x) => x.bug.key === bugKey);
+  return { candidates: l?.candidates ?? [], confirmed: confirmed.get(bugKey) ?? null };
 }
 
 export const latestQualityInsight = async () => (await latestInsight("QUALITY", "team"))?.content as unknown as QualityInsight | undefined;

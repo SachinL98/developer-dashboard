@@ -256,7 +256,7 @@ export async function applyJiraIssue(i: jira.JiraIssue, c?: Awaited<ReturnType<t
   const estimateHrs = i.estimateHrs ?? (points != null && (pointsChanged || existing?.estimateHrs == null) ? hoursForPoints(points) : existing?.estimateHrs ?? null);
   const data = {
     title: i.title, description: i.description, type: i.type as any, priority: i.priority as any, status: status as any, jiraStatus: i.status,
-    storyPoints: points, labels: i.labels, jiraKey: i.key, ...(i.dueDate ? { dueDate: new Date(`${i.dueDate}T12:00:00Z`) } : {}), assigneeId: dev?.id ?? null, sprintId: i.sprintId ? sprint?.id ?? existing?.sprintId ?? null : null, estimateHrs,
+    storyPoints: points, labels: i.labels, jiraKey: i.key, ...(i.links ? { links: i.links as never } : {}), ...(i.dueDate ? { dueDate: new Date(`${i.dueDate}T12:00:00Z`) } : {}), assigneeId: dev?.id ?? null, sprintId: i.sprintId ? sprint?.id ?? existing?.sprintId ?? null : null, estimateHrs,
   };
   if (existing) {
     // Never let a stale Jira update move a card backwards in the workflow.

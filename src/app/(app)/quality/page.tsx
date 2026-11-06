@@ -5,8 +5,11 @@ import { aiKeyFor } from "@/lib/ai";
 import { loadQuality, latestQualityInsight, QUALITY_SPRINTS } from "@/lib/quality";
 import { PageHeader, Avatar, Empty } from "@/components/ui";
 import { QualityActions } from "@/components/QualityActions";
+import { OriginPicker } from "@/components/OriginPicker";
+import { LineSeries } from "@/components/Charts";
 import { PRIORITY_META } from "@/lib/workflow";
 import { fg } from "@/lib/theme";
+import { Download } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +19,7 @@ const VERDICT = { confirmed: "Confirmed", plausible: "Plausible", unrelated: "Pr
 export default async function Quality() {
   const me = await requireUser();
   const lead = atLeast(me.access, "LEAD");
-  const [{ links, stats }, insight, ai, devs] = await Promise.all([
+  const [{ links, stats, confirmed }, insight, ai, devs] = await Promise.all([
     loadQuality(), latestQualityInsight(), aiKeyFor(me.id),
     db.developer.findMany({ select: { id: true, name: true, avatarHue: true, avatarVer: true } }),
   ]);
@@ -24,12 +27,14 @@ export default async function Quality() {
   // Per-person results are for that person, leads and admins. Everyone else only ever gets the team-level numbers.
   const visibleLinks = links.filter((l) => l.candidates[0] && (lead || l.candidates[0].origin.assigneeId === me.id));
   const people = stats.perDev.filter((p) => lead || p.developerId === me.id);
+  const canAnswer = (l: { bug: { assigneeId: string | null } }) => lead || l.bug.assigneeId === me.id;
+  const unmatched = links.filter((l) => !l.candidates.length && canAnswer(l));
   const judged = new Map((insight?.judgements ?? []).map((j) => [j.bugKey, j]));
   const notes = new Map((insight?.people ?? []).filter((p) => lead || p.developerId === me.id).map((p) => [p.developerId, p]));
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Quality" sub={`Where bugs found in later sprints seem to come from, across the last ${QUALITY_SPRINTS} sprints. It is a way to find and fix causes, not to assign blame.`} actions={<QualityActions hasInsight={!!insight} aiReady={!!ai} />} />
+      <PageHeader title="Quality" sub={`Where bugs found in later sprints seem to come from, across the last ${QUALITY_SPRINTS} sprints. It is a way to find and fix causes, not to assign blame.`} actions={<><QualityActions hasInsight={!!insight} aiReady={!!ai} /><a href="/api/reports/export?kind=quality&format=pptx" className="btn"><Download size={14} /> PowerPoint</a><a href="/api/reports/export?kind=quality&format=pdf" className="btn"><Download size={14} /> PDF</a></>} />
 
       {!stats.bugsTotal ? <Empty>No bug tickets in the last sprints yet. Once bugs are logged, this page links them back to the earlier work they probably come from.</Empty> : (<>
         <section className="card-pad">
@@ -38,6 +43,9 @@ export default async function Quality() {
             <div><div className="text-xs text-mute">Traced to earlier work</div><div className="mt-1 text-2xl font-semibold tabular-nums">{stats.bugsTraced}<span className="text-base font-normal text-mute"> · {stats.tracedPct}%</span></div></div>
             <div><div className="text-xs text-mute">Traced bugs per 10 delivered tickets</div><div className="mt-1 text-2xl font-semibold tabular-nums">{stats.teamBugsPer10 ?? "n/a"}</div></div>
           </div>
+          {stats.bySprint.length > 1 && (
+            <div className="mt-5"><div className="mb-1 text-xs font-medium text-mute">Bugs logged and tickets delivered, sprint by sprint</div>
+              <LineSeries data={stats.bySprint.map((s) => ({ name: s.sprint, bugs: s.bugs, delivered: s.delivered }))} lines={[{ key: "bugs", color: "#fb7185", name: "Bugs logged" }, { key: "delivered", color: "#6366f1", name: "Delivered" }]} /></div>)}
           {stats.bySprint.length > 0 && (
             <div className="mt-5 overflow-x-auto"><table className="tbl min-w-[420px]"><thead><tr><th>Sprint</th><th>Delivered</th><th>Bugs logged</th></tr></thead>
               <tbody>{stats.bySprint.map((s) => <tr key={s.sprint}><td>{s.sprint}</td><td className="tabular-nums">{s.delivered}</td><td className="tabular-nums">{s.bugs}</td></tr>)}</tbody></table></div>)}
@@ -82,7 +90,7 @@ export default async function Quality() {
         <section className="card overflow-x-auto">
           <div className="p-5 pb-2"><h2 className="text-sm font-semibold">Bugs and where they probably come from</h2><p className="mt-1 text-xs text-mute">{lead ? "Each bug with the earlier ticket it most likely comes from." : "Bugs that probably come from tickets you delivered."}</p></div>
           <table className="tbl min-w-[760px]">
-            <thead><tr><th>Bug</th><th>Probable origin</th>{lead && <th>Built by</th>}<th>Match</th><th>Why</th></tr></thead>
+            <thead><tr><th>Bug</th><th>Probable origin</th>{lead && <th>Built by</th>}<th>Match</th><th>Why</th><th>Which ticket caused it?</th></tr></thead>
             <tbody>
               {visibleLinks.map((l) => {
                 const c = l.candidates[0]; const j = judged.get(l.bug.key); const by = c.origin.assigneeId ? dev.get(c.origin.assigneeId) : null;
@@ -93,12 +101,26 @@ export default async function Quality() {
                     {lead && <td className="whitespace-nowrap">{by?.name ?? "n/a"}</td>}
                     <td><span className={`pill ${j?.verdict === "unrelated" ? "bg-panel2 text-mute" : c.confidence === "likely" || j?.verdict === "confirmed" ? "bg-neon-amber/10 text-neon-amber" : "bg-panel2 text-mute"}`}>{j ? VERDICT[j.verdict] : c.confidence === "likely" ? "Likely" : "Possible"}</span>{j && j.rootCause !== "unknown" && <div className="mt-1 text-xs text-mute">{CAUSE[j.rootCause]}</div>}</td>
                     <td className="max-w-xs text-xs text-mute">{j?.reason ?? c.signals.map((s) => s.detail).join(" · ")}</td>
+                    <td className="min-w-[200px]">{canAnswer(l) ? <OriginPicker bugKey={l.bug.key} confirmed={confirmed.get(l.bug.key) ?? null} suggestions={l.candidates.slice(0, 3).map((x) => ({ key: x.origin.key, title: x.origin.title }))} /> : <span className="text-xs text-mute">{confirmed.get(l.bug.key) ? "Confirmed" : ""}</span>}</td>
                   </tr>);
               })}
-              {!visibleLinks.length && <tr><td colSpan={lead ? 5 : 4} className="py-8 text-center text-mute">{lead ? "No bug could be traced to earlier work yet." : "No bugs have been traced to your tickets. Nice."}</td></tr>}
+              {!visibleLinks.length && <tr><td colSpan={lead ? 6 : 5} className="py-8 text-center text-mute">{lead ? "No bug could be traced to earlier work yet." : "No bugs have been traced to your tickets. Nice."}</td></tr>}
             </tbody>
           </table>
         </section>
+
+        {unmatched.length > 0 && (
+          <section className="card-pad">
+            <h2 className="text-sm font-semibold">Bugs with no clear origin yet</h2>
+            <p className="mb-3 mt-1 text-xs text-mute">If you know which ticket one of these came from, say so and it joins the picture. Adding the ticket key in the bug (or linking the issues in Jira) also helps.</p>
+            <ul className="divide-y divide-line/70">
+              {unmatched.slice(0, 15).map((l) => (
+                <li key={l.bug.key} className="flex flex-wrap items-center justify-between gap-3 py-2.5 text-sm">
+                  <div className="min-w-0"><span className="font-mono text-xs text-mute">{l.bug.key} · {l.bug.sprintName}</span> {l.bug.title}</div>
+                  <OriginPicker bugKey={l.bug.key} confirmed={null} suggestions={[]} />
+                </li>))}
+            </ul>
+          </section>)}
       </>)}
     </div>
   );

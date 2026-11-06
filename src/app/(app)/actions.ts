@@ -675,6 +675,25 @@ export async function generateProfileAction(devId: string): Promise<Result> {
 }
 
 /** Bug origin analysis for the team. Anyone signed in can run it; what they see afterwards is limited to their own work unless they are a lead or admin. */
+/** Say which ticket a bug came from (or clear the answer with an empty key). Leads, admins and whoever owns the bug can answer. */
+export async function confirmBugOriginAction(bugKey: string, originKey: string): Promise<Result> {
+  try {
+    const u = await me();
+    const z1 = z.string().trim().min(1).max(40), key = z1.parse(bugKey), origin = z.string().trim().max(40).parse(originKey);
+    const bug = await db.ticket.findUnique({ where: { key } });
+    if (!bug || bug.type !== "BUG") throw new Error("That is not a bug ticket.");
+    if (!atLeast(u.access, "LEAD") && bug.assigneeId !== u.id) throw new Error("Only a lead, an admin or the person fixing the bug can say where it came from.");
+    if (!origin) { await db.bugOrigin.deleteMany({ where: { bugKey: key } }); }
+    else {
+      if (origin === key) throw new Error("A bug cannot be its own origin.");
+      const o = await db.ticket.findUnique({ where: { key: origin }, select: { key: true } });
+      if (!o) throw new Error(`There is no ticket ${origin}.`);
+      await db.bugOrigin.upsert({ where: { bugKey: key }, update: { originKey: origin, confirmedById: u.id, confirmedAt: new Date() }, create: { bugKey: key, originKey: origin, confirmedById: u.id } });
+    }
+    revalidatePath("/quality"); revalidatePath(`/tickets/${bug.id}`); return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
 export async function markInboxReadAction(idOrAll: string): Promise<Result> {
   try {
     const u = await me();

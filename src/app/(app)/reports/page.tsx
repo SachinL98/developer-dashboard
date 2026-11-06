@@ -85,6 +85,8 @@ async function OneOnOneTab({ me, dev, month }: { me: Awaited<ReturnType<typeof r
       <PageHeader title="Reports" sub={own ? "Your monthly 1:1: the last two weeks compared with the 30 days before, with suggestions to take into the conversation." : `Monthly 1:1 report for ${person.name}.`}
         actions={report ? <>
           <Link href={`/present?${here}`} className="btn-primary"><Presentation size={14} /> Present</Link>
+          <a href={`/api/reports/export?${here}&format=pptx`} className="btn"><Download size={14} /> PowerPoint</a>
+          <a href={`/api/reports/export?${here}&format=pdf`} className="btn"><Download size={14} /> PDF</a>
           <Link href={`/report-print?${here}`} className="btn"><Printer size={14} /> Print view</Link></> : undefined} />
       <div className="card-pad space-y-4">
         <div role="tablist" aria-label="Report type" className="flex flex-wrap gap-2"><KindTabs active="oneonone" /></div>
