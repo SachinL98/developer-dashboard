@@ -4,6 +4,7 @@ import { LoginError } from "./identity";
 import { afterFailure, burnPasswordCheck, hashPassword, isLocked, passwordProblem, verifyPassword } from "./password";
 import { rateLimitShared, RateLimited } from "../rate-limit";
 import { getWorkspace } from "../config";
+import { hrOwnsIdentity, mirrorFromHr, verifyWithHr } from "../hr-identity";
 import { bootstrapAdmins, isValidEmail } from "../permissions";
 
 const GENERIC = "Incorrect email or password. After several wrong attempts the account is locked for a few minutes.";
@@ -17,7 +18,33 @@ export async function verifyLogin(emailRaw: string, password: string, ip: string
   } catch (e) { if (e instanceof RateLimited) throw new LoginError("Too many attempts. Wait a few minutes and try again."); throw e; }
   if (!email || !password || password.length > 500) throw new LoginError(GENERIC);
 
+  // When the HR app owns accounts, it decides whether the password is right and we mirror the person's profile.
+  let hrDown = false, hrUnknown = false;
+  if (hrOwnsIdentity()) {
+    const hr = await verifyWithHr(email, password);
+    switch (hr.status) {
+      case "ok": {
+        const dev = await mirrorFromHr(hr.profile);
+        if (!dev.active) throw new LoginError("Your account has been deactivated. Ask an admin.");
+        const signedIn = await db.developer.update({ where: { id: dev.id }, data: { failedLogins: 0, lockedUntil: null, lastLoginAt: new Date() } });
+        await linkToJiraOnSignIn(dev.id);
+        return signedIn;
+      }
+      case "invalid": throw new LoginError(GENERIC);
+      case "locked": throw new LoginError("Too many attempts. Wait a few minutes and try again.");
+      case "mfa": throw new LoginError("Two-factor sign-in is on for your account. Sign in to the HR app first, then use Switch to Dev Dashboard.");
+      case "unverified": throw new LoginError("Confirm your email in the HR app first, then sign in again.");
+      case "down": hrDown = true; break;
+      case "unknown": hrUnknown = true; break;
+    }
+  }
+
   const user = await db.developer.findUnique({ where: { email } });
+  // Accounts owned by the HR app never fall back to a local password: someone removed from HR must not get in, and an outage must not open a back door.
+  if (user?.hrManaged && (hrUnknown || hrDown)) {
+    await burnPasswordCheck(password);
+    throw new LoginError(hrDown ? "Sign-in is unavailable right now. Please try again in a few minutes." : GENERIC);
+  }
   if (!user) {
     // A pending sign-up request: only someone who knows the password they chose is told it is waiting.
     const req = await db.signupRequest.findUnique({ where: { email } });

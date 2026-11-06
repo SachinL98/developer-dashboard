@@ -6,6 +6,7 @@ import { rateLimitShared, RateLimited } from "../rate-limit";
 import { hashPassword, passwordProblem } from "./password";
 import { LoginError } from "./identity";
 import { reconcileJiraPeople } from "../jira-people";
+import { hrOwnsIdentity } from "../hr-identity";
 
 export const MAX_PENDING = 100;
 export const REQUEST_TTL_DAYS = 14;
@@ -22,14 +23,14 @@ export type SignupInput = z.input<typeof signupSchema>;
 
 export const SIGNUP_DONE = "Request received. An admin will review it, and you can sign in once it is approved.";
 
-export const signupEnabled = () => process.env.SIGNUP_ENABLED !== "false";
+export const signupEnabled = () => process.env.SIGNUP_ENABLED !== "false" && !hrOwnsIdentity();
 
 /**
  * Self-service sign-up. The email can't be verified (no mail service), so nothing is created until an admin approves.
  * The answer is identical whether or not the email is already known, so nobody can use this form to find out who has an account.
  */
 export async function submitSignup(input: SignupInput, ip: string): Promise<string> {
-  if (!signupEnabled()) throw new LoginError("Sign-up is closed. Ask an admin to add you.");
+  if (!signupEnabled()) throw new LoginError(hrOwnsIdentity() ? "Accounts are created in the HR app. Ask your HR admin to invite you, then sign in here with the same email and password." : "Sign-up is closed. Ask an admin to add you.");
   try { await rateLimitShared(`signup-ip:${ip}`, 5, 60 * 60_000); } catch (e) { if (e instanceof RateLimited) throw new LoginError("Too many requests from this network. Try again later."); throw e; }
   const p = signupSchema.parse(input);
   if (!isValidEmail(p.email)) throw new LoginError("Enter a valid email address.");

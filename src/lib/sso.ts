@@ -3,7 +3,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 export type SsoAudience = "hr" | "dash";
-export interface SsoClaims { email: string; aud: SsoAudience; exp: number; n: string }
+export interface SsoClaims { email: string; aud: SsoAudience; exp: number; n: string; name?: string; role?: string | null }
 export const SSO_TTL_SECONDS = 60;
 
 const sig = (payload: string, secret: string) => createHmac("sha256", secret).update(payload).digest("base64url");

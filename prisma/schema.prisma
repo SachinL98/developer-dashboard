@@ -83,6 +83,7 @@ model Developer {
   discordId           String? // Discord user id, for direct messages and mentions
   notifyEmail         Boolean   @default(true)
   notifyDiscord       Boolean   @default(true)
+  hrManaged           Boolean   @default(false) // password, name and email are owned by the HR app
   aiProvider          String? // anthropic | openai | gemini: which saved AI key this person's AI buttons use
   authSessions AuthSession[]
   connections Connection[]
