@@ -47,4 +47,16 @@ describe("qualityStats", () => {
     expect(s.perDev.find((x) => x.developerId === "ann")!.delivered).toBe(2);
     expect(s.teamBugsPer10).toBe(7.5);
   });
+  it("treats 1 or 2 bugs as normal and only repetition across sprints as a pattern", () => {
+    const feat = (k: string, who: string) => t({ key: k, title: "Pricing rules engine", assigneeId: who, labels: ["pricing"], description: "pricing rules engine totals" });
+    const pb = (n: number, sprint: string) => bug({ key: `P-${n}`, title: "Pricing rules engine wrong total", labels: ["pricing"], description: "pricing rules engine totals", sprintName: sprint });
+    const few = [feat("F1", "ann"), feat("F2", "ann"), feat("F3", "ann"), pb(1, "Sprint 3"), pb(2, "Sprint 3")];
+    expect(qualityStats(few, linkBugs(few)).perDev.find((x) => x.developerId === "ann")!.pattern).toBe("occasional");
+    const many = [feat("F1", "ann"), feat("F2", "ann"), feat("F3", "ann"), pb(1, "Sprint 3"), pb(2, "Sprint 4"), pb(3, "Sprint 5")];
+    const s = qualityStats(many, linkBugs(many));
+    expect(s.perDev.find((x) => x.developerId === "ann")!.pattern).toBe("recurring");
+    expect(s.recurringAreas.length).toBeGreaterThan(0);
+    const none = [feat("F1", "bob")];
+    expect(qualityStats(none, linkBugs(none)).perDev[0].pattern).toBe("none");
+  });
 });

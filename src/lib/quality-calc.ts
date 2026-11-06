@@ -72,11 +72,16 @@ export function linkBugs(tickets: QTicket[], opts: LinkOptions = {}): BugLink[] 
   });
 }
 
+/** A pattern needs repetition: 1 or 2 bugs are normal. Recurring = 3+ traced bugs across at least 2 sprints, or 3+ in one area. */
+export const RECURRING_MIN = 3;
+export type Pattern = "recurring" | "occasional" | "none";
+
 export interface DevQuality {
+  pattern: Pattern; bugSprints: number; recurringAreas: string[];
   developerId: string; delivered: number; bugsTraced: number; likelyBugs: number; bugsPer10: number | null; vsTeam: "higher" | "similar" | "lower" | "not enough data";
   highPriority: number; areas: { topic: string; label: string; bugs: number }[];
 }
-export interface QualityStats { bugsTotal: number; bugsTraced: number; tracedPct: number | null; teamBugsPer10: number | null; perDev: DevQuality[]; bySprint: { sprint: string; bugs: number; delivered: number }[] }
+export interface QualityStats { recurringAreas: { label: string; bugs: number; sprints: number }[]; bugsTotal: number; bugsTraced: number; tracedPct: number | null; teamBugsPer10: number | null; perDev: DevQuality[]; bySprint: { sprint: string; bugs: number; delivered: number }[] }
 
 /** Roll the links up per developer. Only the best candidate of each bug counts, and only when it is likely or clearly the top match. */
 export function qualityStats(tickets: QTicket[], links: BugLink[]): QualityStats {
@@ -91,7 +96,11 @@ export function qualityStats(tickets: QTicket[], links: BugLink[]): QualityStats
     const per10 = n >= 3 ? Math.round((mine.length / n) * 100) / 10 : null;
     const areas = new Map<string, number>();
     for (const x of mine) for (const tp of topicsOf({ title: `${x.top.origin.title} ${x.bug.title}`, labels: x.top.origin.labels }).slice(0, 1)) areas.set(tp, (areas.get(tp) ?? 0) + 1);
+    const bugSprints = new Set(mine.map((x) => x.bug.sprintName).filter(Boolean)).size;
+    const recurringAreas = [...areas].filter(([, c]) => c >= RECURRING_MIN).map(([tp]) => topicLabel(tp));
+    const pattern: Pattern = (mine.length >= RECURRING_MIN && bugSprints >= 2) || recurringAreas.length ? "recurring" : mine.length ? "occasional" : "none";
     return {
+      pattern, bugSprints, recurringAreas,
       developerId: id, delivered: n, bugsTraced: mine.length, likelyBugs: mine.filter((x) => x.top.confidence === "likely").length, bugsPer10: per10,
       vsTeam: ((): DevQuality["vsTeam"] => per10 == null || teamBugsPer10 == null || best.length < 3 ? "not enough data" : per10 >= teamBugsPer10 * 1.5 && mine.length >= 2 ? "higher" : per10 <= teamBugsPer10 * 0.5 ? "lower" : "similar")(),
       highPriority: mine.filter((x) => ["HIGH", "CRITICAL"].includes(x.bug.priority)).length,
@@ -100,6 +109,11 @@ export function qualityStats(tickets: QTicket[], links: BugLink[]): QualityStats
   }).sort((a, b) => b.bugsTraced - a.bugsTraced);
   const sprints = [...new Set(tickets.map((t) => t.sprintName).filter(Boolean))] as string[];
   const bySprint = sprints.map((s) => ({ sprint: s, bugs: tickets.filter((t) => t.type === "BUG" && t.sprintName === s).length, delivered: done.filter((t) => t.sprintName === s).length }));
+  const byArea = new Map<string, { bugs: number; sprints: Set<string> }>();
+  for (const x of best) for (const tp of topicsOf({ title: `${x.top.origin.title} ${x.bug.title}`, labels: x.top.origin.labels }).slice(0, 1)) {
+    const a = byArea.get(tp) ?? { bugs: 0, sprints: new Set<string>() }; a.bugs++; if (x.bug.sprintName) a.sprints.add(x.bug.sprintName); byArea.set(tp, a);
+  }
+  const recurringAreas = [...byArea].filter(([, a]) => a.bugs >= RECURRING_MIN && a.sprints.size >= 2).map(([tp, a]) => ({ label: topicLabel(tp), bugs: a.bugs, sprints: a.sprints.size })).sort((a, b) => b.bugs - a.bugs);
   const bugsTotal = links.length;
-  return { bugsTotal, bugsTraced: best.length, tracedPct: bugsTotal ? Math.round((best.length / bugsTotal) * 100) : null, teamBugsPer10, perDev, bySprint };
+  return { recurringAreas, bugsTotal, bugsTraced: best.length, tracedPct: bugsTotal ? Math.round((best.length / bugsTotal) * 100) : null, teamBugsPer10, perDev, bySprint };
 }

@@ -41,6 +41,7 @@ export default async function Quality() {
           {stats.bySprint.length > 0 && (
             <div className="mt-5 overflow-x-auto"><table className="tbl min-w-[420px]"><thead><tr><th>Sprint</th><th>Delivered</th><th>Bugs logged</th></tr></thead>
               <tbody>{stats.bySprint.map((s) => <tr key={s.sprint}><td>{s.sprint}</td><td className="tabular-nums">{s.delivered}</td><td className="tabular-nums">{s.bugs}</td></tr>)}</tbody></table></div>)}
+          {stats.recurringAreas.length > 0 ? <div className="mt-4 rounded-lg bg-neon-amber/10 px-3 py-2 text-sm text-neon-amber">Recurring across sprints: {stats.recurringAreas.map((a) => `${a.label} (${a.bugs} bugs in ${a.sprints} sprints)`).join(", ")}.</div> : <p className="mt-4 text-sm text-neon-lime">No area is producing repeated bugs. A few bugs here and there is normal.</p>}
           <p className="mt-3 text-xs text-mute">Matches are based on the bug naming a ticket, shared labels and similar wording, so they are suggestions to check, not proof. A bug can also come from unclear requirements or a missed test, not only from the code.</p>
         </section>
 
@@ -61,8 +62,10 @@ export default async function Quality() {
                   <div className="flex items-center gap-3">
                     {d && <Avatar name={d.name} hue={d.avatarHue} id={d.id} ver={d.avatarVer} size={36} />}
                     <div className="min-w-0 flex-1"><div className="truncate font-medium">{d?.name ?? "Developer"}</div><div className="text-xs text-mute">{p.delivered} delivered · {p.bugsTraced} bug{p.bugsTraced === 1 ? "" : "s"} traced{p.likelyBugs ? ` (${p.likelyBugs} likely)` : ""}</div></div>
-                    <span className={`pill ${p.vsTeam === "higher" ? "bg-neon-amber/10 text-neon-amber" : p.vsTeam === "lower" ? "bg-neon-lime/10 text-neon-lime" : "bg-panel2 text-mute"}`}>{p.vsTeam === "not enough data" ? "Not enough data" : p.vsTeam === "higher" ? "Above team rate" : p.vsTeam === "lower" ? "Below team rate" : "Near team rate"}</span>
+                    <span className={`pill ${p.pattern === "recurring" ? "bg-neon-amber/10 text-neon-amber" : p.pattern === "none" ? "bg-neon-lime/10 text-neon-lime" : "bg-panel2 text-mute"}`}>{p.pattern === "recurring" ? "Recurring pattern" : p.pattern === "occasional" ? "Occasional, normal" : "No traced bugs"}</span>
                   </div>
+                  {p.pattern === "recurring" && <p className="rounded-lg bg-neon-amber/10 px-3 py-2 text-xs text-neon-amber">{p.bugsTraced} traced bugs across {p.bugSprints} sprints{p.recurringAreas.length ? `, repeating in ${p.recurringAreas.join(", ")}` : ""}. Worth a supportive conversation.</p>}
+                  {p.pattern === "occasional" && <p className="text-xs text-mute">One or two traced bugs is normal and not a concern on its own. It only matters if it keeps coming back.</p>}
                   {p.areas.length > 0 && <div className="flex flex-wrap gap-1.5 text-xs">{p.areas.map((a) => <span key={a.topic} className="chip">{a.label} · {a.bugs}</span>)}</div>}
                   {n ? (<div className="space-y-2 text-sm">
                     <p>{n.summary}</p>
