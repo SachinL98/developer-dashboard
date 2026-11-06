@@ -23,7 +23,7 @@ import { createUserWithPassword } from "@/lib/auth/login";
 import { approveSignup } from "@/lib/auth/signup";
 import { generateTempPassword, hashPassword } from "@/lib/auth/password";
 import { userMessage } from "@/lib/safe-error";
-import { rateLimit } from "@/lib/rate-limit";
+import { rateLimitShared } from "@/lib/rate-limit";
 import { saveUserKey, removeUserKey, validateKey, listUserProviders, setPreferredProvider, PROVIDERS } from "@/lib/ai";
 import { norm as normSpeaker, isGenericSpeaker } from "@/lib/speakers";
 import { mergePeople } from "@/lib/jira-people";
@@ -32,6 +32,8 @@ import { saveNotifyConfig, sendTest as sendNotifyTest } from "@/lib/notify/run";
 import { validDiscordId } from "@/lib/notify/discord";
 import { generateDevProfile, reviewEstimate, type EstimateReview } from "@/lib/insights";
 import { generateQualityInsight } from "@/lib/quality";
+import { audit } from "@/lib/audit";
+import { notifyInbox } from "@/lib/inbox";
 
 type Result<T = {}> = ({ ok: true } & T) | { ok: false; error: string };
 const fail = (e: unknown): { ok: false; error: string } => ({ ok: false, error: e instanceof z.ZodError ? "Invalid input: " + e.issues[0]?.message : userMessage(e) });
@@ -99,6 +101,7 @@ export async function updateTicketAction(ticketId: string, patch: z.input<typeof
     const { dueDate, ...rest } = p;
     const upd = await db.ticket.update({ where: { id: ticketId }, data: { ...rest, ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(`${dueDate}T12:00:00Z`) : null } : {}), ...(p.prUrl ? { prNumber: Number(p.prUrl.match(/pull\/(\d+)/)?.[1]) || null, prState: "open" } : {}) } });
     // An estimate change is written straight to the real Jira issue, in the unit that project uses.
+    if (p.assigneeId && p.assigneeId !== t.assigneeId && p.assigneeId !== user.id) await notifyInbox(p.assigneeId, { kind: "ASSIGNED", title: `${upd.key} was assigned to you`, body: upd.title, href: `/tickets/${upd.id}` });
     const jiraResult = upd.jiraKey && (p.storyPoints != null || p.estimateHrs != null) ? await svc.pushEstimate(upd.id) : undefined;
     touch(); revalidatePath(`/tickets/${ticketId}`);
     return { ok: true, jira: jiraResult };
@@ -129,7 +132,7 @@ export async function runReviewAction(ticketId: string): Promise<Result> {
     const tid = id.parse(ticketId);
     const tk = await db.ticket.findUniqueOrThrow({ where: { id: tid }, select: { assigneeId: true } });
     if (!atLeast(u.access, "LEAD") && tk.assigneeId !== u.id) return { ok: false, error: "Only the assignee or a lead can run the review." };
-    rateLimit(`review:${u.id}`, 20, 3_600_000);
+    await rateLimitShared(`review:${u.id}`, 20, 3_600_000);
     after(async () => { await svc.runInitialReview(tid, "manual", u.id).catch(() => {}); revalidatePath(`/tickets/${tid}`); });
     return { ok: true };
   } catch (e) { return fail(e); }
@@ -258,7 +261,7 @@ export async function closeSprintAction(sprintId: string): Promise<Result<{ carr
 export async function saveNotesAction(meetingId: string, transcript: string, source: "upload" | "live" | "paste" = "paste"): Promise<Result<{ actions: number; ai: boolean; aiError?: string }>> {
   try {
     const u = await me();
-    rateLimit(`ai:${u.id}`, 30, 3_600_000);
+    await rateLimitShared(`ai:${u.id}`, 30, 3_600_000);
     const parsed = await svc.generateNotes(id.parse(meetingId), z.string().min(1).max(400_000).parse(transcript), u.id, { source: z.enum(["upload", "live", "paste"]).parse(source) });
     revalidatePath("/meetings"); return { ok: true, actions: parsed.actionItems.length, ai: parsed.ai, aiError: parsed.aiError };
   } catch (e) { return fail(e); }
@@ -268,7 +271,7 @@ export async function saveNotesAction(meetingId: string, transcript: string, sou
 export async function importTranscriptAction(meetingId: string): Promise<Result<{ actions: number; chars: number; ai: boolean; aiError?: string }>> {
   try {
     const u = await me();
-    rateLimit(`ai:${u.id}`, 30, 3_600_000);
+    await rateLimitShared(`ai:${u.id}`, 30, 3_600_000);
     const r = await svc.importMeetTranscript(id.parse(meetingId), u.id);
     if (!r) return { ok: false, error: "No transcript yet. Meet publishes it a few minutes after the call, and only if Transcript was turned on in the meeting." };
     revalidatePath("/meetings"); return { ok: true, actions: r.parsed.actionItems.length, chars: r.chars, ai: r.parsed.ai, aiError: r.parsed.aiError };
@@ -355,6 +358,7 @@ export async function setAccessAction(userId: string, access: "DEVELOPER" | "LEA
     z.enum(["DEVELOPER", "LEAD", "ADMIN"]).parse(access);
     if (userId === admin.id && access !== "ADMIN" && (await db.developer.count({ where: { access: "ADMIN", active: true } })) <= 1) return { ok: false, error: "You are the only admin. Make someone else an admin first." };
     await db.developer.update({ where: { id: id.parse(userId) }, data: { access } });
+    await audit(admin, "setAccess", userId);
     revalidatePath("/admin/users"); return { ok: true };
   } catch (e) { return fail(e); }
 }
@@ -364,6 +368,7 @@ export async function setActiveAction(userId: string, active: boolean): Promise<
     if (userId === admin.id) return { ok: false, error: "You can't deactivate yourself." };
     await db.developer.update({ where: { id: id.parse(userId) }, data: { active } });
     if (!active) await db.authSession.deleteMany({ where: { userId } }); // sign them out everywhere
+    await audit(admin, "setActive", userId);
     revalidatePath("/admin/users"); return { ok: true };
   } catch (e) { return fail(e); }
 }
@@ -401,7 +406,7 @@ export async function refreshBoardAction(): Promise<Result> {
 
 const statusMapSchema = z.record(z.string().max(120), z.union([z.literal(""), z.enum(STATUS_ORDER as unknown as [StatusKey, ...StatusKey[]])]));
 export async function saveStatusMapAction(map: Record<string, string>): Promise<Result> {
-  try { await requireAccess("ADMIN"); await jira.saveStatusMap(statusMapSchema.parse(map)); touch(); revalidatePath("/settings"); return { ok: true }; } catch (e) { return fail(e); }
+  try { const adminUser = await requireAccess("ADMIN"); await jira.saveStatusMap(statusMapSchema.parse(map)); await audit(adminUser, "saveStatusMap", undefined, { columns: Object.keys(map).length }); touch(); revalidatePath("/settings"); return { ok: true }; } catch (e) { return fail(e); }
 }
 
 // ----- admin: meetings and workspace settings -----
@@ -420,11 +425,12 @@ const meetingSchema = z.array(z.object({
 /** Admin: edit the recurring meeting schedule and each meeting's fixed Google Meet link, then rebuild the upcoming meetings. */
 export async function saveMeetingsAction(list: MeetingSetting[]): Promise<Result<{ created: number; removed: number }>> {
   try {
-    await requireAccess("ADMIN");
+    const adminUser = await requireAccess("ADMIN");
     const parsed = meetingSchema.parse(list) as MeetingSetting[];
     await saveMeetingSettings(parsed);
     const r = await svc.rebuildUpcomingMeetings();
     touch(); revalidatePath("/admin/meetings");
+    await audit(adminUser, "saveMeetings", undefined, { meetings: list.length });
     return { ok: true, created: r.created, removed: r.removed };
   } catch (e) { return fail(e); }
 }
@@ -432,10 +438,11 @@ export async function saveMeetingsAction(list: MeetingSetting[]): Promise<Result
 /** Admin: set or clear the Meet link of one upcoming meeting. */
 export async function setMeetingLinkAction(meetingId: string, url: string): Promise<Result> {
   try {
-    await requireAccess("ADMIN");
+    const adminUser = await requireAccess("ADMIN");
     const link = meetLink.parse(url);
     await db.meeting.update({ where: { id: id.parse(meetingId) }, data: { meetUrl: link || null } });
     touch(); revalidatePath("/admin/meetings");
+    await audit(adminUser, "setMeetingLink", meetingId);
     return { ok: true };
   } catch (e) { return fail(e); }
 }
@@ -457,10 +464,11 @@ const workspaceSchema = z.object({
 /** Admin: workspace settings (timezone, hours, sprint cadence, capacity defaults, Jira and GitHub mapping). */
 export async function saveWorkspaceAction(input: WorkspaceConfig): Promise<Result> {
   try {
-    await requireAccess("ADMIN");
+    const adminUser = await requireAccess("ADMIN");
     await saveWorkspace(workspaceSchema.parse(input) as WorkspaceConfig);
     jira.resetBoardCache();
     touch(); revalidatePath("/admin/workspace"); revalidatePath("/settings");
+    await audit(adminUser, "saveWorkspace", undefined);
     return { ok: true };
   } catch (e) { return fail(e); }
 }
@@ -468,17 +476,18 @@ export async function saveWorkspaceAction(input: WorkspaceConfig): Promise<Resul
 /** Admin: which GitHub repo (org/name) and display name each project uses. */
 export async function saveProjectAction(projectId: string, patch: { name: string; repo: string }): Promise<Result> {
   try {
-    await requireAccess("ADMIN");
+    const adminUser = await requireAccess("ADMIN");
     const v = z.object({ name: z.string().trim().min(1).max(80), repo: z.string().trim().regex(/^([A-Za-z0-9-]+\/[A-Za-z0-9._-]+)?$/, "Use org/repo, like spaceitlabs/api") }).parse(patch);
     await db.project.update({ where: { id: id.parse(projectId) }, data: { name: v.name, repo: v.repo || null } });
     touch(); revalidatePath("/admin/workspace");
+    await audit(adminUser, "saveProject", projectId);
     return { ok: true };
   } catch (e) { return fail(e); }
 }
 /** Admin: add a project. Jira sync also creates one automatically for the project key it finds. */
 export async function createProjectAction(input: { key: string; name: string; repo?: string }): Promise<Result> {
   try {
-    await requireAccess("ADMIN");
+    const adminUser = await requireAccess("ADMIN");
     const v = z.object({
       key: z.string().trim().toUpperCase().regex(/^[A-Z][A-Z0-9_]{1,9}$/, "Project key is 2-10 capital letters or digits, like ATL"),
       name: z.string().trim().min(1).max(80),
@@ -488,6 +497,7 @@ export async function createProjectAction(input: { key: string; name: string; re
     await svc.ensureProject(v.key);
     await db.project.update({ where: { key: v.key }, data: { name: v.name, repo: v.repo || null } });
     touch(); revalidatePath("/admin/workspace");
+    await audit(adminUser, "createProject", undefined);
     return { ok: true };
   } catch (e) { return fail(e); }
 }
@@ -505,9 +515,10 @@ const reviewConfigSchema = z.object({
 /** Admin: the PR review template (team points + per-project points and guidance) and when reviews run. */
 export async function saveReviewConfigAction(input: ReviewConfig): Promise<Result> {
   try {
-    await requireAccess("ADMIN");
+    const adminUser = await requireAccess("ADMIN");
     await saveReviewConfig(reviewConfigSchema.parse(input) as ReviewConfig);
     revalidatePath("/admin/review");
+    await audit(adminUser, "saveReviewConfig", undefined);
     return { ok: true };
   } catch (e) { return fail(e); }
 }
@@ -521,7 +532,7 @@ const sniff = (b: Uint8Array): string | null =>
 export async function uploadAvatarAction(form: FormData): Promise<Result> {
   try {
     const u = await me();
-    rateLimit(`avatar:${u.id}`, 20, 3_600_000);
+    await rateLimitShared(`avatar:${u.id}`, 20, 3_600_000);
     const file = form.get("photo");
     if (!(file instanceof Blob) || file.size === 0) throw new Error("Choose a photo first.");
     if (file.size > 400_000) throw new Error("That photo is too large. Try a smaller one.");
@@ -594,6 +605,7 @@ export async function decideLeaveAction(leaveId: string, approve: boolean, note?
     if (l.developerId === user.id && !atLeast(user.access, "ADMIN")) throw new Error("Ask another lead or an admin to decide your own leave.");
     await db.leave.update({ where: { id: l.id }, data: { status: approve ? "APPROVED" : "REJECTED", decidedById: user.id, decidedAt: new Date(), decisionNote: z.string().max(300).optional().parse(note)?.trim() || null } });
     if (approve) after(() => syncLeaveEvent(l.id));
+    if (l.developerId !== user.id) await notifyInbox(l.developerId, { kind: "LEAVE", title: approve ? "Your leave was approved" : "Your leave request was declined", body: `${String(l.startDate).slice(0, 10)} to ${String(l.endDate).slice(0, 10)}`, href: "/leave" });
     touchLeave(); return { ok: true };
   } catch (e) { return fail(e); }
 }
@@ -614,9 +626,10 @@ export async function cancelLeaveAction(leaveId: string): Promise<Result> {
 /** Public holidays that remove a working day from everyone's capacity. Admin only. */
 export async function saveHolidaysAction(list: { date: string; name: string }[]): Promise<Result> {
   try {
-    await requireAccess("ADMIN");
+    const adminUser = await requireAccess("ADMIN");
     const clean = z.array(z.object({ date: z.string().refine(isDateStr, "Invalid date"), name: z.string().trim().min(1).max(80) })).max(200).parse(list);
     await saveHolidays([...new Map(clean.map((h) => [h.date, h])).values()].sort((a, b) => a.date.localeCompare(b.date)));
+    await audit(adminUser, "saveHolidays", undefined, { holidays: clean.length });
     touchLeave(); revalidatePath("/admin/holidays"); return { ok: true };
   } catch (e) { return fail(e); }
 }
@@ -633,7 +646,7 @@ export async function saveAiKeyAction(input: { provider: "anthropic" | "openai" 
     const key = z.string().trim().min(20, "That doesn't look like an API key").max(400).parse(input.key);
     if (!meta.keyPattern.test(key)) return { ok: false, error: `${meta.label} keys look like ${meta.keyHint}` };
     const model = z.string().trim().max(80).regex(/^[A-Za-z0-9._:\/-]*$/, "That model name has odd characters").optional().parse(input.model);
-    rateLimit(`key:${u.id}`, 10, 600_000);
+    await rateLimitShared(`key:${u.id}`, 10, 600_000);
     await validateKey(provider, key);
     await saveUserKey(u.id, provider, key, model);
     revalidatePath("/settings"); return { ok: true };
@@ -655,17 +668,25 @@ export async function generateProfileAction(devId: string): Promise<Result> {
     const u = await me();
     const d = id.parse(devId);
     if (d !== u.id && !atLeast(u.access, "LEAD")) throw new Error("Only leads and admins can analyse other developers.");
-    rateLimit(`ai:${u.id}`, 30, 3_600_000);
+    await rateLimitShared(`ai:${u.id}`, 30, 3_600_000);
     await generateDevProfile(d, u.id);
     revalidatePath(`/team/${d}`); return { ok: true };
   } catch (e) { return fail(e); }
 }
 
 /** Bug origin analysis for the team. Anyone signed in can run it; what they see afterwards is limited to their own work unless they are a lead or admin. */
+export async function markInboxReadAction(idOrAll: string): Promise<Result> {
+  try {
+    const u = await me();
+    await db.notification.updateMany({ where: { userId: u.id, readAt: null, ...(idOrAll === "all" ? {} : { id: id.parse(idOrAll) }) }, data: { readAt: new Date() } });
+    revalidatePath("/", "layout"); return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
 export async function generateQualityAction(): Promise<Result> {
   try {
     const u = await me();
-    rateLimit(`quality:${u.id}`, 6, 3_600_000);
+    await rateLimitShared(`quality:${u.id}`, 6, 3_600_000);
     await generateQualityInsight(u.id);
     revalidatePath("/quality"); return { ok: true };
   } catch (e) { return fail(e); }
@@ -680,7 +701,7 @@ export async function reviewEstimateAction(ticketId: string): Promise<Result<{ r
       const mine = votes.find((v) => v.developerId === u.id)?.hours ?? null;
       if (!voteIsFar(mine, votes.filter((v) => v.developerId !== u.id).map((v) => v.hours))) throw new Error("The AI review is available when your vote is far from the others' votes.");
     }
-    rateLimit(`ai:${u.id}`, 30, 3_600_000);
+    await rateLimitShared(`ai:${u.id}`, 30, 3_600_000);
     const review = await reviewEstimate(tid, u.id);
     return { ok: true, review };
   } catch (e) { return fail(e); }
@@ -691,11 +712,12 @@ export async function reviewEstimateAction(ticketId: string): Promise<Result<{ r
 /** Create a user with a one-time password. The password is returned once so the admin can hand it over. */
 export async function createUserAction(input: { name: string; email: string; access: "DEVELOPER" | "LEAD" | "ADMIN" }): Promise<Result<{ tempPassword: string; email: string }>> {
   try {
-    await requireAccess("ADMIN");
+    const adminUser = await requireAccess("ADMIN");
     const p = z.object({ name: z.string().trim().min(2).max(80), email: z.string().trim().email().max(120), access: z.enum(["DEVELOPER", "LEAD", "ADMIN"]) }).parse(input);
     const temp = generateTempPassword();
     const u = await createUserWithPassword(p, temp);
     revalidatePath("/admin/users");
+    await audit(adminUser, "createUser", undefined);
     return { ok: true, tempPassword: temp, email: u.email };
   } catch (e) { return fail(e); }
 }
@@ -710,6 +732,7 @@ export async function resetPasswordAction(userId: string): Promise<Result<{ temp
     await db.developer.update({ where: { id: uid }, data: { passwordHash: await hashPassword(temp), mustChangePassword: true, failedLogins: 0, lockedUntil: null } });
     await db.authSession.deleteMany({ where: { userId: uid } });
     revalidatePath("/admin/users");
+    await audit(admin, "resetPassword", userId);
     return { ok: true, tempPassword: temp };
   } catch (e) { return fail(e); }
 }
@@ -717,17 +740,19 @@ export async function resetPasswordAction(userId: string): Promise<Result<{ temp
 /** Admin approves a sign-up request; the person can then sign in with the password they chose. */
 export async function approveSignupAction(requestId: string, access: "DEVELOPER" | "LEAD" | "ADMIN"): Promise<Result> {
   try {
-    await requireAccess("ADMIN");
+    const adminUser = await requireAccess("ADMIN");
     await approveSignup(id.parse(requestId), z.enum(["DEVELOPER", "LEAD", "ADMIN"]).parse(access));
     revalidatePath("/admin/users"); revalidatePath("/", "layout");
+    await audit(adminUser, "approveSignup", requestId);
     return { ok: true };
   } catch (e) { return fail(e); }
 }
 export async function rejectSignupAction(requestId: string): Promise<Result> {
   try {
-    await requireAccess("ADMIN");
+    const adminUser = await requireAccess("ADMIN");
     await db.signupRequest.deleteMany({ where: { id: id.parse(requestId) } });
     revalidatePath("/admin/users"); revalidatePath("/", "layout");
+    await audit(adminUser, "rejectSignup", requestId);
     return { ok: true };
   } catch (e) { return fail(e); }
 }
@@ -735,13 +760,14 @@ export async function rejectSignupAction(requestId: string): Promise<Result> {
 /** Admin: set the real email of a person imported from Jira whose address Jira hides, so they can later sign up and be linked. */
 export async function setPersonEmailAction(userId: string, email: string): Promise<Result> {
   try {
-    await requireAccess("ADMIN");
+    const adminUser = await requireAccess("ADMIN");
     const e = z.string().trim().toLowerCase().email().max(120).parse(email);
     const u = await db.developer.findUniqueOrThrow({ where: { id: id.parse(userId) } });
     if (u.passwordHash) return { ok: false, error: "This person already has an account." };
     if (await db.developer.findUnique({ where: { email: e } })) return { ok: false, error: "That email already belongs to someone else." };
     await db.developer.update({ where: { id: u.id }, data: { email: e } });
     revalidatePath("/admin/users");
+    await audit(adminUser, "setPersonEmail", userId);
     return { ok: true };
   } catch (e) { return fail(e); }
 }
@@ -764,9 +790,10 @@ export async function linkSpeakerAction(speakerName: string, developerId: string
 /** Admin: this person imported from Jira is the same human as an existing account. Moves everything across and removes the duplicate. */
 export async function mergePersonAction(fromId: string, intoId: string): Promise<Result<{ tickets: number }>> {
   try {
-    await requireAccess("ADMIN");
+    const adminUser = await requireAccess("ADMIN");
     const r = await mergePeople(id.parse(fromId), id.parse(intoId));
     revalidatePath("/admin/users"); revalidatePath("/team"); touch();
+    await audit(adminUser, "mergePerson", fromId);
     return { ok: true, tickets: r.tickets };
   } catch (e) { return fail(e); }
 }
@@ -777,7 +804,7 @@ export async function generateOneOnOneAction(devId: string): Promise<Result> {
     const u = await me();
     const d = id.parse(devId);
     if (d !== u.id && !atLeast(u.access, "LEAD")) throw new Error("You can only make your own report.");
-    rateLimit(`oneonone:${u.id}`, 8, 3_600_000);
+    await rateLimitShared(`oneonone:${u.id}`, 8, 3_600_000);
     await generateOneOnOne(d, { keyUserId: u.id });
     revalidatePath("/one-on-one"); revalidatePath("/reports"); return { ok: true };
   } catch (e) { return fail(e); }
@@ -786,16 +813,17 @@ export async function generateOneOnOneAction(devId: string): Promise<Result> {
 // ----- notifications -----
 export async function saveNotifyConfigAction(input: { overdue: boolean; startReminder: boolean; graceMin: number }): Promise<Result> {
   try {
-    await requireAccess("ADMIN");
+    const adminUser = await requireAccess("ADMIN");
     const v = z.object({ overdue: z.boolean(), startReminder: z.boolean(), graceMin: z.number().int().min(5).max(240) }).parse(input);
     await saveNotifyConfig(v);
+    await audit(adminUser, "saveNotifyConfig", undefined);
     revalidatePath("/admin/notifications"); return { ok: true };
   } catch (e) { return fail(e); }
 }
 export async function sendTestNotificationAction(): Promise<Result<{ channels: Record<string, string> }>> {
   try {
     const u = await requireAccess("ADMIN");
-    rateLimit(`notify-test:${u.id}`, 10, 600_000);
+    await rateLimitShared(`notify-test:${u.id}`, 10, 600_000);
     const r = await sendNotifyTest({ id: u.id, name: u.name, email: u.email, discordId: u.discordId, notifyEmail: true, notifyDiscord: true });
     revalidatePath("/admin/notifications");
     return { ok: true, channels: r.channels };

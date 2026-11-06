@@ -136,6 +136,9 @@ model Ticket {
   estimateSyncedAt  DateTime? // last time the estimate was written to the Jira issue
   estimateSyncError String? // why the last write-back failed, if it did
   complicated  Boolean     @default(false) // flagged for grooming
+  blocked      Boolean     @default(false) // waiting on something outside the assignee's control
+  blockedReason String?
+  links        Json? // Jira issue links: [{ type, direction, key }]
   dueDate      DateTime? // from Jira's due date, or set here; a ticket past it that is not done is overdue
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
@@ -411,4 +414,47 @@ model AvatarImage {
   mime        String
   data        Bytes
   updatedAt   DateTime @updatedAt
+}
+
+/// Request counters shared by every server instance (a fixed window per key).
+model RateLimit {
+  key         String   @id
+  windowStart DateTime
+  count       Int
+}
+
+/// Who did what in the admin area, newest first.
+model AuditLog {
+  id        String   @id @default(cuid())
+  at        DateTime @default(now())
+  actorId   String?
+  actorName String
+  action    String
+  target    String?
+  detail    Json?
+
+  @@index([at])
+}
+
+/// In-app notifications (the bell in the top bar).
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  kind      String
+  title     String
+  body      String?
+  href      String?
+  createdAt DateTime  @default(now())
+  readAt    DateTime?
+
+  @@index([userId, readAt, createdAt])
+}
+
+/// A person's confirmed answer to "which ticket caused this bug?". It beats any automatic guess.
+model BugOrigin {
+  bugKey        String   @id
+  originKey     String
+  confirmedById String
+  confirmedAt   DateTime @default(now())
+  note          String?
 }

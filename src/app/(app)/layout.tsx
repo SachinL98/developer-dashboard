@@ -9,6 +9,7 @@ import { MobileNav } from "@/components/MobileNav";
 import { WorkClock } from "@/components/WorkClock";
 import { Avatar } from "@/components/ui";
 import { UserMenu } from "@/components/UserMenu";
+import { NotificationBell } from "@/components/NotificationBell";
 import { CommandPalette, PaletteButton, type PaletteItem } from "@/components/CommandPalette";
 import { logoutAction } from "./actions";
 import { LogOut, Plug } from "lucide-react";
@@ -20,14 +21,16 @@ export const dynamic = "force-dynamic";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const me = await requireUser();
   if (me.mustChangePassword) redirect("/change-password");
-  const [session, timer, conns, cards, pendingSignups, cfg] = await Promise.all([
+  const [session, timer, conns, cards, pendingSignups, cfg, inbox] = await Promise.all([
     db.workSession.findFirst({ where: { developerId: me.id, endedAt: null } }),
     db.timeEntry.findFirst({ where: { developerId: me.id, endedAt: null }, include: { ticket: true } }),
     db.connection.findMany({ where: { userId: me.id }, select: { provider: true } }),
     db.ticket.findMany({ where: { assigneeId: me.id, status: { in: ["READY_TO_DEV", "IN_PROGRESS", "INITIAL_REVIEW", "REVIEW", "FAILED_STG"] } }, select: { id: true, key: true, title: true }, orderBy: { rank: "asc" } }),
     atLeast(me.access, "ADMIN") ? db.signupRequest.count() : Promise.resolve(0),
     getWorkspace(), // also applies the admin-set timezone
+    db.notification.findMany({ where: { userId: me.id }, orderBy: { createdAt: "desc" }, take: 12 }),
   ]);
+  const bell = inbox.map((n) => ({ id: n.id, title: n.title, body: n.body, href: n.href, at: n.createdAt.toISOString(), read: !!n.readAt }));
   const [sh, sm] = parseHHMM(cfg.workStart), [eh, em] = parseHHMM(cfg.workEnd);
   const targetHrs = Math.round(((eh * 60 + em - (sh * 60 + sm)) / 60) * 10) / 10;
   const has = new Set(conns.map((c) => c.provider));
@@ -54,7 +57,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="flex min-h-screen w-full flex-col lg:flex-row">
       <a href="#main" className="skip-link">Skip to content</a>
       <CommandPalette items={jump} />
-      <MobileNav isAdmin={atLeast(me.access, "ADMIN")}>{footer}</MobileNav>
+      <MobileNav isAdmin={atLeast(me.access, "ADMIN")} bell={<NotificationBell items={bell} />}>{footer}</MobileNav>
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col gap-6 overflow-y-auto border-r border-line/70 bg-bg px-3 py-4 lg:flex">
         <Link href="/" className="flex items-center gap-2.5 px-2">
           <img src="/icon-192.png" alt="" width={32} height={32} className="h-8 w-8 rounded-lg" />
@@ -68,6 +71,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="max-w-md flex-1"><PaletteButton className="h-9 bg-panel" /></div>
           <div className="ml-auto flex items-center gap-3">
             <Link href="/tickets/new" className="btn-primary">+ New ticket</Link>
+            <NotificationBell items={bell} />
             <UserMenu id={me.id} ver={me.avatarVer} name={me.name} role={me.access.toLowerCase()} hue={me.avatarHue} theme={me.theme as ThemeChoice} logout={logoutAction} />
           </div>
         </header>

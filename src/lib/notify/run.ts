@@ -7,6 +7,8 @@ import { localDate, zonedToUtc } from "../time";
 import { isPlaceholderEmail } from "../jira-people";
 import { emailProvider, renderEmail, sendEmail } from "./email";
 import { discordRoute, sendDiscord } from "./discord";
+import { failingMinutes, ALERT_AFTER_MIN, type SyncHealth } from "../sync-health";
+import { notifyInbox } from "../inbox";
 import { minutesOfDay, overdueMessage, overdueTickets, shouldRemindStart, shouldSendOverdue, startReminderMessage } from "./rules";
 
 export interface NotifyConfig { overdue: boolean; startReminder: boolean; graceMin: number }
@@ -90,7 +92,24 @@ export async function runNotifications(now = new Date(), opts: { force?: boolean
       }
     }
   }
+  await alertSyncHealth(now, today);
   return { ran: true, reminders, overdue };
+}
+
+/** Tell admins (inbox, email, Discord) once a day when the automatic Jira sync has been failing for over an hour. */
+async function alertSyncHealth(now: Date, today: string) {
+  const health = await getSetting<SyncHealth>("jira.health");
+  const mins = failingMinutes(health, now);
+  if (mins < ALERT_AFTER_MIN) return;
+  const admins = await db.developer.findMany({ where: { active: true, access: "ADMIN", passwordHash: { not: null } }, select: { id: true, name: true, email: true, discordId: true, notifyEmail: true, notifyDiscord: true } });
+  const why = health?.lastError ?? "unknown error";
+  for (const a of admins) {
+    const r = await deliverOnce(a, "SYNC_FAILING", today, {
+      subject: "Jira sync has been failing", intro: `Hi ${a.name.split(" ")[0]}, the automatic Jira sync has failed for about ${Math.round(mins / 60)} hour(s), so tickets and sprints may be out of date. Last error: ${why}`,
+      items: ["Open Settings and check the Jira connection, then press Sync Jira."], url: `${base()}/settings`, discord: `Jira sync has been failing for ~${Math.round(mins / 60)}h. Last error: ${why}. ${base()}/settings`,
+    }, now);
+    if (r) await notifyInbox(a.id, { kind: "SYNC", title: "Jira sync has been failing", body: why.slice(0, 160), href: "/settings" });
+  }
 }
 
 /** A test message to one person, so an admin can check email and Discord are working. Not limited to once a day. */

@@ -14,7 +14,7 @@ const tabs = [
 ];
 
 /** Below the `lg` breakpoint: a top bar, a slide-in drawer with the full menu, and a bottom tab bar for the four everyday pages. */
-export function MobileNav({ isAdmin, children }: { isAdmin: boolean; children: ReactNode }) {
+export function MobileNav({ isAdmin, children, bell }: { isAdmin: boolean; children: ReactNode; bell?: ReactNode }) {
   const path = usePathname();
   const [open, setOpen] = useState(false);
   useEffect(() => { setOpen(false); }, [path]);
@@ -30,7 +30,8 @@ export function MobileNav({ isAdmin, children }: { isAdmin: boolean; children: R
       <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-bg/85 px-4 backdrop-blur">
         <button className="btn-ghost -ml-2 h-11 w-11 p-0" aria-label="Open menu" aria-expanded={open} onClick={() => setOpen(true)}><Menu size={22} /></button>
         <img src="/icon-192.png" alt="" width={32} height={32} className="h-8 w-8 rounded-lg" />
-        <span className="truncate font-semibold">Dev Dashboard</span>
+        <span className="min-w-0 flex-1 truncate font-semibold">Dev Dashboard</span>
+        {bell}
       </header>
 
       {open && <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={() => setOpen(false)} aria-hidden />}

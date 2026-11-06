@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { currentUser } from "@/lib/auth/session";
 import { aiKeyFor } from "@/lib/ai";
 import { AudioUnsupported, mergeStreams, nameSpeakers, segmentsToText, transcribeAudio } from "@/lib/stt";
-import { rateLimit, RateLimited } from "@/lib/rate-limit";
+import { rateLimitShared, RateLimited } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -15,7 +15,7 @@ const MAX_BYTES = 3_500_000; // stays under the 4.5 MB request limit of serverle
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const user = await currentUser();
   if (!user || user.mustChangePassword) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
-  try { rateLimit(`audio:${user.id}`, 240, 3_600_000); } catch (e) { if (e instanceof RateLimited) return NextResponse.json({ ok: false, error: e.message }, { status: 429 }); throw e; }
+  try { await rateLimitShared(`audio:${user.id}`, 240, 3_600_000); } catch (e) { if (e instanceof RateLimited) return NextResponse.json({ ok: false, error: e.message }, { status: 429 }); throw e; }
   const { id } = await ctx.params;
   const meeting = await db.meeting.findUnique({ where: { id }, select: { id: true, attendees: true } });
   if (!meeting) return NextResponse.json({ ok: false, error: "Meeting not found." }, { status: 404 });

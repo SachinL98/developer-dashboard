@@ -3,6 +3,7 @@ import { gateError, hoursForPoints, pointsForHours, STATUS_META, type StatusKey 
 import { getSetting, setSetting } from "./settings";
 import { getMeetingDefs, getWorkspace } from "./config";
 import { inSyncWindow, syncDue } from "./sync-window";
+import { recordSync, type SyncHealth } from "./sync-health";
 import * as jira from "./integrations/jira";
 import * as gh from "./integrations/github";
 import { parseNotes, summariseWithClaude } from "./notes";
@@ -308,9 +309,15 @@ export async function autoSyncJira(now = new Date(), opts: { force?: boolean } =
   if (!opts.force && !inSyncWindow(now, cfg.timezone)) return { ran: false as const, reason: "outside working hours" };
   const last = await getSetting<string>("jira.lastSync");
   if (!opts.force && !syncDue(last, now)) return { ran: false as const, reason: "synced recently" };
-  const sprints = await syncSprintsFromJira().catch((e) => { warn("jira.sprints", e); return null; });
-  const r = await syncJira();
-  return { ran: true as const, sprints, ...r };
+  try {
+    const sprints = await syncSprintsFromJira().catch((e) => { warn("jira.sprints", e); return null; });
+    const r = await syncJira();
+    await setSetting("jira.health", recordSync(await getSetting<SyncHealth>("jira.health"), true, undefined, new Date()));
+    return { ran: true as const, sprints, ...r };
+  } catch (e) {
+    await setSetting("jira.health", recordSync(await getSetting<SyncHealth>("jira.health"), false, e instanceof Error ? e.message : String(e), new Date())).catch(() => {});
+    throw e;
+  }
 }
 
 /**

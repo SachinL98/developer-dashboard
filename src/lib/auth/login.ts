@@ -1,7 +1,7 @@
 import { db } from "../db";
 import { LoginError } from "./identity";
 import { afterFailure, burnPasswordCheck, hashPassword, isLocked, passwordProblem, verifyPassword } from "./password";
-import { rateLimit, RateLimited } from "../rate-limit";
+import { rateLimitShared, RateLimited } from "../rate-limit";
 import { getWorkspace } from "../config";
 import { bootstrapAdmins, isValidEmail } from "../permissions";
 
@@ -11,8 +11,8 @@ const GENERIC = "Incorrect email or password. After several wrong attempts the a
 export async function verifyLogin(emailRaw: string, password: string, ip: string) {
   const email = emailRaw.trim().toLowerCase();
   try {
-    rateLimit(`login-ip:${ip}`, 30, 10 * 60_000);
-    rateLimit(`login-email:${email}`, 15, 10 * 60_000);
+    await rateLimitShared(`login-ip:${ip}`, 30, 10 * 60_000);
+    await rateLimitShared(`login-email:${email}`, 15, 10 * 60_000);
   } catch (e) { if (e instanceof RateLimited) throw new LoginError("Too many attempts. Wait a few minutes and try again."); throw e; }
   if (!email || !password || password.length > 500) throw new LoginError(GENERIC);
 

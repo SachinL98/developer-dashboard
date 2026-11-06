@@ -4,7 +4,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { currentUser, revokeSessions } from "@/lib/auth/session";
 import { hashPassword, passwordProblem, verifyPassword } from "@/lib/auth/password";
-import { rateLimit } from "@/lib/rate-limit";
+import { rateLimitShared } from "@/lib/rate-limit";
 import { userMessage } from "@/lib/safe-error";
 
 export interface PasswordState { error: string | null; done?: boolean }
@@ -14,7 +14,7 @@ export async function changePasswordAction(_prev: PasswordState, form: FormData)
   try {
     const user = await currentUser();
     if (!user) return { error: "Your session has expired. Sign in again." };
-    rateLimit(`pw-change:${user.id}`, 10, 10 * 60_000);
+    await rateLimitShared(`pw-change:${user.id}`, 10, 10 * 60_000);
     const current = z.string().max(500).parse(String(form.get("current") ?? ""));
     const next = z.string().max(500).parse(String(form.get("next") ?? ""));
     const confirm = String(form.get("confirm") ?? "");
