@@ -41,6 +41,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
   const data: BoardTicket[] = tickets.map((t) => ({
     columnId: columnIdFor({ status: t.status as StatusKey, jiraStatus: t.jiraStatus }, columns), jiraStatus: t.jiraStatus, labels: t.labels,
     review: !t.reviews[0] ? "none" : t.reviews[0].status === "RUNNING" ? "running" : t.reviews[0].status === "ERROR" ? "error" : t.reviews[0].passed ? "passed" : "blocked",
+    blocked: t.blocked, blockedReason: t.blockedReason,
     jiraUrl: site && t.jiraKey ? `${site}/browse/${t.jiraKey}` : null,
     id: t.id, key: t.key, title: t.title, status: t.status, type: t.type, priority: t.priority, points: t.storyPoints, estimateHrs: t.estimateHrs,
     loggedHrs: hours(sumEntries(t.timeEntries)), progressPct: t.progressPct, prNumber: t.prNumber, prState: t.prState,

@@ -6,7 +6,7 @@ import { STATUS_META, allowedNext, STORY_POINTS, type StatusKey } from "@/lib/wo
 
 export function TicketControls(p: {
   id: string; status: StatusKey; progress: number; timerRunning: boolean; assigneeId: string | null; devs: { id: string; name: string }[];
-  canLead: boolean; prUrl: string | null; points: number | null; estimateHrs: number | null; sprintId: string | null; dueDate?: string | null; sprints: { id: string; name: string }[];
+  canLead: boolean; prUrl: string | null; points: number | null; estimateHrs: number | null; sprintId: string | null; dueDate?: string | null; blocked?: boolean; blockedReason?: string | null; sprints: { id: string; name: string }[];
 }) {
   const [msg, setMsg] = useState<{ t: string; bad?: boolean } | null>(null);
   const [pct, setPct] = useState(p.progress);
@@ -14,6 +14,7 @@ export function TicketControls(p: {
   const [pr, setPr] = useState(p.prUrl ?? "");
   const [est, setEst] = useState(p.estimateHrs?.toString() ?? "");
   const [due, setDue] = useState(p.dueDate ?? "");
+  const [reason, setReason] = useState(p.blockedReason ?? "");
   const [pending, start] = useTransition();
   const run = (fn: () => Promise<{ ok: boolean; error?: string } & Record<string, any>>, ok?: string) =>
     start(async () => { const r = await fn(); setMsg(r.ok ? { t: ok ?? "Saved" } : { t: (r as any).error, bad: true }); });
@@ -68,6 +69,11 @@ export function TicketControls(p: {
           <select className="input" disabled={!p.canLead} value={p.sprintId ?? ""} onChange={async (e) => { const { assignToSprintAction } = await import("@/app/(app)/actions"); run(() => assignToSprintAction(p.id, e.target.value || null)); }}>
             <option value="">Backlog</option>{p.sprints.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select></div>
+      </div>
+      <div className="rounded-xl border border-line p-3">
+        <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={!!p.blocked} disabled={pending} onChange={(e) => run(() => updateTicketAction(p.id, { blocked: e.target.checked, blockedReason: e.target.checked ? (reason || null) : null }), e.target.checked ? "Marked as blocked" : "Unblocked")} /> Blocked</label>
+        <p className="mt-0.5 text-xs text-mute">Waiting on something outside your control (a decision, another team, an environment). It shows on the board and in the sprint outlook so it gets help.</p>
+        {p.blocked && <div className="mt-2 flex gap-2"><input className="input" placeholder="What is it waiting on?" value={reason} onChange={(e) => setReason(e.target.value)} /><button className="btn" onClick={() => run(() => updateTicketAction(p.id, { blockedReason: reason || null }), "Reason saved")}><Save size={14} /></button></div>}
       </div>
       <div><label className="label">Pull request URL</label>
         <div className="flex gap-2"><input className="input" placeholder="https://github.com/org/repo/pull/123" value={pr} onChange={(e) => setPr(e.target.value)} />

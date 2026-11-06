@@ -9,10 +9,13 @@ import { emailProvider, renderEmail, sendEmail } from "./email";
 import { discordRoute, sendDiscord } from "./discord";
 import { failingMinutes, ALERT_AFTER_MIN, type SyncHealth } from "../sync-health";
 import { notifyInbox } from "../inbox";
+import { activeSprint, sprintSnapshot } from "../queries";
+import { sprintHealth, sprintRiskReasons, stuckTickets, WAITING_STATUSES } from "../delivery-rules";
+import { isDone } from "../analytics";
 import { minutesOfDay, overdueMessage, overdueTickets, shouldRemindStart, shouldSendOverdue, startReminderMessage } from "./rules";
 
-export interface NotifyConfig { overdue: boolean; startReminder: boolean; graceMin: number }
-export const defaultNotifyConfig: NotifyConfig = { overdue: true, startReminder: true, graceMin: 30 };
+export interface NotifyConfig { overdue: boolean; startReminder: boolean; graceMin: number; stuck: boolean; sprintRisk: boolean }
+export const defaultNotifyConfig: NotifyConfig = { overdue: true, startReminder: true, graceMin: 30, stuck: true, sprintRisk: true };
 export const getNotifyConfig = async (): Promise<NotifyConfig> => ({ ...defaultNotifyConfig, ...((await getSetting<Partial<NotifyConfig>>("notify.config")) ?? {}) });
 export const saveNotifyConfig = (c: NotifyConfig) => setSetting("notify.config", c);
 
@@ -92,8 +95,42 @@ export async function runNotifications(now = new Date(), opts: { force?: boolean
       }
     }
   }
+  if (cfg.stuck || cfg.sprintRisk) await deliveryAlerts(now, today, people, cfg).catch(() => {});
   await alertSyncHealth(now, today);
   return { ran: true, reminders, overdue };
+}
+
+/** Once a day: nudge people whose tickets wait in review or staging, and tell leads when the sprint looks at risk. */
+async function deliveryAlerts(now: Date, today: string, people: Person[], cfg: NotifyConfig) {
+  const sprint = await activeSprint();
+  if (!sprint) return;
+  const snap = await sprintSnapshot(sprint.id);
+  const open = snap.tickets.filter((t) => !isDone(t.status));
+  const since = new Map<string, Date>();
+  const trs = await db.transition.findMany({ where: { ticketId: { in: open.map((t) => t.id) }, to: { in: WAITING_STATUSES as never[] } }, orderBy: { at: "desc" }, select: { ticketId: true, to: true, at: true } });
+  for (const tr of trs) { const t = open.find((x) => x.id === tr.ticketId); if (t && t.status === tr.to && !since.has(t.id)) since.set(t.id, tr.at); }
+  const stuck = stuckTickets(open.map((t) => ({ id: t.id, key: t.key, title: t.title, status: t.status, assigneeId: t.assigneeId, since: since.get(t.id) ?? t.updatedAt })), now);
+
+  if (cfg.stuck) {
+    for (const p of people) {
+      const mine = stuck.filter((t) => t.assigneeId === p.id);
+      if (!mine.length) continue;
+      const items = mine.slice(0, 8).map((t) => `${t.key} ${t.title} (${t.days} working days in ${t.status.toLowerCase().replace(/_/g, " ")})`);
+      const r = await deliverOnce(p, "STUCK", today, { subject: "Tickets waiting on you", intro: `Hi ${p.name.split(" ")[0]}, ${mine.length} of your tickets have been waiting a while. A quick push or a message to the reviewer usually unblocks them.`, items, url: `${base()}/board`, discord: `${mine.length} of your tickets are waiting 2+ working days: ${mine.slice(0, 4).map((t) => t.key).join(", ")}. ${base()}/board` }, now);
+      if (r) await notifyInbox(p.id, { kind: "STUCK", title: `${mine.length} of your tickets are waiting`, body: mine.slice(0, 3).map((t) => t.key).join(", "), href: "/board" });
+    }
+  }
+  if (cfg.sprintRisk && snap.tickets.length && snap.elapsedPct >= 30) {
+    const donePct = (snap.tickets.filter((t) => isDone(t.status)).length / snap.tickets.length) * 100;
+    const h = sprintHealth(donePct, snap.elapsedPct);
+    if (h.level === "on_track") return;
+    const reasons = sprintRiskReasons({ donePct, elapsedPct: snap.elapsedPct, daysLeft: snap.daysLeft, blocked: open.filter((t) => t.blocked).length, stuck: stuck.length, unestimated: open.filter((t) => t.estimateHrs == null).length, failedStaging: open.filter((t) => t.status === "FAILED_STG").length });
+    const leads = await db.developer.findMany({ where: { active: true, access: { in: ["LEAD", "ADMIN"] }, passwordHash: { not: null } }, select: { id: true, name: true, email: true, discordId: true, notifyEmail: true, notifyDiscord: true } });
+    for (const l of leads) {
+      const r = await deliverOnce(l, "SPRINT_RISK", today, { subject: `${sprint.name} is ${h.label.toLowerCase()}`, intro: `Hi ${l.name.split(" ")[0]}, ${sprint.name} looks ${h.label.toLowerCase()}. A short check-in now can still change the outcome.`, items: reasons, url: `${base()}/board`, discord: `${sprint.name} is ${h.label.toLowerCase()}: ${reasons.slice(0, 2).join("; ")}. ${base()}/` }, now);
+      if (r) await notifyInbox(l.id, { kind: "SPRINT", title: `${sprint.name} is ${h.label.toLowerCase()}`, body: reasons[0], href: "/" });
+    }
+  }
 }
 
 /** Tell admins (inbox, email, Discord) once a day when the automatic Jira sync has been failing for over an hour. */

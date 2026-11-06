@@ -88,7 +88,7 @@ const patchSchema = z.object({
   assigneeId: id.nullable(), storyPoints: z.number().int().min(0).max(100).nullable(), estimateHrs: z.number().min(0).max(1000).nullable(),
   prUrl: z.string().url().max(300).regex(/^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+/, "Use a GitHub pull request URL").nullable(),
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-11-20").nullable(),
-  complicated: z.boolean(), priority, title: z.string().trim().min(1).max(240), description: z.string().max(20_000),
+  complicated: z.boolean(), blocked: z.boolean(), blockedReason: z.string().trim().max(300).nullable(), priority, title: z.string().trim().min(1).max(240), description: z.string().max(20_000),
 }).partial().strict();
 
 export async function updateTicketAction(ticketId: string, patch: z.input<typeof patchSchema>): Promise<Result<{ jira?: svc.PushResult }>> {
@@ -830,10 +830,10 @@ export async function generateOneOnOneAction(devId: string): Promise<Result> {
 }
 
 // ----- notifications -----
-export async function saveNotifyConfigAction(input: { overdue: boolean; startReminder: boolean; graceMin: number }): Promise<Result> {
+export async function saveNotifyConfigAction(input: { overdue: boolean; startReminder: boolean; graceMin: number; stuck: boolean; sprintRisk: boolean }): Promise<Result> {
   try {
     const adminUser = await requireAccess("ADMIN");
-    const v = z.object({ overdue: z.boolean(), startReminder: z.boolean(), graceMin: z.number().int().min(5).max(240) }).parse(input);
+    const v = z.object({ overdue: z.boolean(), startReminder: z.boolean(), graceMin: z.number().int().min(5).max(240), stuck: z.boolean(), sprintRisk: z.boolean() }).parse(input);
     await saveNotifyConfig(v);
     await audit(adminUser, "saveNotifyConfig", undefined);
     revalidatePath("/admin/notifications"); return { ok: true };

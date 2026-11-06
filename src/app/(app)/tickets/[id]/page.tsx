@@ -113,7 +113,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
         </div>
 
         <div className="space-y-6">
-          <div className="card-pad"><TicketControls canLead={atLeast(me.access, "LEAD")} id={t.id} status={t.status} progress={t.progressPct} timerRunning={running} assigneeId={t.assigneeId} devs={devs.map((d) => ({ id: d.id, name: d.name }))} prUrl={t.prUrl} points={t.storyPoints} estimateHrs={t.estimateHrs} dueDate={t.dueDate ? t.dueDate.toISOString().slice(0, 10) : null} sprintId={t.sprintId} sprints={sprints.map((s) => ({ id: s.id, name: s.name }))} /></div>
+          <div className="card-pad"><TicketControls blocked={t.blocked} blockedReason={t.blockedReason} canLead={atLeast(me.access, "LEAD")} id={t.id} status={t.status} progress={t.progressPct} timerRunning={running} assigneeId={t.assigneeId} devs={devs.map((d) => ({ id: d.id, name: d.name }))} prUrl={t.prUrl} points={t.storyPoints} estimateHrs={t.estimateHrs} dueDate={t.dueDate ? t.dueDate.toISOString().slice(0, 10) : null} sprintId={t.sprintId} sprints={sprints.map((s) => ({ id: s.id, name: s.name }))} /></div>
 
           <div className="card-pad">
             <div className="h-section mb-2">Time</div>

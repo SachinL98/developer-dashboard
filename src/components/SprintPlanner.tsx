@@ -98,6 +98,7 @@ export function SprintPlanner({ sprints, selected, backlog, inSprint, fit, perDe
             )}
             {perDev.length > 0 && <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2">{perDev.map((d) => (
               <div key={d.name}><div className="flex justify-between text-[11px] text-mute"><span>{d.name.split(" ")[0]}{d.leaveDays > 0 && <span className="ml-1 text-neon-amber" title="Approved leave in this sprint">· {d.leaveDays}d off</span>}</span><span>{d.hrs}/{d.cap}h</span></div><Progress pct={d.cap ? (d.hrs / d.cap) * 100 : d.hrs ? 100 : 0} color={d.hrs > d.cap ? "#fb7185" : "#6ee7ff"} /></div>))}</div>}
+            {perDev.some((d) => d.hrs > d.cap) && (() => { const over = perDev.filter((d) => d.hrs > d.cap); const room = perDev.filter((d) => d.cap - d.hrs >= 4).sort((a, b) => (b.cap - b.hrs) - (a.cap - a.hrs)); return <p className="mt-3 rounded-lg bg-neon-amber/10 px-3 py-2 text-xs text-neon-amber">{over.map((d) => `${d.name.split(" ")[0]} is ${Math.round((d.hrs - d.cap) * 10) / 10}h over their capacity`).join("; ")}.{room.length ? ` ${room.slice(0, 2).map((d) => `${d.name.split(" ")[0]} has about ${Math.round(d.cap - d.hrs)}h free`).join(", ")}. Consider moving a ticket.` : " Consider moving a ticket or trimming scope."}</p>; })()}
             <ul className="mt-5 space-y-1.5">
               {inSprint.map((t) => (
                 <li key={t.id} className="flex items-center gap-2 rounded-lg border border-line bg-panel2 px-3 py-2 text-sm">

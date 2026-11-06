@@ -3,7 +3,7 @@ import Link from "next/link";
 import { fg, tint } from "@/lib/theme";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import clsx from "clsx";
-import { GitPullRequest, Clock, Flame, Lock, ArrowRight, ExternalLink, Bot, Loader2 } from "lucide-react";
+import { GitPullRequest, Clock, Flame, Lock, ArrowRight, ExternalLink, Bot, Loader2, Ban } from "lucide-react";
 import { moveTicketAction } from "@/app/(app)/actions";
 import { STATUS_META, TYPE_META, PRIORITY_META, allowedNext, type StatusKey } from "@/lib/workflow";
 import type { BoardColumn } from "@/lib/board-columns";
@@ -15,7 +15,7 @@ export interface BoardTicket {
   points: number | null; estimateHrs: number | null; loggedHrs: number; progressPct: number; prNumber: number | null; prState: string | null;
   assigneeId: string | null; assignee: { name: string; hue: number; id: string; ver: number } | null; project: { key: string; color: string }; complicated: boolean;
   columnId: string; jiraStatus: string | null; labels: string[]; jiraUrl: string | null;
-  review: "none" | "running" | "passed" | "blocked" | "error"; // latest initial Claude review of the linked PR
+  blocked: boolean; blockedReason: string | null; review: "none" | "running" | "passed" | "blocked" | "error"; // latest initial Claude review of the linked PR
 }
 
 export function Board({ tickets: initial, columns, readOnlyHint, actor }: { tickets: BoardTicket[]; columns: BoardColumn[]; readOnlyHint?: string; actor: Actor }) {
@@ -96,6 +96,7 @@ function Card({ t, actor, onDragStart, onDragEnd, onMove }: { t: BoardTicket; ac
         </span>
       </div>
       <Link href={`/tickets/${t.id}`} className="mt-1.5 block text-sm leading-snug hover:text-ink">{t.title}</Link>
+      {t.blocked && <div className="mt-1.5 flex items-start gap-1 rounded-md bg-neon-red/10 px-1.5 py-1 text-[11px] text-neon-red" title={t.blockedReason ?? "Blocked"}><Ban size={11} className="mt-0.5 shrink-0" /><span className="min-w-0 truncate">Blocked{t.blockedReason ? `: ${t.blockedReason}` : ""}</span></div>}
       {(t.jiraStatus || t.labels.length > 0) && (
         <div className="mt-1.5 flex flex-wrap gap-1 text-[10px]">
           {t.jiraStatus && <span className="rounded border border-line px-1 text-mute" title="Status in Jira">{t.jiraStatus}</span>}

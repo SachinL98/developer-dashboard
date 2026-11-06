@@ -15,7 +15,7 @@ export function canMoveTicket(actor: Actor, ticket: { assigneeId: string | null 
   return ticket.assigneeId === actor.id && DEV_TARGETS.includes(to);
 }
 
-export type TicketPatchKey = "assigneeId" | "storyPoints" | "estimateHrs" | "prUrl" | "complicated" | "priority" | "title" | "description" | "dueDate";
+export type TicketPatchKey = "assigneeId" | "storyPoints" | "estimateHrs" | "prUrl" | "complicated" | "priority" | "title" | "description" | "dueDate" | "blocked" | "blockedReason";
 const LEAD_ONLY_FIELDS: TicketPatchKey[] = ["assigneeId", "priority"];
 
 /** Developers can edit their own tickets (not reassign/reprioritise); leads and admins can edit anything. */

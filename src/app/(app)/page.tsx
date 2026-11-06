@@ -12,6 +12,7 @@ import { STATUS_META, STATUS_ORDER } from "@/lib/workflow";
 import { fmtDay, fmtDur, fmtTime } from "@/lib/time";
 import { sumEntries, isDone } from "@/lib/analytics";
 import { idleWorkdays } from "@/lib/pace";
+import { sprintHealth } from "@/lib/delivery-rules";
 import { localDate } from "@/lib/time";
 
 export default async function Overview() {
@@ -43,7 +44,8 @@ export default async function Overview() {
   // Progress is measured in tickets: it works for every board, including Jira projects that do not use story points.
   const doneCount = snap.tickets.filter((t) => isDone(t.status)).length;
   const pace = snap.tickets.length ? (doneCount / snap.tickets.length) * 100 : 0;
-  const health = pace + 8 >= snap.elapsedPct ? ["On track", "#a3e635"] : pace + 25 >= snap.elapsedPct ? ["At risk", "#fbbf24"] : ["Behind", "#fb7185"];
+  const sh = sprintHealth(pace, snap.elapsedPct);
+  const health = [sh.label, sh.level === "on_track" ? "#a3e635" : sh.level === "at_risk" ? "#fbbf24" : "#fb7185"];
 
   const rows = devs.map((d) => {
     const mine = snap.tickets.filter((t) => t.assigneeId === d.id);
