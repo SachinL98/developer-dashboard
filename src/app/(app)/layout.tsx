@@ -9,6 +9,7 @@ import { MobileNav } from "@/components/MobileNav";
 import { WorkClock } from "@/components/WorkClock";
 import { Avatar } from "@/components/ui";
 import { UserMenu } from "@/components/UserMenu";
+import { Shortcuts } from "@/components/Shortcuts";
 import { NotificationBell } from "@/components/NotificationBell";
 import { CommandPalette, PaletteButton, type PaletteItem } from "@/components/CommandPalette";
 import { logoutAction } from "./actions";
@@ -36,7 +37,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const has = new Set(conns.map((c) => c.provider));
   const missing = !atLeast(me.access, "ADMIN") ? [] : [!has.has("JIRA") && "Jira", !has.has("GOOGLE") && "Google Calendar & Meet"].filter(Boolean) as string[];
   const jump: PaletteItem[] = [
-    { href: "/tickets/new", label: "New ticket", hint: "Create" }, { href: "/", label: "Overview" }, { href: "/board", label: "Board", hint: "Kanban" }, { href: "/sprints", label: "Sprints" },
+    { href: "/tickets/new", label: "New ticket", hint: "Create" }, { href: "/my-day", label: "My day", hint: "Your cards, timer" }, { href: "/", label: "Team overview" }, { href: "/board", label: "Board", hint: "Kanban" }, { href: "/sprints", label: "Sprints" },
     { href: "/estimation", label: "Estimates", hint: "Planning poker" }, { href: "/time", label: "Time", hint: "Timer, check-ins" }, { href: "/team", label: "People" },
     { href: "/reports?kind=oneonone", label: "1:1 report", hint: "Reports" }, { href: "/leave", label: "Leave" }, { href: "/meetings", label: "Meetings", hint: "Notes, recorder" },
     { href: "/analytics", label: "Analytics" }, { href: "/quality", label: "Quality", hint: "Bug origins" }, { href: "/reports", label: "Reports" }, { href: "/settings", label: "Settings", hint: "Profile, AI, alerts" },
@@ -57,6 +58,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="flex min-h-screen w-full flex-col lg:flex-row">
       <a href="#main" className="skip-link">Skip to content</a>
       <CommandPalette items={jump} />
+      <Shortcuts />
       <MobileNav isAdmin={atLeast(me.access, "ADMIN")} bell={<NotificationBell items={bell} />}>{footer}</MobileNav>
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col gap-6 overflow-y-auto border-r border-line/70 bg-bg px-3 py-4 lg:flex">
         <Link href="/" className="flex items-center gap-2.5 px-2">

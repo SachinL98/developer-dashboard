@@ -29,6 +29,10 @@ export function Board({ tickets: initial, columns, readOnlyHint, actor }: { tick
   const [, start] = useTransition();
   const [q, setQ] = useState("");
   const [who, setWho] = useState("all");
+  const [chip, setChip] = useState<"all" | "mine" | "blocked" | "review">("all");
+  // Remember the person's filters between visits (this browser only).
+  useEffect(() => { try { const v = JSON.parse(localStorage.getItem("board-filters") ?? "{}"); if (v.chip) setChip(v.chip); if (v.who) setWho(v.who); } catch { /* storage blocked */ } }, []);
+  useEffect(() => { try { localStorage.setItem("board-filters", JSON.stringify({ chip, who })); } catch { /* storage blocked */ } }, [chip, who]);
   const people = useMemo(() => [...new Set(tickets.map((t) => t.assignee?.name).filter(Boolean))] as string[], [tickets]);
 
   const say = (msg: string, bad = false) => { setToast({ msg, bad }); setTimeout(() => setToast(null), 4200); };
@@ -42,7 +46,8 @@ export function Board({ tickets: initial, columns, readOnlyHint, actor }: { tick
     });
   }
 
-  const visible = tickets.filter((t) => (who === "all" || t.assignee?.name === who) && (!q || (t.key + t.title).toLowerCase().includes(q.toLowerCase())));
+  const quick = (t: BoardTicket) => chip === "all" || (chip === "mine" && t.assigneeId === actor.id) || (chip === "blocked" && t.blocked) || (chip === "review" && ["INITIAL_REVIEW", "REVIEW"].includes(t.status));
+  const visible = tickets.filter((t) => quick(t) && (who === "all" || t.assignee?.name === who) && (!q || (t.key + t.title).toLowerCase().includes(q.toLowerCase())));
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -50,6 +55,10 @@ export function Board({ tickets: initial, columns, readOnlyHint, actor }: { tick
         <select className="input sm:max-w-[200px]" value={who} onChange={(e) => setWho(e.target.value)}>
           <option value="all">All developers</option>{people.map((p) => <option key={p}>{p}</option>)}
         </select>
+        <div role="group" aria-label="Quick filters" className="flex gap-1 rounded-lg border border-line bg-panel p-1">
+          {([["all", "All"], ["mine", "My cards"], ["blocked", "Blocked"], ["review", "In review"]] as const).map(([k, label]) => (
+            <button key={k} onClick={() => setChip(k)} aria-pressed={chip === k} className={clsx("rounded-md px-2.5 py-1 text-xs", chip === k ? "bg-line text-ink" : "text-mute hover:text-ink")}>{label}</button>))}
+        </div>
         <span className="text-xs text-mute">{readOnlyHint ?? "Drag a card to the next stage. Cards only move forward."}</span>
       </div>
       <div className="-mx-4 snap-x snap-mandatory scroll-px-4 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:px-6 sm:scroll-px-6 lg:-mx-8 lg:px-8 lg:snap-none">
@@ -85,7 +94,8 @@ function Card({ t, actor, onDragStart, onDragEnd, onMove }: { t: BoardTicket; ac
   const next = allowedNext(t.status).filter((n) => canMoveTicket(actor, t, n));
   const over = t.estimateHrs ? t.loggedHrs > t.estimateHrs : false;
   return (
-    <div draggable={next.length > 0} onDragStart={onDragStart} onDragEnd={onDragEnd}
+    <div draggable={next.length > 0} onDragStart={onDragStart} onDragEnd={onDragEnd} tabIndex={0} role="group" aria-label={`${t.key} ${t.title}. Press M to move to ${next[0] ? STATUS_META[next[0]].label : "the next stage"}, Enter to open.`}
+      onKeyDown={(e) => { if (e.target !== e.currentTarget) return; if (e.key === "m" && next[0]) { e.preventDefault(); onMove(next[0]); } else if (e.key === "Enter") { window.location.href = `/tickets/${t.id}`; } }}
       className="group cursor-grab rounded-xl border border-line/70 bg-panel p-3.5 shadow-sm transition hover:-translate-y-px hover:border-neon/30 hover:shadow-md active:cursor-grabbing">
       <div className="flex items-center justify-between text-[11px]">
         <span className="font-mono text-mute">{t.key}</span>

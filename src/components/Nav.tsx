@@ -1,11 +1,11 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, KanbanSquare, Rocket, Timer, Calculator, Video, BarChart3, FileText, CalendarDays, Settings, Users, ShieldCheck, Shield } from "lucide-react";
+import { Sun, LayoutDashboard, KanbanSquare, Rocket, Timer, Calculator, Video, BarChart3, FileText, CalendarDays, Settings, Users, ShieldCheck, Shield } from "lucide-react";
 import clsx from "clsx";
 
 const groups = [
-  { title: "", items: [{ href: "/", label: "Overview", icon: LayoutDashboard }] },
+  { title: "", items: [{ href: "/my-day", label: "My day", icon: Sun }, { href: "/", label: "Team overview", icon: LayoutDashboard }] },
   { title: "Delivery", items: [
     { href: "/board", label: "Board", icon: KanbanSquare },
     { href: "/sprints", label: "Sprints", icon: Rocket },
